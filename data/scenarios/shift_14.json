@@ -1,0 +1,92 @@
+{
+  "name": "One full shift: 14 orders, beyond practical exhaustive reach",
+  "machine": {
+    "id": "M1"
+  },
+  "orders": [
+    {
+      "id": "S01",
+      "processing_time": 5,
+      "due_date": 21,
+      "weight": 2.0
+    },
+    {
+      "id": "S02",
+      "processing_time": 8,
+      "due_date": 32,
+      "weight": 3.0
+    },
+    {
+      "id": "S03",
+      "processing_time": 4,
+      "due_date": 43,
+      "weight": 4.0
+    },
+    {
+      "id": "S04",
+      "processing_time": 7,
+      "due_date": 14,
+      "weight": 1.0
+    },
+    {
+      "id": "S05",
+      "processing_time": 3,
+      "due_date": 25,
+      "weight": 2.0
+    },
+    {
+      "id": "S06",
+      "processing_time": 6,
+      "due_date": 36,
+      "weight": 3.0
+    },
+    {
+      "id": "S07",
+      "processing_time": 2,
+      "due_date": 47,
+      "weight": 4.0
+    },
+    {
+      "id": "S08",
+      "processing_time": 5,
+      "due_date": 18,
+      "weight": 1.0
+    },
+    {
+      "id": "S09",
+      "processing_time": 8,
+      "due_date": 29,
+      "weight": 2.0
+    },
+    {
+      "id": "S10",
+      "processing_time": 4,
+      "due_date": 40,
+      "weight": 3.0
+    },
+    {
+      "id": "S11",
+      "processing_time": 7,
+      "due_date": 11,
+      "weight": 4.0
+    },
+    {
+      "id": "S12",
+      "processing_time": 3,
+      "due_date": 22,
+      "weight": 1.0
+    },
+    {
+      "id": "S13",
+      "processing_time": 6,
+      "due_date": 33,
+      "weight": 2.0
+    },
+    {
+      "id": "S14",
+      "processing_time": 2,
+      "due_date": 44,
+      "weight": 3.0
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "factory_day_a": {
+    "status": "optimal",
+    "objective": 4.0,
+    "proof": "exhaustive",
+    "note": "8 orders; optimum proven by enumerating all 40320 sequences at test time"
+  },
+  "factory_day_b": {
+    "status": "optimal",
+    "objective": 78.0,
+    "proof": "exhaustive",
+    "note": "8 orders; tight middle forces weighted trade-offs; exhaustive proof"
+  },
+  "clear_day": {
+    "status": "optimal",
+    "objective": 0.0,
+    "proof": "exhaustive",
+    "note": "5 orders; every due date at end of day, objective 0 must be found"
+  },
+  "dominant_weight": {
+    "status": "optimal",
+    "objective": 51.0,
+    "proof": "exhaustive",
+    "note": "8 orders; one order outweighs the rest 50-100x; exhaustive proof"
+  },
+  "shift_14": {
+    "status": "optimal",
+    "objective": 190.0,
+    "proof": "solver",
+    "note": "14 orders; exhaustive (87 billion sequences) impractical at test time; lock is the solver's own proven-optimal value - a regression anchor, not an independent proof"
+  }
+}
