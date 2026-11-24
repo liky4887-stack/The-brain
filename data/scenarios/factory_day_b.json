@@ -1,0 +1,56 @@
+{
+  "name": "Tight middle of the day forces weighted tardiness trade-offs",
+  "machine": {
+    "id": "M1"
+  },
+  "orders": [
+    {
+      "id": "B1",
+      "processing_time": 5,
+      "due_date": 7,
+      "weight": 2
+    },
+    {
+      "id": "B2",
+      "processing_time": 4,
+      "due_date": 8,
+      "weight": 6
+    },
+    {
+      "id": "B3",
+      "processing_time": 3,
+      "due_date": 6,
+      "weight": 3
+    },
+    {
+      "id": "B4",
+      "processing_time": 6,
+      "due_date": 12,
+      "weight": 1
+    },
+    {
+      "id": "B5",
+      "processing_time": 2,
+      "due_date": 9,
+      "weight": 4
+    },
+    {
+      "id": "B6",
+      "processing_time": 5,
+      "due_date": 11,
+      "weight": 2
+    },
+    {
+      "id": "B7",
+      "processing_time": 3,
+      "due_date": 14,
+      "weight": 5
+    },
+    {
+      "id": "B8",
+      "processing_time": 4,
+      "due_date": 10,
+      "weight": 1
+    }
+  ]
+}

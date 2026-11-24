@@ -1,0 +1,38 @@
+{
+  "name": "Every due date at end of day: an objective-0 schedule exists",
+  "machine": {
+    "id": "M1"
+  },
+  "orders": [
+    {
+      "id": "C1",
+      "processing_time": 4,
+      "due_date": 22,
+      "weight": 3
+    },
+    {
+      "id": "C2",
+      "processing_time": 6,
+      "due_date": 22,
+      "weight": 1
+    },
+    {
+      "id": "C3",
+      "processing_time": 3,
+      "due_date": 22,
+      "weight": 2
+    },
+    {
+      "id": "C4",
+      "processing_time": 5,
+      "due_date": 22,
+      "weight": 4
+    },
+    {
+      "id": "C5",
+      "processing_time": 4,
+      "due_date": 22,
+      "weight": 2
+    }
+  ]
+}

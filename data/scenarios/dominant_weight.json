@@ -1,0 +1,56 @@
+{
+  "name": "One order outweighs the rest 50-100x",
+  "machine": {
+    "id": "M1"
+  },
+  "orders": [
+    {
+      "id": "D1",
+      "processing_time": 6,
+      "due_date": 8,
+      "weight": 100
+    },
+    {
+      "id": "D2",
+      "processing_time": 3,
+      "due_date": 5,
+      "weight": 1
+    },
+    {
+      "id": "D3",
+      "processing_time": 4,
+      "due_date": 7,
+      "weight": 1
+    },
+    {
+      "id": "D4",
+      "processing_time": 2,
+      "due_date": 6,
+      "weight": 1
+    },
+    {
+      "id": "D5",
+      "processing_time": 5,
+      "due_date": 12,
+      "weight": 1
+    },
+    {
+      "id": "D6",
+      "processing_time": 3,
+      "due_date": 9,
+      "weight": 1
+    },
+    {
+      "id": "D7",
+      "processing_time": 4,
+      "due_date": 15,
+      "weight": 2
+    },
+    {
+      "id": "D8",
+      "processing_time": 2,
+      "due_date": 18,
+      "weight": 1
+    }
+  ]
+}
