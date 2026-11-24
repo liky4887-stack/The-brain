@@ -1,0 +1,563 @@
+
+
+Beating DIOS: blueprint
+
+Blueprint: a planning system that matches Makkook DIOS, then beats it
+
+Plan and research, commercial product on your frePPLe fork
+
+Researched Nov 20, 2026, 12:45am
+
+Build one engine DIOS can't easily copy: a tested model compiler on free solvers, replanning in seconds, and a planner-facing why for every decision.
+
+Your frePPLe fork stays the data and screens layer; the model compiler, decomposition and explanations are yours to write.
+
+Every repo below was checked live on GitHub tonight: 102 repos, 19 flagged for license or activity.
+
+Where you winArchitectureRepos by layerBuild planSolver choiceGo to market
+
+DIOS's moat is the model, not the code.The founder describes composing sector, industry and variant modules into one model of about 2M constraints and 1.4M variables. Shark Tank EgyptAuto transcript; check the numbers in the video.
+
+Their published F&B case is your scale target.17 lines, 96 time slots and 4,001 SKUs: 6.5M decisions, 500k constraints, 9 objectives, changeovers. makkook.ai
+
+Free solvers can get there, with decomposition.On 240 MIPLIB instances, parallel HiGHS solved 179 against COPT's 225 and was about 7.7 times slower. Rolling horizons and splitting by plant close most of that gap. Mittelmann
+
+Win on speed, trust and onboarding, not on a bigger model.Seconds-level replans, explanations a planner can act on, an LLM that drafts and answers but never solves, and weeks to go live. Makkook sells a five-step consulting delivery. makkook.ai
+
+Start in food and beverage, prove it in a shadow pilot.Run beside the client's planner for four weeks on their real data, and score both plans on the same KPIs and decision latency.
+
+Where you can beat DIOS
+
+Each claim says why it's believable and what's hard. DIOS already claims explanations, automatic replanning and scenarios, so you win on depth and speed, not on having the feature.
+
+1. Replan in seconds, with a stable planRe-solve only what a change touches, starting from the current plan.
+
+Why believable: warm starts, fixing untouched variables and CP-SAT neighbourhood search re-solve a small window, not 1.4M variables.
+
+Your metric: a plan stability score (share of orders that moved) shown next to every replan, so planners trust it.
+
+Hard: keeping a local fix close to the global optimum. Run a full re-solve nightly and compare.
+
+2. A why on every decisionWhich limit made this order late, and what would fix it.
+
+Why believable: MILP gives binding constraints and shadow prices; infeasible models give an irreducible subset you can name in plain words.
+
+Beyond DIOS: one-click counterfactuals ("add a Saturday shift") solved as a scenario and diffed against the plan.
+
+Hard: duals don't exist for integer models; you re-solve the fixed LP, which takes care to explain honestly.
+
+3. An LLM copilot around the solverIt drafts mappings and constraints and answers questions; the solver still decides.
+
+Why believable: OptiGuide and ORLM show LLMs answering what-ifs and drafting OR models. DIOS keeps AI chat out of its core.
+
+Competition: Timefold already sells a Copilot that answers questions about a plan, so this alone isn't unique.
+
+Hard: drafted constraints are often wrong. Nothing reaches production without passing its unit tests.
+
+4. Weeks to go live, not a consulting projectTemplates plus an AI-assisted data mapper plus a data-quality score.
+
+Why believable: Makkook's own deck lists workshops, a pilot, tuning, delivery and go-live, which is a services model.
+
+Your version: load the ERP extract, get a mapped model and a scored data report in a day, a first plan in a week.
+
+Hard: client data is messy everywhere. The template library takes years of real plants to mature.
+
+5. A digital twin that tests the plan firstSimulate breakdowns and late trucks before you commit.
+
+Why believable: salabim runs a plan as events; 200 random runs give a robustness score per plan.
+
+Beyond DIOS: pick between two plans by how they survive bad days, not only by cost on paper.
+
+Hard: the twin is only as good as its calibration to the real floor.
+
+6. Cheaper and on-prem by defaultNo per-core solver fees unless a client wants them.
+
+Why believable: the default stack is MIT, Apache and BSD; commercial solvers plug in per client.
+
+Regional edge: on-prem with self-hosted models via vLLM suits plants that won't send data to a cloud.
+
+Hard: Makkook has six implementations, a funded team and an academic optimisation lead. You're behind on references.
+
+What's genuinely hardThe parts that decide whether this works.
+
+Model correctness: a fast plan that breaks a real rule loses the client. Every constraint needs a test.
+
+SAP: PyRFC is archived; you'll write OData and BAPI adapters and need SAP access to test them.
+
+Scale on free solvers: 1.4M variables in one MILP is beyond HiGHS in minutes. Decomposition is mandatory, not optional.
+
+Architecture, by layer
+
+LayerCore picksYou build
+
+1. Data indlt, Debezium, PanderaSAP adapters, mapper
+
+2. Data modelPostgres, frePPLeThe ontology
+
+3. Model compilerPyomo, linopyCompiler, templates
+
+4. SolversHiGHS, CP-SAT, Timefold, PyVRPSolver router
+
+5. Scalempi-sppy, Ray, pymooRolling horizon, LNS
+
+6. ForecastingNixtla stack, ChronosForecast-to-plan link
+
+7. Digital twinsalabimPlan simulator
+
+8. Scenarios, auditDolt, pghistory, TemporalVersions, approvals
+
+9. ExplainabilityOptiGuideNearly all
+
+10. LLM layerLangGraph, MCP, vLLMTools, eval set
+
+11. APIFastAPIERP write-back
+
+12. FrontendNext.js, vis-timelinePlanner cockpit
+
+13. Tenancy, securityKeycloak, OpenFGA, K8sIsolation, installer
+
+Data flows top to bottom: changes land in Postgres, the compiler builds a model from the template, the router splits and solves it, the twin stress-tests the result, and the planner approves it in the cockpit before it's written back to the ERP.
+
+Repos by layer
+
+Licence and activity from each repo's GitHub page, checked tonight. ⚠ marks a licence trap or a quiet, archived or young project.
+1. Data in and ERP connectorsPull ERP, WMS, MES and machine data, and hear every change as it happens.
+
+RepoJobLicenseStars, last commit
+
+dltBatch loads from ERP, databases, APIsApache-2.0★6.1k, Nov 17, 2026
+
+debeziumChange capture from ERP databasesApache-2.0★13.4k, Nov 19, 2026
+
+kafkaEvent bus for changesApache-2.0★34.2k, Nov 19, 2026
+
+meltanoReady-made connectorsMIT★2.7k, Nov 12, 2026
+
+dagsterNightly and batch pipelinesApache-2.0★16.4k, Nov 19, 2026
+
+panderaChecks every table before solvingMIT★4.5k, Nov 19, 2026
+
+node-redWire shop-floor sourcesApache-2.0★23.9k, Nov 17, 2026
+
+opcua-asyncioOPC UA to PLCsLGPL-3.0 ⚠ fine as a library★1.5k, Nov 18, 2026
+
+pymodbusModbus devicesBSD-3★2.8k, Nov 19, 2026
+
+streampipesIIoT toolboxApache-2.0★763, Nov 19, 2026
+
+odooTest ERP, via its APILGPL-3.0★56.0k, Nov 19, 2026
+
+erpnextTest ERP, via its API onlyGPL-3.0 ⚠ API only, never copy code★41.5k, Nov 19, 2026
+
+airbyteConnectors, not as a hosted serviceELv2 ⚠ no hosted resale★22.4k, Nov 17, 2026
+
+PyRFCSAP RFC, archivedApache-2.0★576, Mar 12, 2025 ⚠ archived, don't build on it
+
+connectorOdoo connectorAGPL-3.0 ⚠ avoid★376, Aug 12, 2026
+
+Build in-house: SAP adapters over OData and BAPI, an AI-assisted field-mapping tool, and a data-quality score each client sees before the first solve.
+
+2. Canonical data modelOne typed graph of items, resources, workers, locations, time, demand and cost.
+
+RepoJobLicenseStars, last commit
+
+postgresMain storePostgreSQL★22.9k, Nov 19, 2026
+
+ageGraph queries over entities in PostgresApache-2.0★5.0k, Nov 4, 2026
+
+timescaledbSensor and event time seriesApache-2.0 + TSL ⚠ some features TSL★23.9k, Nov 19, 2026
+
+pydanticTyped schema for every entityMIT★29.6k, Nov 19, 2026
+
+alembicSchema migrationsMIT★4.5k, Oct 27, 2026
+
+basyx-python-sdkAsset Administration Shell modelsMIT★107, Oct 2, 2026
+
+freppleSystem of record, planning screensMIT (CE)★784, Nov 19, 2026
+
+Build in-house: The ontology itself, with its relations and units, the two-way mapping to frePPLe's tables, and per-tenant extensions without schema forks.
+
+3. Model compilerTurns the entity graph plus a decision template into a solver model. This is DIOS's core.
+
+RepoJobLicenseStars, last commit
+
+pyomoFull modelling languageBSD-3★2.6k, Nov 19, 2026
+
+linopyFast MILP building from arraysMIT★263, Nov 19, 2026
+
+PyOptInterfaceVery fast model buildingMPL-2.0★320, Jul 22, 2026
+
+pyoframePolars-based MILP buildingMIT★30, Sep 12, 2026 ⚠ young
+
+cpmpyConstraint programming modelsApache-2.0★379, Nov 17, 2026
+
+pulpSimple LP prototypesMIT-style★2.5k, Nov 19, 2026
+
+Build in-house: Everything: the compiler, the template library (sector, industry, variant such as make-to-order), a unit test per constraint, and a model diff between runs.
+
+4. SolversA portfolio: MILP for plans, CP-SAT for sequencing, local search for staff and routes.
+
+RepoJobLicenseStars, last commit
+
+HiGHSLP/MILP, defaultMIT★1.9k, Nov 11, 2026
+
+scipMILP/MINLP, second opinionApache-2.0★680, Nov 19, 2026
+
+PySCIPOptPython API for SCIPMIT★1.0k, Nov 18, 2026
+
+or-toolsCP-SAT sequencing and changeoversApache-2.0★14.4k, Nov 19, 2026
+
+PyJobShopMachine scheduling on CP-SATMIT★181, Nov 24, 2025 ⚠ last commit Nov 2025
+
+cuoptGPU LP and routingApache-2.0★1.1k, Nov 19, 2026
+
+timefold-solverStaffing and local searchApache-2.0★1.9k, Nov 19, 2026
+
+timefold-quickstartsShift and food-packaging examplesApache-2.0★607, Nov 3, 2026
+
+PyVRPVehicle routingMIT★734, Nov 19, 2026
+
+vroomFast routing engineBSD-2-Clause★1.9k, Nov 17, 2026
+
+osrm-backendRoad travel timesBSD-2-Clause★8.2k, Nov 19, 2026
+
+stockpylInventory policiesMIT★185, Jun 10, 2026
+
+CbcFallback MILPEPL-2.0★1.0k, Nov 18, 2026
+
+Build in-house: A router that picks the solver per sub-problem, time budgets, warm starts from yesterday's plan, and a plug for commercial solvers per client.
+
+5. Decomposition and scaleHow you reach 1.4M variables and still answer in minutes.
+
+RepoJobLicenseStars, last commit
+
+mpi-sppyParallel decomposition, scenariosBSD-3★98, Nov 12, 2026
+
+gcgDantzig-Wolfe decompositionApache-2.0★20, Jul 27, 2026 ⚠ young on GitHub
+
+ALNSLarge neighbourhood searchMIT★668, Feb 25, 2025 ⚠ stable, last commit Feb 2025
+
+mealpyMetaheuristics, includes GSKMIT★1.3k, Sep 23, 2026
+
+pymooMulti-objective searchApache-2.0★3.0k, Nov 12, 2026
+
+DESDEOInteractive trade-offsMIT★49, Nov 10, 2026
+
+rayRun sub-problems in parallelApache-2.0★44.3k, Nov 19, 2026
+
+OMLTML models inside MILPBSD-3★350, Jul 9, 2026
+
+ecoleLearning inside branch-and-boundBSD-3-Clause★379, Dec 20, 2025 ⚠ research, quiet since Dec 2025
+
+Build in-house: Rolling horizon with relax-and-fix, splitting by plant and time, MILP-based neighbourhood search, and lexicographic or weighted objectives.
+
+6. Forecasting and MLDemand and lead-time forecasts with ranges, fed into the plan.
+
+RepoJobLicenseStars, last commit
+
+statsforecastFast statistical forecastsApache-2.0★5.0k, Nov 19, 2026
+
+mlforecastGradient-boosted forecastsApache-2.0★1.3k, Nov 19, 2026
+
+hierarchicalforecastSKU, store, region totals that add upApache-2.0★770, Nov 5, 2026
+
+neuralforecastNeural forecastsApache-2.0★4.3k, Nov 18, 2026
+
+dartsForecasting toolkitApache-2.0★9.6k, Nov 19, 2026
+
+chronos-forecastingPretrained zero-shot forecastsApache-2.0★6.3k, Oct 5, 2026
+
+timesfmPretrained zero-shot forecastsApache-2.0★35.6k, Nov 13, 2026
+
+mlflowModel trackingApache-2.0★28.9k, Nov 19, 2026
+
+pyodAnomaly alertsBSD-2-Clause★10.1k, Nov 12, 2026
+
+Build in-house: Turning forecast ranges into safety stock and buffers, and a back-test harness that scores every client's forecasts against a naive baseline.
+
+7. Simulation and digital twinRun tomorrow's plan against breakdowns and late trucks before you commit it.
+
+RepoJobLicenseStars, last commit
+
+salabimPlant simulationMIT★414, May 29, 2026
+
+dittoLive twin stateEPL-2.0★953, Nov 19, 2026
+
+GymnasiumEnvironments for learned policiesMIT★12.8k, Nov 12, 2026
+
+or-gymSupply chain environmentsMIT★458, Feb 13, 2023 ⚠ no commits since Feb 2023
+
+Build in-house: A simulator that executes any plan from the canonical model, a robustness score per plan, and calibration against what really happened on the floor.
+
+8. Scenarios, versions and auditEvery plan, scenario and approval is kept and replayable.
+
+RepoJobLicenseStars, last commit
+
+doltVersioned plan dataApache-2.0★24.9k, Nov 19, 2026
+
+lakeFSVersioned data lakeBSL-1.1 ⚠ limits competing services★5.6k, Nov 19, 2026
+
+django-pghistoryAudit log inside PostgresBSD-3-Clause★551, Feb 17, 2026
+
+pgauditDatabase audit loggingPostgreSQL★1.7k, Nov 17, 2026
+
+temporalReplan and approval workflowsMIT★24.5k, Nov 19, 2026
+
+sdk-pythonTemporal from PythonMIT★1.3k, Nov 19, 2026
+
+Build in-house: Plan version semantics, the approval flow, and the three decision-latency timestamps (signal, decision, written back) for every alert.
+
+9. ExplainabilityWhy this plan, why this order is late, what it would take to change it.
+
+RepoJobLicenseStars, last commit
+
+OptiGuideWhat-if questions on a modelMIT★734, Nov 4, 2026
+
+shapExplain forecastsMIT★25.9k, Nov 19, 2026
+
+DiCECounterfactuals for ML modelsMIT★1.5k, Jul 13, 2025 ⚠ quiet since Jul 2025
+
+Build in-house: Almost all of it: binding-constraint and shadow-price reports, infeasibility explanations from irreducible subsets, counterfactual plans and plan-diff summaries.
+
+10. LLM and agent layerAn assistant around the solver, never inside it.
+
+RepoJobLicenseStars, last commit
+
+langgraphAgent workflowsMIT★45.2k, Nov 19, 2026
+
+python-sdkExpose solver tools to assistantsMIT★24.9k, Nov 5, 2026
+
+pydantic-aiTyped agent callsMIT★21.3k, Nov 19, 2026
+
+vllmSelf-host open models on-premApache-2.0★97.2k, Nov 19, 2026
+
+ORLMLLMs that draft OR modelsApache-2.0★284, Sep 18, 2025 ⚠ research, Sep 2025
+
+OptiMUSLLM drafts MILPsMIT★309, Nov 4, 2025 ⚠ research, Nov 2025
+
+langfuseTrace and evaluate LLM callsMIT + ee ⚠ ee folders commercial★37.6k, Nov 19, 2026
+
+Build in-house: The tool layer over your API, an eval set of real planner questions, Arabic and English, and the rule that every drafted constraint passes tests before use.
+
+11. API and integration outOne API for the frontend, the assistant and write-back to ERP.
+
+RepoJobLicenseStars, last commit
+
+fastapiREST APIMIT★104.9k, Nov 18, 2026
+
+hey-apiTyped TypeScript clientMIT★5.6k, Sep 30, 2026
+
+appriseAlerts to email, chat, SMSBSD-2-Clause★17.8k, Nov 19, 2026
+
+Build in-house: Public API and webhooks, write-back of approved orders into SAP and Odoo, and rate limits per tenant.
+
+12. FrontendA dark, minimal planner cockpit on web, approvals on mobile.
+
+RepoJobLicenseStars, last commit
+
+next.jsWeb appMIT★143.6k, Nov 19, 2026
+
+uiComponentsMIT★128.6k, Nov 19, 2026
+
+vis-timelineMachine schedule viewApache-2.0 / MIT★2.6k, Nov 19, 2026
+
+react-ganttReact GanttMIT★219, Nov 17, 2026
+
+echartsChartsApache-2.0★67.8k, Oct 4, 2026
+
+ag-gridBig editable tablesMIT + commercial ⚠ Enterprise features paid★15.7k, Nov 19, 2026
+
+xyflowEntity and flow graph editorMIT★39.1k, Nov 17, 2026
+
+supersetKPI dashboardsApache-2.0★75.6k, Nov 19, 2026
+
+expoMobile approvals appMIT★53.7k, Nov 19, 2026
+
+Build in-house: The cockpit: objective weight sliders, side-by-side scenarios, a why panel on every bar of the Gantt, and one-tap approvals.
+
+13. Multi-tenant, deployment and securityCloud or on-prem, one tenant's data never seen by another.
+
+RepoJobLicenseStars, last commit
+
+keycloakSign-in, SSOApache-2.0★38.0k, Nov 19, 2026
+
+openfgaFine-grained permissionsApache-2.0★6.2k, Nov 16, 2026
+
+cloudnative-pgPostgres on KubernetesApache-2.0★9.6k, Nov 19, 2026
+
+kubernetesRuntimeApache-2.0★129.3k, Nov 19, 2026
+
+helmPackagingApache-2.0★30.5k, Nov 19, 2026
+
+argo-cdGitOps deploysApache-2.0★24.7k, Nov 19, 2026
+
+opentelemetry-collectorTraces and metricsApache-2.0★7.8k, Nov 19, 2026
+
+prometheusMetricsApache-2.0★67.7k, Nov 19, 2026
+
+grafanaOps dashboardsAGPL-3.0 ⚠ internal ops only, unmodified★78.0k, Nov 19, 2026
+
+openbaoSecretsMPL-2.0★9.1k, Nov 19, 2026
+
+trivyImage and dependency scansApache-2.0★39.5k, Nov 19, 2026
+
+Build in-house: Tenant isolation with Postgres row-level security, a one-command on-prem installer, sandboxed solver jobs with memory caps, and SOC 2 or ISO 27001 controls.
+
+Build plan
+
+PhaseGoalGateTeam
+
+0. Engine coreCompiler on 2 templatesPublic benchmarks pass2
+
+1. MVPOne F&B plant, weekly planMakkook-size instance, back-test3
+
+2. v1Replan, trade-offs, scenariosReplan under 60 s, shadow pilot5
+
+3. Beat DIOS2M-row scale, twin, copilot, routesScale test, pilot win8-10
+
+Phase lengths depend on your team; each gate passes with logged numbers before the next phase starts. Give each phase to your AI coding tool as its own prompt, the way you built the car app.
+
+Phase 0: engine coreCanonical model, compiler and solvers proven on public instances.
+
+Deliverables
+
+Pydantic ontology mapped to your frePPLe tables; Alembic migrations.
+
+Compiler with two templates: capacitated lot sizing with setup times, and flexible job shop with changeovers.
+
+Solver router: HiGHS for lot sizing, CP-SAT via PyJobShop for sequencing; a test per constraint.
+
+Repos
+frePPLe, Pyomo or linopy, HiGHS, OR-Tools, PyJobShop, Pandera, Postgres.
+
+Gate
+
+Taillard job-shop instances from JSPLIB (ta01-ta10): within 5% of their best-known makespans in 60 seconds.
+
+A 20-instance MIPLIB 2017 subset runs through the router as a solver regression suite.
+
+The same small plant data gives the same feasible plan in frePPLe and in your compiler.
+
+Team and risk
+You plus one operations-research engineer. Risk: building a general compiler too early; keep it to two templates.
+
+Phase 1: MVP for one food plantA weekly production plan with changeovers that a planner can read.
+
+Deliverables
+
+dlt and Pandera ingestion from an Odoo or CSV export, with a data-quality score.
+
+Rolling-horizon solve: daily buckets by MILP, then line sequencing by CP-SAT.
+
+Next.js cockpit: Gantt on vis-timeline, KPI cards, late-order why from frePPLe.
+
+Repos
+dlt, Pandera, Dagster, HiGHS, OR-Tools, timefold-quickstarts food-packaging example as reference, Next.js, shadcn/ui, vis-timeline, ECharts.
+
+Gate
+
+A synthetic instance at Makkook's published size (17 lines, 96 slots, 4,001 SKUs): feasible plan in under 15 minutes, gap logged.
+
+Back-test on 12 weeks of one plant's history: lower changeover hours or late orders than the plans they actually ran.
+
+Team and risk
+Add one full-stack developer. Risk: no real plant data. Line up the pilot client before this phase starts.
+
+Phase 2: v1, the features DIOS sellsFast replanning, weighted goals, scenarios, forecasts and an audit trail.
+
+Deliverables
+
+Debezium plus Temporal: a machine-down or rush-order event triggers a local re-solve.
+
+Objective weight sliders (cost, on-time, energy, changeovers) and side-by-side scenarios in Dolt.
+
+Forecasts with ranges from statsforecast and hierarchicalforecast feeding safety stock.
+
+Audit log and decision-latency timestamps; binding-constraint and infeasibility explanations.
+
+Repos
+Debezium, Kafka, Temporal, Dolt, django-pghistory, pymoo, Nixtla stack, MLflow, apprise, Keycloak.
+
+Gate
+
+Single-machine breakdown on the Phase 1 instance: new plan in under 60 seconds, under 5% of orders moved, cost within 2% of a full overnight re-solve.
+
+Forecasts beat a seasonal-naive baseline on the pilot's history.
+
+Four-week shadow pilot completed with both plans scored.
+
+Team and risk
+Add a data and integration engineer and an ML engineer. Risk: ERP write-back. Keep it approval-only until the pilot signs off.
+
+Phase 3: beating DIOSDIOS scale, the digital twin, the copilot, routing and staffing.
+
+Deliverables
+
+Decomposition by plant and time with mpi-sppy and Ray; MILP-based neighbourhood search.
+
+salabim twin with a robustness score per plan; copilot over your API via MCP and LangGraph.
+
+Routing with PyVRP and OSRM; staffing with Timefold; multi-tenant on Kubernetes with an on-prem installer.
+
+Repos
+mpi-sppy, GCG, Ray, ALNS, salabim, LangGraph, MCP SDK, vLLM, Langfuse, PyVRP, OSRM, Timefold, OpenFGA, CloudNativePG, Argo CD.
+
+Gate
+
+A synthetic 2M-constraint, 1.4M-variable plan: feasible in under 30 minutes on one 32-core server, with the gap logged.
+
+Routing within 1% of best-known on CVRPLIB X instances under 100 customers; staffing feasible on INRC-II.
+
+Copilot answers 50 real planner questions correctly against solver output; drafts 20 IndustryOR models that pass tests.
+
+Team and risk
+Grow to 8-10: three OR engineers, two backend, one frontend, one SRE and security, one solutions engineer. Risk: scale without a commercial solver; budget one for the biggest client.
+
+Free or commercial solver at DIOS scale
+
+SolverMIPLIB solvedCostUse it for
+
+HiGHS179 of 240 (parallel)Free, MITDefault MILP
+
+SCIP136 of 240Free, Apache-2.0Second opinion
+
+OR-Tools CP-SATNot in this tableFree, Apache-2.0Sequencing
+
+COPT225 of 240QuoteFastest in the table
+
+GurobiNot listedQuote; free tier 2,000 vars, non-commercialBig clients
+
+CPLEXNot listed$320 per user a month, development onlyRarely
+
+HexalyNot listedQuote, unlimited-use licence, startup pricingHuge heuristic models
+
+Results from Mittelmann's MILP table, 12 threads, two-hour limit; Gurobi, CPLEX and Xpress aren't in it. plato.asu.edu
+
+Recommendation: ship on HiGHS and CP-SAT, keep the compiler solver-neutral through Pyomo or linopy, and pass a commercial licence through to clients who need it.
+
+Go to market
+
+First vertical: food and beverage. Changeovers dominate, Makkook has published the case, so a pilot compares like with like.
+
+Pilot proof: four weeks in shadow mode on real data; score both plans on changeover hours, on-time delivery, overtime and decision latency, agreed before the pilot starts.
+
+Offer: fixed-price pilot, then a yearly licence per plant with on-prem as a standard option.
+
+Sources and where to verify
+
+Shark Tank Egypt, Makkook pitch, auto transcript
+
+Makkook, DIOS page
+
+Makkook, F&B planning case
+
+Makkook, about us
+
+Mittelmann, MILP benchmark on MIPLIB 2017
+
+Gurobi pricing, CPLEX pricing, Hexaly pricing, Timefold pricing
+
+MIPLIB 2017, JSPLIB, CVRPLIB, INRC-II
+
+GitHub repo pages for all 102 repos, checked Nov 20, 2026
+

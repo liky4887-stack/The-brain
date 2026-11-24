@@ -1,0 +1,4 @@
+# Stage 1 placeholder: the engine core (stages 0-4) has no database and no
+# services, so nothing here runs yet. Postgres and the API join at Stage 5
+# (integration/product layer), with their own compose services defined then.
+services: {}

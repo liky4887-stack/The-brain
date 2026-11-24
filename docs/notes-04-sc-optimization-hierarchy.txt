@@ -1,0 +1,62 @@
+Building high-quality supply chain optimization systems
+made with Sesame
+
+Building a high-quality supply chain and factory planning system requires a layered architecture that separates high-level strategic planning from low-level operational execution. Industry-standard platforms like o9 Solutions, Kinaxis, and RELEX typically employ a hybrid approach, utilizing different mathematical paradigms for different time horizons.
+
+The Mathematical Hierarchy of Planning
+
+Effective systems do not rely on a single solver. Instead, they decompose the problem into a hierarchy of models, each optimized for a specific decision scope.
+
+1. Strategic & Tactical Planning (MILP)
+For network design, multi-echelon inventory optimization (MEIO), and capacity allocation, Mixed-Integer Linear Programming (MILP) is the industry standard.
+- Why MILP: It excels at handling continuous variables (e.g., flow volumes, fractional blending) and global cost-minimization objectives.
+- Key Concepts: Multi-commodity network flow, Benders decomposition (for separating master planning from sub-problems), and stochastic programming to handle demand uncertainty.
+- Foundational Text: Modeling the Supply Chain by Jeremy F. Shapiro (ResearchGate — https://www.researchgate.net/publication/224904948_Supply_Chain_Network_Design_Heuristics_for_Capacitated_Facilities_underRisk_of_Supply_Disruptions) provides the rigorous mathematical framework for these models. Model Building in Mathematical Programming by H.P. Williams is the definitive guide for formulating these problems correctly.
+
+2. Operational Scheduling (CP-SAT)
+For factory-floor sequencing, job-shop scheduling, and resource-constrained project scheduling (RCPSP), Constraint Programming (CP)—specifically Google OR-Tools' CP-SAT solver—is currently the most efficient open-source tool (GitHub — https://github.com/google/or-tools).
+- Why CP-SAT: It handles discrete, combinatorial constraints (e.g., "Job A must finish before Job B starts," "Machine X cannot process two items simultaneously") far more efficiently than MILP. MILP models for these problems often require "big-M" formulations that weaken the linear relaxation, causing solver performance to collapse.
+- Key Concepts: Interval variables, NoOverlap constraints, and cumulative resource scheduling.
+- Performance: CP-SAT often finds high-quality feasible solutions for large-scale scheduling problems in minutes, whereas MILP solvers may struggle to find any feasible solution within an hour (Stack Overflow — https://stackoverflow.com/questions/49405659/mip-vs-cp-for-scheduling-problems).
+
+Recommended Learning-to-Implementation Map
+
+To build a system of this scope, follow this prioritized roadmap:
+
+1.  Foundations (Theory):
+    - Master the basics of linear programming and integer programming.
+    - Study Supply Chain Management: Strategy, Planning, and Operation by Sunil Chopra for the business logic of supply chain hierarchies.
+    - Review Designing and Managing the Supply Chain by Simchi-Levi et al. for the analytical frameworks behind decision-support systems.
+
+2.  Modeling (Practice):
+    - Start with Google OR-Tools (GitHub — https://github.com/google/or-tools). It is the most accessible entry point for both MILP (via the Glop/PDLP solvers) and CP (via CP-SAT).
+    - Implement a simple Job Shop Scheduling Problem (JSSP) using CP-SAT to understand interval variables.
+    - Implement a simple network flow problem using MILP to understand continuous variables and cost minimization.
+
+3.  Advanced Decomposition (Architecture):
+    - Study Logic-Based Benders Decomposition (LBBD). This is the architectural secret to large-scale systems: use a MILP master model to decide what to produce (allocation), and use a CP-SAT sub-model to decide how to sequence it (scheduling).
+    - Explore PyJobShop (GitHub — https://github.com/PyJobShop/PyJobShop) as a reference implementation for how to wrap CP-SAT for complex production environments.
+
+Open-Source Resources & Benchmarks
+
+Do not reinvent the wheel. Use these repositories to understand how to structure your data and models:
+
+- Scheduling Frameworks:
+    - PyJobShop: A Python library for complex production scheduling using CP-SAT.
+    - GA-Scheduler: Useful for understanding how to implement metaheuristics (Genetic Algorithms) when exact solvers are too slow for real-time needs.
+    - JobShopLab: An OpenAI Gym-compatible environment for testing scheduling agents, useful if you plan to integrate Reinforcement Learning (RL) for stochastic environments (arXiv — https://arxiv.org/pdf/2107.00913).
+
+- Benchmarks:
+    - PSPLIB (Project Scheduling Problem Library): The gold standard for testing your scheduling models against known hard instances.
+    - FJSPLib: A dedicated repository for Flexible Job Shop Scheduling benchmarks.
+    - Supply Chain MPS Benchmarks: Look for standardized MPS (Mathematical Programming System) files on GitHub to test your MILP solver's performance on network flow problems.
+
+Software Architecture Considerations
+
+A production-grade system requires more than just a solver. You must build for:
+
+- Data Modeling: Use a relational database (PostgreSQL) or a graph database to manage the Bill of Materials (BOM) and routing data. The optimization model should be decoupled from the data layer via a standardized API.
+- Model Validation: Implement "infeasibility analysis." When a model fails to find a solution, the system must be able to identify the conflicting constraints (e.g., "Machine capacity is insufficient for the requested demand"). CP-SAT provides tools for this, but it requires careful implementation.
+- Hybridization: As your system grows, you will likely need to combine exact solvers (MILP/CP) with heuristics. For extremely large-scale problems, consider integrating local search solvers like Hexaly (formerly LocalSolver), which are often used in industry to complement exact methods.
+- Stochasticity: Move beyond deterministic models. Incorporate "Robust Optimization" or "Stochastic Programming" to ensure your plans remain feasible even when demand or lead times fluctuate. This is the primary differentiator between a basic scheduler and an enterprise-grade supply chain platform.
+- Build a small, independently testable optimizer first; turn selected textbook methods into implementation guidance, then integrate it with frePPLe.

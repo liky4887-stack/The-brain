@@ -1,0 +1,31 @@
+Five Levels of a Factory Optimizer
+made with Sesame
+
+This note explains, in plain language, how factory information becomes a usable work plan.
+
+1. The Map
+
+Describe the factory: its products, machines, work areas, workers, and the steps materials follow. This tells the system what exists and how work can move from one step to the next.
+
+2. The Rulebook
+
+Write down what is allowed and what is not. Examples include which machines can make each product, how much each machine can produce, how long each step takes, worker availability, deadlines, and required process order.
+
+3. The Goal
+
+Say what a good plan should achieve. For example, finish more orders, reduce costs, avoid late deliveries, or balance several of these goals. If goals conflict, the system needs clear priorities or weights.
+
+4. The Brain
+
+This is the optimization code. It turns the map, rules, and goal into a mathematical problem, then uses a solver such as CP-SAT or HiGHS to search for a strong plan that obeys the rules. The books teach useful methods for building this code; they are not a finished factory-specific program by themselves.
+
+5. The Result
+
+Show the plan in a form people can use: what to make, which machine or work area to use, and when to do each job. The plan should also make it possible to see important limits or reasons behind the decisions.
+
+How the levels fit together
+
+Map + Rulebook + Goal → Brain → Result
+
+The first three levels describe the factory problem. The Brain solves that problem. The Result gives the factory team a schedule to review and use.
+This note explains how factory information becomes a usable work plan.

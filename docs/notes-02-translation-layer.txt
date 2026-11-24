@@ -1,0 +1,53 @@
+This reading list maps the books and references to the formulation, MIP, constraint-programming, and implementation parts of the optimization engine.
+
+Optimization translation layers for factory planning
+made with Sesame
+
+Building a robust factory-planning system requires a sophisticated translation layer that bridges the gap between high-level business logic (ERP/MES data) and the low-level mathematical requirements of solvers like Google OR-Tools CP-SAT and HiGHS. This layer is not merely a data pipe; it is an architectural component that transforms domain-specific constraints into solvable mathematical structures.
+
+The Architecture of the Translation Layer
+
+A modern translation layer typically functions as a three-tier pipeline. It decouples the "what" (business rules) from the "how" (mathematical formulation).
+
+1.  Semantic/Data Ingestion Layer: This layer normalizes disparate data streams—such as Bill of Materials (BOMs), machine routings, and real-time sensor telemetry—into a standardized format, often utilizing a Unified Namespace (UNS) or semantic models like ISO 23247 (Medium — https://medium.com/@arcmineko/the-three-layer-architecture-model-an-abstraction-model-for-connecting-strategy-and-execution-d3bd0b414ebb).
+2.  Constraint Mapping & Formulation Layer: This is the core engine. It maps physical factory constraints (e.g., sequence-dependent setup times, labor availability) into mathematical variables and constraints. This layer abstracts the complexity, allowing planners to define rules in domain terms rather than raw algebraic equations (ResearchGate — https://www.researchgate.net/publication/406846559_HENE_A_Distributed_Allostatic_Optimization_Architecture_for_Resource_Arbitration_in_Constrained_Closed-Loop_Networks).
+3.  Solver Abstraction & Execution Layer: This layer translates the formulated model into solver-specific code. It manages execution, handles timeouts, and maps raw solver output (e.g., binary decision variables) back into actionable schedules (MDPI — https://www.mdpi.com/2079-8954/14/1/26).
+
+Mapping Domain Logic to Solvers
+
+The translation layer must account for the fundamental differences between CP-SAT (a hybrid Constraint Programming/SAT solver) and HiGHS (a Mixed-Integer Linear Programming/MILP solver).
+
+CP-SAT Representation
+CP-SAT is designed for discrete combinatorial problems. It excels at scheduling because it natively supports:
+- Interval Variables: Representing tasks with start, end, and duration.
+- Global Constraints: Such as NoOverlap (for single machines) or Cumulative (for parallel capacity), which are highly efficient for sequencing (GitHub — https://github.com/vpetreski/cp-deep-dive/blob/main/docs/knowledge/cp-sat/overview.md).
+- Search Mechanics: It uses constraint propagation and Conflict-Directed Clause Learning (CDCL) to prune infeasible paths rapidly (arXiv — https://arxiv.org/html/2510.21695v1).
+
+HiGHS (MILP) Representation
+HiGHS requires all constraints to be expressed as linear equations ($Ax \le b$). This makes scheduling significantly more complex:
+- Disjunctive Formulations: You must use "Big-M" constraints or time-indexed binary variables to prevent overlapping tasks.
+- Linearization: Because HiGHS does not natively understand "no-overlap" logic, the translation layer must manually linearize these constraints. This often leads to a massive increase in the number of variables and constraints, which can cause the search space to explode (Carnegie Mellon — https://egon.cheme.cmu.edu/ewo/docs/CP-SAT%20and%20OR-Tools.pdf).
+
+Key Frameworks for Abstraction
+
+To avoid writing solver-specific code, developers use abstraction libraries that act as the translation layer:
+
+- Google OR-Tools MathOpt: A modern, solver-agnostic library. It allows you to write a model once and swap backends (CP-SAT, HiGHS, Gurobi) by changing an enum. Limitation: It does not auto-linearize high-level CP constraints (like NoOverlap) for MILP solvers. You must provide the algebraic formulation yourself (google.com — https://developers.google.com/optimization/math_opt).
+- JuMP (Julia) & MathOptInterface (MOI): A highly mature abstraction layer. MOI performs "bridge transformations," automatically rewriting constraints into forms supported by the target solver. It is the gold standard for solver-independent modeling (jump.dev — https://jump.dev/JuMP.jl/stable/background/algebraic_modeling_languages/).
+- CPMpy (Python): A library that allows you to write CP models and translate them to different backends, including MIP solvers, by handling some of the linearization under the hood (readthedocs.io — https://cpmpy.readthedocs.io/en/latest/modeling.html).
+
+Recommended Resources for Model Building
+
+These resources provide the theoretical and practical foundation for building these translation layers:
+
+- "Model Building in Mathematical Programming" (H. Paul Williams): The definitive text for translating business rules into the algebraic equations required by MILP solvers like HiGHS. It teaches the "art" of formulation, which is not automated by any software (real.fm — https://stage.real.fm/sites/FNAIAM/756135/model-building-in-mathematical-programming.pdf).
+- "The CP-SAT Primer" (Dominik Krupke): Essential for understanding how to structure models for CP-SAT, specifically how to use interval variables and global constraints effectively (github.io — https://d-krupke.github.io/cpsat-primer/).
+- "Algorithms for Optimization" (Kochenderfer & Wheeler): Provides a strong foundation in the underlying algorithms, helping you understand when to choose CP-SAT versus MILP solvers based on problem structure (solvermax.com — https://www.solvermax.com/resources/links/textbooks-about-optimization).
+- "MathOptInterface: An Abstract Device Interface for Mathematical Optimization" (Legat et al.): The primary academic reference for understanding how to build a robust solver abstraction layer (arxiv.org — https://arxiv.org/html/2206.03866v2).
+
+Where Automation Fails
+It is critical to recognize that no library provides a "book-to-code" transfer for complex factory logic. While these tools handle the syntax of translation, they cannot handle the semantics of your specific factory:
+
+- Linearization Logic: If you choose to use a MILP solver (HiGHS) for a scheduling problem, the translation layer cannot automatically invent the "Big-M" constraints required to model your specific machine setup rules. You must derive these mathematically.
+- Constraint Selection: Choosing between a Cumulative constraint (CP-SAT) and a network flow formulation (MILP) is a design decision that requires deep domain knowledge. The software will execute your choice, but it will not tell you which choice is optimal for your specific factory throughput.
+- Data Quality: The translation layer assumes the input data is clean. It cannot automatically fix "dirty" data (e.g., missing machine routings or inaccurate cycle times) that renders the mathematical model infeasible.

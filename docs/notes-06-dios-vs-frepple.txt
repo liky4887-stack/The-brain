@@ -1,0 +1,309 @@
+
+
+DIOS vs frePPLe
+
+How Makkook DIOS works, and what completes frePPLe
+
+Research, public sources only, for your frePPLe fork
+
+Researched Nov 20, 2026, 12:15am
+
+DIOS is a model compiler: it turns a client's data into one huge optimization model and solves it. frePPLe can't do that. You'd build the compiler yourself on Pyomo or OR-Tools.
+
+No leak exists. The best public source is the founder's own Shark Tank Egypt pitch, aired Nov 18. I downloaded it and transcribed all 28 minutes myself.
+
+Facts are marked Confirmed (with a link) or Inference (my reading). Every pitch number comes from my automatic Arabic transcript, so check the video at the timestamps given.
+
+One giant model, compiled from templates.In the pitch the founder says ready-made modules (sector, then industry, then variant like make-to-order or make-to-stock) are composed into one maths model. His example has about 2 million constraints and 1.4 million decision variables, sent to a solver. Shark Tank, ~4:40-6:30 makkook.ai/dios
+
+The optimisation brain is an academic metaheuristics team.The Chief Optimization Officer, Prof. Ali Khater, co-created the Gaining-Sharing Knowledge (GSK) algorithm and won IEEE CEC 2021. So DIOS probably mixes exact solvers with custom evolutionary search. about-us GSK paperMix is inference.
+
+No LLM in the core, on purpose.The founder says LLMs are probabilistic and leave no audit trail, so DIOS is deterministic and explains the trade-offs behind each decision. Their own article describes 6.5 million decisions, 500,000 constraints and 9 objectives in one F&B plan. makkook.ai article
+
+frePPLe CE covers about a third.It holds the data, the planning screens, scenarios and "why is this late". It can't do the model compiler, weighted objectives, minimising changeovers, replanning only what changed, routing or staffing. frePPLe source
+
+Recommended: frePPLe as the system of record plus an optimisation service.Use Pyomo/linopy with HiGHS and CP-SAT for the compiler, Timefold and PyVRP for staffing and routing, Nixtla for forecasts, Debezium and Temporal for event-driven replanning. The compiler and the industry libraries have to be built in-house. No repo has them.
+
+The biggest pieces you add to frePPLe
+
+GapFill withLicenseActivity
+
+Model compiler + MILPPyomo + HiGHSBSD-3 / MITPushed Nov 19, 2026
+
+Changeover schedulingOR-Tools CP-SATApache-2.0Pushed Nov 19, 14.4k★
+
+Event-driven replanningDebezium + TemporalApache-2.0 / MITPushed Nov 19
+
+Weighted objectivespymooApache-2.0Pushed Nov 12, 3k★
+
+Part 1: how DIOS works
+
+The pitch: architecture, in the founder's wordsConfirmed from the video, via my Whisper transcript (timestamps approximate).
+
+Confirmed: industry modules are layered as sector, then industry, then variant (MTO/MTS). An entity model with relations between items, machines, workers and more is composed into one model of ~2M constraints and ~1.4M variables, then solved. ~4:40-6:30
+
+Confirmed: the client's IT team gives API access to SAP, and Makkook maps it to its own database. WMS and TMS are named too. It offers alternatives with their trade-offs, and replans only the part a user is allowed to change.
+
+Confirmed: 50+ operational decision families. He calls it deterministic and says it uses no LLM in the core. He names o9 and RELEX as competitors.
+
+The relation types point to a Palantir-style ontologyInference from one phrase in the pitch.
+
+The transcript has him describing relations as roughly "kinetic, semantic, transactional" (~5:30). Whisper may have misheard part of that.
+
+Inference: "semantic" and "kinetic" are Palantir Foundry's words for objects and links versus actions. So DIOS likely keeps a typed graph of business objects that the compiler reads.
+
+The DIOS page agrees: a pre-built model of "items, resources, workers, locations, time, demand, cost" that it "compiles" into an executable maths model. makkook.ai/dios
+
+Business facts from the pitchThe company's own numbers, said on TV.
+
+Commercial sales started in Q2 2026. Six implementations in seven months, about EGP 14M in contracts, and a pipeline of 9 clients worth about EGP 30M.
+
+The ask was EGP 35M for 5%, which puts the valuation at EGP 700M (the video title says 700M). The last round valued them at about EGP 270M.
+
+Small team and early revenue, so each client probably gets a lot of custom modelling. Inference.
+
+The team behind the solverTwo academic leads, checked in OpenAlex.
+
+Prof. Ali Khater is Chief Optimization Officer, "leading core optimization modeling & solvers". His papers cover GSK, AGSK (CEC 2020), APGSK-IMODE (CEC 2021) and adaptive differential evolution. CEC 2021 CEC 2020
+
+Dr. Ayman El-Kilany is Chief AI Officer. His papers include a reinforcement-learning query optimiser and work on missing and imbalanced data. IEEE Access
+
+You can reproduce the GSK idea: mealpy (MIT) includes a GSKA implementation.
+
+Tech stack from a job adA Makkook Tech Lead / Principal Engineer posting.
+
+Python, Node or .NET. PostgreSQL or SQL Server. React/Next.js or Angular. Flutter or React Native, including offline mobile. egjobank
+
+Docker, CI/CD, deploying to cloud or on-premises, and Kafka or RabbitMQ for messaging.
+
+Inference: a Python optimisation core behind a Postgres store, with event messaging for replanning. That's close to the architecture recommended below.
+
+Their own articles and newsThe newest technical claims on makkook.ai.
+
+F&B case: 17 lines × 96 time slots × 4,001 SKUs is 6.5M decisions. It has 500k constraints, 9 objectives and sequence-dependent changeovers, and replans automatically. Nov 17, 2026
+
+Simplex partnership (Jun 17, 2026) claims CNC fatigue prediction and real-time toolpath recalculation. That's marketing, with no method given. makkook.ai news
+
+Decision latency (signal to decision to system of record) is the KPI they sell, as covered in your earlier map.
+
+An outside expert's readNot Makkook: an ex-Microsoft/AWS engineer's X thread on the pitch.
+
+Describes DIOS as sitting on top of ERP, MES and CRM and producing daily plans, inventory, staffing and truck routes. @_MoustafaM
+
+His view: AI can help write constraints and predict inputs, but "AI suggests, the solver checks." His Madrid graph-database project is his own, not Makkook's.
+
+What I searched that turned up nothing usefulDead ends, so you don't repeat them.
+
+Website: I crawled all 33 sitemap pages and their JavaScript. It's a Next.js marketing site with a Leadfeeder tracker, and no app, API or docs.
+
+Wayback Machine: 2026 snapshots are only bot-check pages. The 2025 snapshots show an earlier AI-services agency site.
+
+I found no GitHub org, patent or conference talk on DIOS. I didn't touch any non-public system or leaked material.
+
+Part 2: each DIOS capability against frePPLe CE
+
+DIOS capabilityfrePPLe CECompleted by
+
+Compile entities into one MILP/CP modelNo: plans one order at a time by priorityPyomo or linopy + HiGHS/SCIP; the compiler is in-house
+
+Industry decision libraries (50+ families)NoIn-house; Timefold quickstarts as starting patterns
+
+Sequence-dependent changeoversFollows setup times but doesn't minimise them (paid solver does)OR-Tools CP-SAT, PyJobShop, Timefold
+
+Several weighted objectives (9 in F&B)Nopymoo, DESDEO; weighted sums in Pyomo
+
+Metaheuristics at huge scaleNomealpy (GSKA included), Timefold local search
+
+Replan only what changedNo (incremental replanning is paid)Debezium + Kafka + Temporal; fixing variables is in-house
+
+Scenarios and plan versionsScenarios yes; versions noDolt or django-pghistory
+
+Explain why late, show trade-offs"Why late" and problem lists yesOptiGuide pattern for what-if questions; trade-off explanation in-house
+
+Demand forecastingYes (ML forecast is beta)statsforecast, mlforecast, hierarchicalforecast, darts
+
+Inventory optimisationNo (paid)stockpyl
+
+Routing and fleets (logistics suite)NoPyVRP, VROOM + OSRM
+
+Workforce and staffingSkills onlyTimefold employee scheduling
+
+ERP/WMS/TMS connectorsREST API, Odoo connectordlt, Debezium; SAP adapters in-house
+
+Shop floor and PLC (Simplex, SCADA)Noopcua-asyncio, pymodbus, Node-RED, StreamPipes
+
+Data checks before solvingBasicPandera
+
+Simulation / digital twinNosalabim, Eclipse BaSyx, Eclipse Ditto
+
+Alerts and anomaliesProblem listPyOD + apprise
+
+Gantt, KPIs, audit logOwn screensvis-timeline, Superset, django-pghistory
+
+Assistant layer (optional; DIOS says none in core)MCP app is paidMCP Python SDK, LangGraph, ORLM/OptiMUS for drafting constraints
+
+Every repo, with license and activity
+
+Licenses, stars and last push are from GitHub's API on Nov 19, 2026. Stars stand in for maturity. Flagged licenses are marked ⚠.
+
+RepoJobLicenseStars, last push
+
+frePPLePlanning core, data, UIMIT (CE)784, Nov 19
+
+PyomoModel buildingBSD-32.6k, Nov 19
+
+linopyFast large MILP buildingMIT263, Nov 19
+
+HiGHSMILP/LP solverMIT1.9k, Nov 19
+
+SCIPMILP solverApache-2.0680, Nov 19
+
+OR-ToolsCP-SAT schedulingApache-2.014.4k, Nov 19
+
+CPMpyCP modellingApache-2.0379, Nov 19
+
+PyJobShopMachine schedulingMIT181, Aug 14
+
+Timefold SolverStaffing, local searchApache-2.01.9k, Nov 19
+
+Timefold quickstartsFood packaging, shiftsApache-2.0607, Nov 16
+
+pymooMulti-objectiveApache-2.03k, Nov 12
+
+DESDEOInteractive trade-offsMIT49, Nov 16
+
+mealpyMetaheuristics, GSKAMIT1.3k, Sep 23
+
+OMLTML models inside MILPBSD-3351, Jul 9
+
+stockpylInventoryMIT185, Jun 10
+
+PyVRPRoutingMIT734, Nov 19
+
+VROOMFast routingBSD-21.9k, Nov 17
+
+OSRMRoad travel timesBSD-28.2k, Nov 19
+
+statsforecastForecastingApache-2.05k, Nov 19
+
+mlforecastML forecastingApache-2.01.3k, Nov 19
+
+hierarchicalforecastSKU-store-region totalsApache-2.0770, Nov 5
+
+dartsForecasting toolkitApache-2.09.6k, Nov 19
+
+salabimPlant simulationMIT414, May 29
+
+BaSyx Python SDKAsset modelsMIT107, Nov 18
+
+Eclipse DittoDigital twin stateEPL-2.0953, Nov 19
+
+dltERP data loadingApache-2.06.1k, Nov 19
+
+DebeziumChange captureApache-2.013.4k, Nov 19
+
+KafkaEvent busApache-2.034.2k, Nov 19
+
+TemporalReplan workflowsMIT24.5k, Nov 19
+
+DagsterBatch pipelinesApache-2.016.4k, Nov 19
+
+PanderaData checksMIT4.5k, Nov 19
+
+Node-REDMachine wiringApache-2.023.9k, Nov 17
+
+opcua-asyncioOPC UA to PLCsLGPL-3.0 ⚠ fine as a library1.5k, Nov 18
+
+pymodbusModbus devicesBSD-32.8k, Nov 19
+
+StreamPipesIIoT toolboxApache-2.0763, Nov 19
+
+PyODAnomaly alertsBSD-210.1k, Nov 12
+
+appriseNotificationsBSD-217.8k, Nov 19
+
+DoltVersioned plan dataApache-2.024.9k, Nov 19
+
+django-pghistoryAudit logBSD-3551, Feb 17
+
+TimescaleDBSensor time seriesApache core ⚠ some features TSL23.9k, Nov 19
+
+vis-timelineGantt viewApache-2.0 / MIT2.6k, Nov 19
+
+SupersetKPI dashboardsApache-2.075.6k, Nov 19
+
+SHAPExplain forecastsMIT25.9k, Nov 19
+
+MLflowModel trackingApache-2.028.9k, Nov 19
+
+OptiGuideWhat-if Q&A on modelsMIT734, Nov 4
+
+ORLMLLM drafts OR modelsApache-2.0284, Sep 2025
+
+OptiMUSLLM drafts MILPsMIT309, Nov 2025
+
+LangGraphAgent workflowsMIT45.2k, Nov 19
+
+MCP Python SDKTools for an assistantMIT24.9k, Nov 17
+
+supervisionCCTV analytics (in their cases)MIT51.7k, Nov 19
+
+Ultralytics YOLOVision modelsAGPL-3.0 ⚠ avoid or buy licence63.6k, Nov 19
+
+pm4pyProcess miningAGPL-3.0 ⚠1.1k, Nov 5
+
+OCA connectorOdoo integrationAGPL-3.0 ⚠376, Nov 3
+
+Recommended reference architecture
+1. Data inPull ERP data and listen for changes.
+
+dlt for batch loads from ERP, WMS and TMS. Debezium into Kafka for live changes. Node-RED, opcua-asyncio and pymodbus for machines.
+
+Pandera checks every table before it reaches the model. Data lands in Postgres, plus TimescaleDB for sensor data.
+
+2. frePPLe as the system of recordIts entities, screens, scenarios and "why late" stay as they are.
+
+Your canonical entity graph maps onto frePPLe's item, resource, location, demand, setupmatrix and skill tables through its REST API.
+
+frePPLe's own planner stays as a fast fallback and for its delay and problem reports.
+
+3. Optimisation service (the DIOS-level part)A Python service next to frePPLe.
+
+The in-house compiler reads the entity graph plus a decision template and builds Pyomo/linopy models. HiGHS or SCIP solves them, and CP-SAT or PyJobShop handles changeovers.
+
+Timefold covers staffing, PyVRP with OSRM covers routing, and stockpyl covers stock targets. pymoo or weighted sums handle the objectives, and mealpy is the fallback when exact solves are too slow.
+
+Forecasts come from Nixtla and feed frePPLe's forecast API, tracked in MLflow. Results write back as frePPLe orders.
+
+4. Replanning, audit and screensEvents trigger re-solves; everything is logged.
+
+A Kafka event starts a Temporal workflow, which re-solves the affected window with the rest fixed and puts the result up for approval.
+
+django-pghistory or Dolt keeps every plan version and the three decision-latency timestamps. vis-timeline, Superset and apprise handle the Gantt, KPIs and alerts.
+
+What no repo gives you (build in-house)This is where DIOS's value is.
+
+The entity-to-model compiler and the 50+ industry decision templates, each tested on real client data.
+
+Replanning only the affected window, explaining trade-offs between alternatives, and the screen for setting objective weights.
+
+Per-client SAP adapters, and speed at the ~1.4M-variable scale. I didn't test open-source solvers at that size, so benchmark them on your data early.
+
+Sources and where to verify
+
+Shark Tank Egypt, Makkook pitch, Nov 18, 2026 (transcribed with Whisper small)
+
+Makkook DIOS page and about page
+
+6.5 million decisions article, Nov 17, 2026
+
+Simplex partnership news, Jun 17, 2026
+
+Makkook Tech Lead job ad
+
+GSK algorithm paper, APGSK-IMODE, CEC 2021, El-Kilany, IEEE Access 2022
+
+@_MoustafaM thread on the pitch, Nov 19, 2026
+
+frePPLe source and docs, version 10.0.0
+

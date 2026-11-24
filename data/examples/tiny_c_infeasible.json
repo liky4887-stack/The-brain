@@ -1,0 +1,8 @@
+{
+  "name": "Instance C: infeasible (deadline 3 < processing 5)",
+  "machine": {"id": "M1"},
+  "orders": [
+    {"id": "O1", "processing_time": 5, "due_date": 10, "weight": 1, "deadline": 3}
+  ],
+  "expected": {"status": "infeasible"}
+}

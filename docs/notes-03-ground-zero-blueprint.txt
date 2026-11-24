@@ -1,0 +1,140 @@
+Factory optimization system: ground-zero blueprint
+made with Sesame
+
+This blueprint starts from an empty project and builds toward a validated factory-planning product. The core sequence is: define one small factory problem, model it, validate it, then connect data and user interfaces. frePPLe, HiGHS, and OR-Tools are useful components, but none automatically supplies the factory-specific optimization brain.
+
+Goal and scope
+
+Build a factory-planning system that ingests planning data, models operational constraints, computes feasible and useful plans, explains outcomes, and can later scale to real production data. Start with one plant, one product family, a few machines, and a small set of orders. Do not begin by trying to reproduce a competitor's inaccessible internals.
+
+The architecture in plain language
+
+1. Data and planning layer: holds products, bills of material, routings, resources, calendars, orders, inventory, and planning screens. frePPLe can provide a starting point here.
+2. Semantic and validation layer: checks that incoming data is complete and consistent, uses stable identifiers and units, and reports errors before optimization.
+3. Factory-rule and model-building layer: converts explicit factory rules into decision variables, constraints, and objectives. This is the application-specific optimization logic, not the books or the solver.
+4. Solver adapters and execution layer: builds and runs a supported model with the selected solver, applies time limits, records status, and returns a structured result. HiGHS is suitable for linear and mixed-integer linear models; OR-Tools CP-SAT is especially useful for discrete scheduling and sequencing.
+5. Validation and explanation layer: checks every returned plan against the original business rules, compares small cases to known answers, and explains the plan and trade-offs.
+6. Product layer: API, web interface, scenarios, reports, permissions, audit history, and later integrations.
+
+Zero-start sequence
+
+Stage 0: Define one bounded planning problem
+
+Before installing several platforms, write a one-page specification for a tiny but real-shaped case:
+
+- One machine and two orders, with processing times, due dates, and priorities.
+- Machine availability and the rule that it cannot process two jobs at once.
+- The decision to make, such as start times and order sequence.
+- The objective, such as minimizing total weighted tardiness; avoid mixing several goals until the first is correct.
+- Expected answer or a way to enumerate every feasible schedule by hand.
+
+Exit gate: every input, decision, constraint, unit, and objective is defined unambiguously. The first implementation can be tiny; the specification should be precise.
+
+Stage 1: Environment and planning-data foundation
+
+Do first: create a Git repository for your own system, install Python and Docker, and create a minimal project with tests and a reproducible development environment. Then clone or run frePPLe separately as a candidate planning-data and user-interface foundation. Do not modify its core until you understand its data model and license obligations.
+
+Candidate repositories:
+- frePPLe — https://github.com/frePPLe/frepple: planning data, workflows, and screens to evaluate as a base; not a substitute for the custom solver model.
+- FastAPI — https://github.com/fastapi/fastapi: Python API layer if you choose a separate service.
+- PostgreSQL — https://github.com/postgres/postgres: durable application and planning data store.
+- Docker Compose — https://github.com/docker/compose: reproducible local services.
+
+Build: repository structure, configuration, database connection, health checks, one sample dataset, and automated tests. Keep the first toy model independent of frePPLe so solver logic can be tested without a large application.
+
+Exit gate: a clean checkout starts the services and runs tests using documented commands; sample factory data can be loaded and read back.
+
+Stage 2: Data semantics and model specification
+
+Define canonical records for products, operations, resources, calendars, orders, inventory, and setup times. Validate units, missing fields, duplicate identifiers, precedence, and impossible quantities. Map each business rule to: source data, mathematical meaning, test case, and error message.
+
+Use the books as technical references, not as data to feed into a solver:
+- Model Building in Mathematical Programming, H. Paul Williams: formulation and translating decision problems into equations.
+- Applied Integer Programming: Modeling and Solution, Chen, Batson, and Dang: practical integer-programming formulations.
+- Integer Programming, Laurence Wolsey: MIP formulation strength and tractability.
+- Introduction to Linear Optimization, Bertsimas and Tsitsiklis: foundations for linear models.
+- Principles of Constraint Programming and the Handbook of Constraint Programming: constraint propagation, search, and global constraints.
+- The CP-SAT Primer by Dominik Krupke and the official OR-Tools documentation — https://developers.google.com/optimization: practical CP-SAT modeling and API details.
+- Pyomo: Optimization Modeling in Python, Hart et al.: Pyomo model construction and solver interfaces.
+
+A book-to-skill tool can make reference material easier for an AI coding assistant to retrieve. It does not guarantee correct formulations, create factory rules, or generate a validated engine automatically. Use only lawfully obtained books and follow their licenses and copyright terms.
+
+Exit gate: a written model spec and hand-checkable examples exist before the solver implementation begins.
+
+Stage 3: Build the translation layer and connect solvers
+
+Implement the model-building layer in small, testable modules:
+
+1. Convert validated factory records into an internal, solver-neutral problem representation.
+2. Express the tiny scheduling model in one solver path first.
+3. Add a separate adapter for the other solver only when the model and tests are stable.
+4. Return a standard result object: status, objective value, assignments, timing, resource use, warnings, and solver diagnostics.
+5. Independently validate each solution against the original factory rules.
+
+Recommended first solver path: use OR-Tools CP-SAT for the tiny discrete machine-scheduling example because interval and no-overlap constraints are natural there. Add HiGHS through a MILP formulation for linear planning and allocation cases. Do not assume one formulation runs unchanged on both: CP-SAT and HiGHS support different modeling constructs and require different formulations in some cases.
+
+Modeling frameworks and repositories to evaluate:
+- OR-Tools — https://github.com/google/or-tools: CP-SAT and other optimization tools; strong first path for discrete scheduling.
+- HiGHS — https://github.com/ERGO-Code/HiGHS: open-source LP/MIP solver for algebraic linear models.
+- Pyomo — https://github.com/Pyomo/pyomo: Python algebraic modeling, especially useful for LP/MILP models and HiGHS integration. It is not an automatic bridge for CP-SAT scheduling constructs.
+- Google MathOpt — https://developers.google.com/optimization/math_opt: model/API abstraction for supported optimization structures; verify solver support for every feature used.
+- CPMpy — https://github.com/CPMpy/cpmpy: Python constraint-modeling interface to multiple backends; test exactly which constraints and transformations your use case supports.
+
+Exit gate: the model is feasible on known cases, solver status is handled correctly, and the independent validator rejects deliberately corrupted solutions.
+
+Stage 4: Validate before adding scale
+
+For the one-machine, two-order case, enumerate all possible sequences and compute their completion times and objective by hand or with a tiny independent script. Compare the solver result against that exhaustive baseline.
+
+Test at least:
+- Feasible and infeasible instances.
+- Ties where multiple schedules are equally optimal.
+- Missing or inconsistent input data.
+- Time limits and non-optimal solver statuses.
+- Zero or extreme processing times and boundary calendars.
+- Each constraint individually, including deliberately invalid outputs.
+
+A different schedule is not necessarily wrong if it satisfies every constraint and has the same optimal objective. Check feasibility, objective value, and solver status, not just whether the exact sequence matches one expected answer.
+
+Exit gate: tests demonstrate correctness on small exhaustive cases and the validator checks every returned plan independently.
+
+Stage 5: Integrate, pilot, and scale carefully
+
+Connect the validated model to frePPLe or another planning-data source through explicit import/export interfaces. Add scenario versioning, audit logs, user permissions, explainable objective trade-offs, and a web workflow only after the planning model works. Pilot with sanitized or authorized data; compare recommendations with planners' decisions and measured outcomes before any automated execution.
+
+Candidate repositories by capability:
+- Nixtla — https://github.com/Nixtla: forecasting and time-series tools to evaluate for demand forecasting; forecasting is not the scheduling optimizer.
+- Darts — https://github.com/unit8co/darts: time-series forecasting library for candidate demand signals.
+- Timefold quickstarts — https://github.com/TimefoldAI/timefold-quickstarts: scheduling examples and patterns to inspect; not a drop-in replacement for your chosen Python solver layer.
+- Vis-Timeline — https://github.com/visjs/vis-timeline: possible resource schedule visualization.
+- Apache Superset — https://github.com/apache/superset: analytics dashboards; check its license and deployment terms before commercial use.
+
+Treat these as candidates to inspect and license-check, not as an instruction to include all of them. Forecasting produces demand estimates; inventory policy and production scheduling are separate models with separate assumptions and tests. Add only a component that fills a demonstrated product gap.
+
+Exit gate: a pilot produces feasible schedules, explains material trade-offs, records inputs and solver status, and has human review before operational changes.
+
+Suggested repository layout
+
+---
+  factory-optimizer/
+    apps/api/                 # API and authentication
+    apps/web/                 # planner interface, later stage
+    packages/domain/          # canonical factory records and validation
+    packages/models/          # mathematical formulations and objectives
+    packages/solvers/         # CP-SAT and HiGHS adapters
+    packages/validation/      # independent plan checks
+    data/examples/            # tiny, synthetic, hand-checkable cases
+    tests/                    # unit, integration, and regression tests
+    deploy/                   # Docker configuration
+    docs/                     # model specs, assumptions, and decisions
+---
+
+Decisions to preserve
+
+- Start from the empty-project baseline with a bounded toy problem, not by installing every repository at once.
+- Treat frePPLe as a candidate for planning records and screens, not as the custom optimization brain.
+- Build and validate the model layer before integrating a full planning product.
+- Use CP-SAT and HiGHS for different strengths; do not assume they accept identical models.
+- Keep LLMs as coding and explanation assistants. Deterministic model code, solver status, and independent validation determine whether a plan is usable.
+- Check each project's current license, maintenance, version compatibility, and commercial-use terms before adoption; this blueprint does not claim every candidate repository was installed or benchmarked.
+- The right starting point is a small, fully specified factory problem, then a tested model before scaling. The plan separates frePPLe data/screens from the custom optimization layer and maps the solver and open-source options to each stage.

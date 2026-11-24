@@ -1,0 +1,22 @@
+# Decisions to preserve
+
+From the ground-zero blueprint (docs/notes-03-ground-zero-blueprint.txt) and
+the user's notes. Do not relax these without an explicit instruction from
+the repo owner.
+
+1. Toy problem first. One machine, two orders, one objective, hand-computed
+   answers. No scale work before Stage 4 gates pass.
+2. frePPLe is the data and screens layer only. The optimization brain
+   (compiler, solver routing, validation, explanation) is written here.
+3. LLMs never decide plans. A future copilot drafts and answers; the solver
+   decides; every drafted constraint passes tests before use.
+4. License-check every dependency before it enters the tree. No AGPL in a
+   paid product (Ultralytics, pm4py, OCA Odoo connector are out unless a
+   commercial license is bought). Current dependencies: ortools
+   (Apache-2.0), pydantic (MIT), pytest (MIT, dev only).
+5. The validator is independent of the solver and checks every returned
+   plan. A solver status is never taken on faith.
+6. Honest statuses: infeasible, time-limited and errored runs are reported
+   as such. No fabricated plans, no unexplained numbers.
+7. Claims track tests. Nothing is said to "work" beyond what the test
+   suite proves, and optimality claims cite the exhaustive baseline.

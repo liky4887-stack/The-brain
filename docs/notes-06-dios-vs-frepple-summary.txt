@@ -1,0 +1,7 @@
+DIOS takes a company's data, turns it into one huge optimization model and solves it. frePPLe can't do that part. You'd write that converter yourself, on top of Pyomo — https://github.com/Pyomo/pyomo or OR-Tools — https://github.com/google/or-tools.
+
+- No leak turned up. The best source is the founder's Shark Tank Egypt pitch — https://www.youtube.com/watch?v=0B5ArxRIZBA. He talks about a model with about 2 million constraints and 1.4 million variables, and no AI chatbot in the core. The transcript was auto-generated, so check those numbers in the video.
+- frePPLe covers about a third of it. That's your data, planning screens, what-if scenarios and "why is this order late." It doesn't handle weighing goals against each other, cutting changeover time, replanning only what changed, truck routing or staff scheduling.
+- Avoid AGPL code in a paid product. That covers Ultralytics, pm4py and the Odoo connector, unless you buy a license. None of the repos were run, and the free solvers weren't tested at a model that size.
+
+The page keeps confirmed facts and guesses separate. It checks each DIOS feature against frePPLe, lists 53 repos with license and activity, and lays out a recommended setup with what you'd still have to build.

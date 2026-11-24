@@ -1,0 +1,29 @@
+For demand sensing: Nixtla or Meta Prophet. For optimization: Pyomo with HiGHS. The full repository mapping is still paused until the twenty sixth.
+
+Operations research books and resources
+made with Sesame
+
+This reading list separates the resources by the part of an optimization system’s “brain” they support: turning a real-world problem into a model, solving MIP and constraint-programming problems, and implementing models in software.
+
+Formulation and foundations
+
+- Model Building in Mathematical Programming, H. Paul Williams: Formulate real-world problems as mathematical models, define decision variables and constraints, and debug formulations.
+- Introduction to Linear Optimization, Dimitris Bertsimas and John N. Tsitsiklis: Foundations for linear optimization and the mathematical ideas underlying many integer-programming models.
+
+Mixed-integer programming (MIP)
+
+- Integer Programming, Laurence A. Wolsey: MIP theory and practice, including formulation strength and computational tractability.
+- Applied Integer Programming: Modeling and Solution, Der-San Chen, Robert G. Batson, and Yu Dang: Practical integer-programming models and solution methods for applied problems.
+
+Constraint programming (CP)
+
+- Principles of Constraint Programming, Krzysztof R. Apt: Constraint satisfaction, domain reduction, and propagation.
+- Handbook of Constraint Programming, edited by Francesca Rossi, Peter van Beek, and Toby Walsh: A broad reference on propagation, search heuristics, and global constraints.
+
+Hybrid methods and implementation
+
+- Hybrid Optimization: The Ten Years of CPAIOR, Michela Milano and Pascal Van Hentenryck: Connections between constraint programming and mathematical programming.
+- MO-Book: Hands-On Mathematical Optimization with AMPL in Python, by Pirnay, Sadykov, and Vanderbei: A practical route from optimization models to computational implementation.
+- Google OR-Tools documentation and examples: Current practical guidance for modeling and using OR-Tools, including CP-SAT. Use these alongside the books because solver APIs and examples evolve.
+
+No single title covers the complete optimization engine. Together, these resources address formulation, MIP, CP, hybrid methods, and implementation; the system-specific model and decision logic still need to be designed and tested for the intended factory-planning problems.
