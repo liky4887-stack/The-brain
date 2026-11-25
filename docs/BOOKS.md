@@ -99,3 +99,15 @@ flagged at the point of use instead of being silently borrowed.
   longest paths on 150 random DAGs, and the disjunctive-graph makespan
   matches direct simulation on all machine sequencings of Example 5.3.1.
   Shifting bottleneck (5.4) documented, not implemented.
+
+- Hillier & Lieberman, Introduction to Operations Research, 7th ed.
+  (McGraw-Hill). Received 2026-11-25 as a 1237-page digital PDF (text
+  layer intact). Read in two passes: all 22 chapters mapped, then deep
+  read of ch.4 (simplex) with ch.3 and 6 for framing. Distilled into
+  docs/skills/hillier-introduction-to-operations-research.md. The
+  two-phase primal simplex with Bland's rule (exact rational arithmetic)
+  is implemented in packages/brain-core/brain_core/lp/simplex.py and
+  validated in tests/test_simplex.py against brute-force vertex
+  enumeration on 120 random LPs plus the locked Wyndor example - the
+  brute force caught a missing negative-right-hand-side normalization
+  (sec. 4.6) before merge. This gives The-brain in-house LP relaxations.
