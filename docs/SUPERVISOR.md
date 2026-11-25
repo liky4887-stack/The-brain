@@ -73,16 +73,24 @@ plant ids across shards and silently skipped plants are verdict-level
 problems. One block never touches another block's plants; blocks are
 disjoint ranges of the same generator.
 
-(b) Fail-stop broadcast / circuit breaker: honest GitHub reality -
-runners cannot talk to each other directly. What exists natively is
-matrix fail-fast (one shard failure cancels the others) and a
-coordinator via the results branch. Choice, with the trade-off
-recorded: shards stay failure-ISOLATED (fail-fast: false) because a
-cancelled shard uploads no artifact and destroys the evidence needed
-to fix the error; the CIRCUIT BREAKER sits at the block boundary -
-the ladder halts on any FAIL verdict and no further rung launches
-until the failure is fixed and re-verified. Everything halts until
-the error is fixed, at the granularity that keeps the evidence.
+(b) Pause -> auto-heal -> resume (user correction 2:54 PM): failures
+do NOT cancel the climb. Honest GitHub reality: runners cannot pause
+mid-matrix and cannot talk to each other; "pause" = the orchestrator
+holds the next rung's push, "resume" = re-dispatch. Within a block,
+shards stay failure-isolated (never cancelled: a cancelled shard
+uploads no artifact and destroys the evidence the heal needs). On a
+FAIL the orchestrator: classifies the failure SIGNATURE
+(benchmarks/failure_registry.py - volatile details stripped so the
+same failure is recognized across runs), then, bounded at 2 heal
+attempts per signature: known+fixed -> re-dispatch once, only if the
+run actually contains the fix commit; known+open -> stay paused
+(healing in progress); new -> diagnose, fix on a branch, full suite +
+verification-harness claim, merge (every fix visible in a parent
+report - no unreviewed code on main), record the registry entry,
+resume. Later blocks consult the registry BEFORE running: that is
+what "learn from the error" concretely means here
+(benchmarks/registry/known-failures.json, committed, with first/last
+seen, fix commit and avoidance rule).
 
 (c) Watchdog, continuous: the wake-driven orchestrator plus the
 results branch are the watchdog - no rung starts before the previous
