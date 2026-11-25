@@ -71,7 +71,31 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
     cell_problems = [p for plan, _ in solved for p in plan.problems]
     max_cell = max((w for _, w in solved), default=0.0)
     sum_cell = sum(w for _, w in solved)
-    merged = WindowPlan(horizon_start, days, assignments, None,
+    # Merge the cells' bucket results: their qty dicts are disjoint by
+    # construction (a SKU lives in exactly one cell), and the total
+    # bucket objective is the sum of the per-cell recomputed
+    # objectives. A cell whose bucket failed keeps the failure visible:
+    # the merged objective is None then, and consumers (rolling) treat
+    # the window as failed - nothing is hidden.
+    from ..rolling.two_level import BucketResult
+    cell_buckets = [plan.bucket for plan, _ in solved]
+    if all(b is not None and b.objective is not None
+           for b in cell_buckets):
+        qty = {}
+        for b in cell_buckets:
+            qty.update(b.qty)
+        merged_bucket = BucketResult(
+            "merged-cells", sum(b.objective for b in cell_buckets),
+            None, qty,
+            sum(b.skipped_future_demands for b in cell_buckets),
+            sum(b.n_binaries for b in cell_buckets),
+            sum(b.n_vars for b in cell_buckets))
+    else:
+        merged_bucket = BucketResult(
+            "merged-cells:cell-failed", None, None, {},
+            sum(b.skipped_future_demands for b in cell_buckets if b),
+            0, 0)
+    merged = WindowPlan(horizon_start, days, assignments, merged_bucket,
                         "merged:" + ",".join(p.seq_status
                                              for p, _ in solved),
                         problems=cell_problems)
