@@ -129,7 +129,8 @@ def lns_improve(factory: Factory, horizon_start, days: int,
            if best_x[j] > 1e-6}
     bucket = BucketResult(incumbent.status, best_obj, None, qty,
                           incumbent.skipped_future_demands,
-                          incumbent.n_binaries, incumbent.n_vars)
+                          incumbent.n_binaries, incumbent.n_vars,
+                          incumbent.n_rows)
     return LNSResult(bucket, accepted > 0, float(incumbent.objective),
                      best_obj, run, accepted,
                      time.monotonic() - t0, history)
