@@ -127,3 +127,20 @@ flagged at the point of use instead of being silently borrowed.
   the cross-check caught that SSP silently mis-optimizes negative-cost
   instances (outside the book's ch.9 nonnegativity assumption), so they
   are now rejected loudly. Cycle-canceling documented, not implemented.
+
+- Vanderbei, Linear Programming: Foundations and Extensions, 2nd ed.
+  (Springer 2001). Received 2026-11-25 as a 466-page pdfTeX digital PDF
+  (no OCR gate needed). Read in two passes: structure, then deep read of
+  ch.16 (central path) and ch.17 (path-following method, Figure 17.1,
+  eqs 17.1-17.6). Distilled into
+  docs/skills/vanderbei-linear-programming.md. Implemented in
+  packages/brain-core/brain_core/lp/interior_point.py: solve_lp_ipm, a
+  primal-dual infeasible-start path-following method with block-
+  eliminated KKT Newton steps (delta=0.1, step margin 0.9). Honest
+  scope: floats, near-optimal solutions on feasible+bounded instances
+  only, no infeasibility/unboundedness certificates (simplex keeps that
+  job). tests/test_interior_point.py locks Wyndor (Z=36 at (2,6)) and
+  cross-checks 60 random feasible+bounded LPs against the exact simplex
+  within 1e-4. A sign error in the eliminated KKT block (-Y^-1 W, not
+  +Y^-1 W) was caught by numerically comparing the reduced system
+  against the full 4-block Newton system before merge.
