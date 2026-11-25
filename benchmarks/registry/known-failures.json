@@ -18,6 +18,24 @@
     "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
     "step": 1
    }
+  },
+  "ec7d0c9923f8": {
+   "attempts": 0,
+   "first_seen": {
+    "run_id": "45612194065",
+    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+    "step": 0
+   },
+   "signature": "ec7d0c9923f8",
+   "summary": "publish branched results branch from run SHA -> diverged -> push rejected -> RESULT lost (gate2m runs #4/#5, scale #2)",
+   "status": "fixed",
+   "fix_commit": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+   "avoidance": "results branch always based on remote tip; RESULT stashed across checkout; rebase-retry push",
+   "last_seen": {
+    "run_id": "45612194065",
+    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+    "step": 0
+   }
   }
  }
 }
