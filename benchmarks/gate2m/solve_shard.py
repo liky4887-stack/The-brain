@@ -155,7 +155,10 @@ def main() -> None:
                           "stopped_by": stopped_by},
                "records": records}
     path = os.path.join(a.out, f"shard-{a.shard}.json")
-    json.dump(payload, open(path, "w"))
+    # compact separators: shard artifacts accumulate against the
+    # account's 500 MB artifact-storage quota (free tier) across runs
+    # and shards; whitespace is pure overhead here
+    json.dump(payload, open(path, "w"), separators=(",", ":"))
     bad = sum(len(r["problems"]) for r in records)
     # The artifact always uploads; merge_validate owns the verdict, so a
     # failing plant is reported with its evidence, not as an opaque

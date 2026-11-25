@@ -65,7 +65,7 @@ jobs:
         with:
           name: shard-${{ matrix.shard }}
           path: benchmarks/scale/out/shard-${{ matrix.shard }}.json
-          retention-days: 90  # super-block spot re-validation must not outlive evidence
+          retention-days: 30  # spot re-validation stays inside the retention window; 90d x growing shard counts would breach the 500 MB free artifact quota
 
   merge:
     needs: [setup, solve]
