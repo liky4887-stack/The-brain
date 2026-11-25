@@ -55,6 +55,18 @@
     "step": 1
    },
    "avoidance": "rm -f the RESULT path after the /tmp backup, before checkout -B onto the results branch"
+  },
+  "fc9f56ec5ce7": {
+   "signature": "fc9f56ec5ce7",
+   "status": "open",
+   "attempts": 1,
+   "first_seen": {
+    "run_id": "45642234090",
+    "sha": "5adf866b5e9d9aa703e5067bf4487363c5a9d171",
+    "step": 4
+   },
+   "summary": "day-model CP-SAT UNKNOWN after 120s at 53M-var scale (window 1 day 5 plant 594, window 1 day 4 plant 766) WITH the 3b7e07ee1b2f heal chain already in place (hint + x4 escalation + fix-and-optimize fallback all ran): same class, deeper density. 2 of 249,179 assignments; verdict OPEN, everything else PASS-clean.",
+   "avoidance": "under diagnosis: local repro of plants 594/766 (seeds 1594/1766) at seq budget 600s classifies needs-more-time vs hint-saturation (>138 chunks)"
   }
  }
 }
