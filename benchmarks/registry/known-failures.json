@@ -12,13 +12,13 @@
    "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)",
    "status": "open",
    "fix_commit": "2b72542842580f6664705b67afab6f75f3d4dafc",
-   "avoidance": "auto greedy warm start merged 2b72542; next for 138+ chunks: capacity-aware hint or fix-and-optimize fallback; last resort: raise day ceiling above 120s",
+   "avoidance": "auto greedy warm start merged 2b72542 (decides <=133 chunks); next for 138+ chunks: fix-and-optimize fallback (fix greedy line choice for the largest half of chunks via the existing fixed= parameter, solve the rest exactly); last resort: raise day ceiling",
    "last_seen": {
     "run_id": "45616135861",
     "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
     "step": 1
    },
-   "root_cause": "measured: single-worker CP-SAT with no incumbent seed stalls on dense day models; symmetry breaking alone insufficient; greedy warm-start hint (a08db9c) seeds an incumbent and decides 124-133 chunk days (plant 43 d4/d5, plant 76 d4) at 100s, but plant 155 day 4 (138 chunks) still UNKNOWN at 110s"
+   "root_cause": "measured: single-worker CP-SAT with no incumbent seed stalls on dense day models; symmetry breaking alone insufficient; greedy warm-start hint (a08db9c) seeds an incumbent and decides 124-133 chunk days (plant 43 d4/d5, plant 76 d4) at 100s, but plant 155 day 4 (138 chunks) still UNKNOWN at 110s; capacity-aware (minutes + changeover estimate) greedy seeding also measured: still UNKNOWN at 100s on plant 155 day 4, so seeding alone saturates at ~133 chunks"
   },
   "ec7d0c9923f8": {
    "attempts": 0,
