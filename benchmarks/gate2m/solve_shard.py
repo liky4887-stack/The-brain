@@ -11,7 +11,24 @@ import os
 import resource
 import time
 
+import traceback
+
 from common import run_plant, shard_indices
+
+
+def run_plant_safe(i: int) -> dict:
+    """One plant, failure-isolated: an exception or validation problems
+    land IN THE RECORD so the merge step reports them with full detail
+    instead of killing the shard with an opaque exit code."""
+    try:
+        return run_plant(i)
+    except Exception as e:
+        return {"plant": i, "seed": 1000 + i, "gen_s": 0.0,
+                "solve_s": 0.0, "window_days": 7, "freeze_days": 3,
+                "n_windows": 2, "horizon_start": "", "cap_min": 0.0,
+                "problems": [f"plant crashed: {type(e).__name__}: {e}"],
+                "crash_traceback": traceback.format_exc()[-1500:],
+                "kpis": {}, "windows": [], "assignments": []}
 
 
 def rss_mb() -> float:
@@ -33,9 +50,9 @@ def main() -> None:
     if a.workers > 1 and len(idx) > 1:
         from concurrent.futures import ProcessPoolExecutor
         with ProcessPoolExecutor(max_workers=a.workers) as pool:
-            records = list(pool.map(run_plant, idx))
+            records = list(pool.map(run_plant_safe, idx))
     else:
-        records = [run_plant(i) for i in idx]
+        records = [run_plant_safe(i) for i in idx]
     wall = time.monotonic() - t0
     os.makedirs(a.out, exist_ok=True)
     payload = {"shard": a.shard, "shards": a.shards, "indices": idx,
@@ -45,10 +62,11 @@ def main() -> None:
     path = os.path.join(a.out, f"shard-{a.shard}.json")
     json.dump(payload, open(path, "w"))
     bad = sum(len(r["problems"]) for r in records)
+    # The artifact always uploads; merge_validate owns the verdict, so a
+    # failing plant is reported with its evidence, not as an opaque
+    # job failure that needs signed-in log access to diagnose.
     print(f"shard {a.shard}: {len(idx)} plants, wall {wall:.0f}s, "
           f"problems {bad} -> {path}")
-    if bad:
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":
