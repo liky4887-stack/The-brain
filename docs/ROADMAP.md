@@ -169,9 +169,25 @@ Corresponds to plan-beating-dios Phase 2.
   forecast ranges' coverage measured and reported per SKU. Safety
   stock = Z_95 * one-step residual sigma feeds buffer.minimum,
   never lowering an existing minimum.
-- Remaining Stage 3: audit log and decision-latency timestamps;
-  binding-constraint and infeasibility explanations in plain words.
-  Gate: four-week shadow pilot with both plans scored.
+- Audit log + decision-latency timestamps MERGED (2026-11-25,
+  packages/brain-core/brain_core/audit/log.py): append-only stdlib
+  JSONL, one line per committed decision - trigger, event/decision
+  timestamps, measured wall time and decision latency, sha256 plan
+  digest over canonical assignments, validator KPIs.
+- Plain-words explanations MERGED (2026-11-25,
+  packages/brain-core/brain_core/explain/why.py): binding line-days
+  (FULL at measured minutes, the validator's own threshold),
+  per-SKU lateness (due vs made by due day + measured capacity use
+  on eligible line-days), aggregate infeasibility (required vs
+  available minutes, per sole-eligible line). Every sentence is
+  recomputed from records + returned plan; no solver claims, no LLM.
+- Four-week shadow pilot GATE PASSED (2026-11-25, evidence
+  /tmp/shadow4.json): 4 weekly instances at 6 lines x 400 SKUs x 7
+  days, optimizer and naive both scored by the independent validator
+  and both written to the audit log. All 8 plans valid; changeovers
+  12,600 vs 17,730 min (-28.9%); lateness 0 vs 0 (dust < 1e-9);
+  measured optimizer decision latency ~60.3s per week.
+- STAGE 3 COMPLETE (2026-11-25): all six slices merged.
 
 ## Stage 4 - Beat DIOS at scale
 
