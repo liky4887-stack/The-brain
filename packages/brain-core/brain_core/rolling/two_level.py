@@ -123,7 +123,8 @@ def _sku_data(factory: Factory) -> dict:
 def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                      cap_min: float, chg_allowance: float,
                      inv0: dict | None = None,
-                     extra_due_day0: dict | None = None
+                     extra_due_day0: dict | None = None,
+                     cap_override: dict | None = None
                      ) -> tuple[MIP, dict]:
     """Assemble the level-1 MIP over [horizon_start, +days).
 
@@ -178,13 +179,15 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             rows.append(r); cols.append(j); vals.append(v)
         sense.append(sn); rhs.append(rh)
 
-    # capacity per (line, day), net of the changeover allowance
+    # capacity per (line, day), net of the changeover allowance;
+    # cap_override[(line, day)] replaces the RHS (0.0 = line down)
+    cap_override = cap_override or {}
     for l in lines:
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0 / sku[s][0])
                    for s in active if (s, t, l) in xidx]
             if ent:
-                add_row(ent, "L", cap_eff)
+                add_row(ent, "L", cap_override.get((l, t), cap_eff))
     # linking: sum_l x_itl <= M_it * y_it, tight M
     for s in active:
         M = min(cap_eff * sku[s][0], sum(dem[s]) + 1.0)
@@ -223,10 +226,12 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
 def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                   cap_min: float, chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                   time_limit_s: float = 60.0, inv0: dict | None = None,
-                  extra_due_day0: dict | None = None) -> BucketResult:
+                  extra_due_day0: dict | None = None,
+                  cap_override: dict | None = None) -> BucketResult:
     """Level 1 solve; objective recomputed from the assignment."""
     mip, maps = build_bucket_mip(factory, horizon_start, days, cap_min,
-                                 chg_allowance, inv0, extra_due_day0)
+                                 chg_allowance, inv0, extra_due_day0,
+                                 cap_override)
     if not maps["active"]:
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
@@ -353,7 +358,9 @@ def chunk_lots(sku: dict, qty: dict, cap_min: float
 def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     day: int, cap_min: float, window_start_day: int = 0,
                     time_limit_s: float = 60.0,
-                    hint: dict | None = None
+                    hint: dict | None = None,
+                    fixed: dict | None = None,
+                    line_blacklist: frozenset | None = None
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -379,16 +386,28 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
             for name, q in chunks}
     state = {name: sku[name.split("#")[0]][2] for name, q in chunks}
     qty_of = dict(chunks)
+    blacklist = line_blacklist or frozenset()
     x = {}
     for name, _ in chunks:
         for l in sku[name.split("#")[0]][1]:
-            x[(name, l)] = m.new_bool_var(f"x_{name}_{l}")
+            if l not in blacklist:
+                x[(name, l)] = m.new_bool_var(f"x_{name}_{l}")
     for name, _ in chunks:
-        m.add_exactly_one(x[(name, l)]
-                          for l in sku[name.split("#")[0]][1])
+        eligible = [x[(name, l)] for l in sku[name.split("#")[0]][1]
+                    if (name, l) in x]
+        if not eligible:
+            return [], [f"day {day}: {name} has no eligible line"]
+        m.add_exactly_one(eligible)
     if hint:
         for (name, l), var in x.items():
             m.add_hint(var, 1 if hint.get(name) == l else 0)
+    if fixed:
+        for name, l in fixed.items():
+            if (name, l) in x:
+                m.add(x[(name, l)] == 1)
+            else:
+                return [], [f"day {day}: fixed chunk {name} cannot "
+                            f"run on {l}"]
     lines = sorted({l for name, _ in chunks
                     for l in sku[name.split("#")[0]][1]})
     state_chunks: dict[tuple[str, str], list[str]] = {}
@@ -495,11 +514,12 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                  bucket_time_s: float = 60.0, seq_time_s: float = 10.0,
                  inv0: dict | None = None,
                  extra_due_day0: dict | None = None,
-                 window_start_day: int = 0) -> WindowPlan:
+                 window_start_day: int = 0,
+                 cap_override: dict | None = None) -> WindowPlan:
     """One window: buckets -> sequencing -> independent validation."""
     bucket = solve_buckets(factory, horizon_start, days, cap_min,
                            chg_allowance, bucket_time_s, inv0,
-                           extra_due_day0)
+                           extra_due_day0, cap_override)
     if bucket.objective is None:
         return WindowPlan(horizon_start, days, [], bucket,
                           f"bucket-level failed: {bucket.status}",
