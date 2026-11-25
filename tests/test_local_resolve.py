@@ -131,7 +131,7 @@ def test_gate_machine_down_under_60s_within_2_percent():
     assert base_plan.problems == []
     down_line = sorted({a.line for a in base_plan.assignments})[0]
     res = machine_down(p.factory, base_plan, down_line, 2, 3, cap,
-                       seq_time_s=45)
+                       seq_time_s=45, absorb_back=2)
     assert res.wall_s < 60.0, f"local re-solve took {res.wall_s:.0f}s"
     assert res.moved_fraction < 0.05, \
         f"moved {res.moved_fraction:.1%} of units"
