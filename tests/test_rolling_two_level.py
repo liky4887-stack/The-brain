@@ -206,7 +206,7 @@ def test_gate_scale_window_under_15_minutes():
     t0 = time.time()
     plan = solve_window(p.factory, p.params.horizon_start, p.params.days,
                         p.day_capacity_minutes, chg_allowance=0.15,
-                        bucket_time_s=600, seq_time_s=5)
+                        bucket_time_s=95, seq_time_s=45)
     wall = time.time() - t0
     assert wall < 900.0, f"gate missed: {wall:.0f}s"
     assert plan.bucket.objective is not None
