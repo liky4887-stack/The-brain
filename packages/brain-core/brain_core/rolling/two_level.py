@@ -1,31 +1,37 @@
 """Two-level rolling-window solve: MILP buckets, then CP-SAT sequencing.
 
 Level 1 (buckets, HiGHS via solvers/highs_mip.py): assigns production
-quantities to (SKU, day, eligible line) over the window. Setup binary
-per SKU-day, cumulative coverage with explicit lateness variables,
-earliness variables as holding cost (unit-days). Capacity per line-day
-is reduced by a measured changeover allowance: exact changeovers are
-sequence-dependent and only known after sequencing, so the bucket
-level plans against an allowance and the sequencing level checks the
-truth (honesty: an allowance miss is reported, never hidden).
+quantities to (SKU, day, eligible line) over a window of days. One
+setup binary per SKU-day, cumulative coverage constraints with explicit
+lateness variables, earliness variables as holding cost (unit-days).
+Capacity per line-day is reduced by a measured changeover allowance:
+exact changeovers are sequence-dependent and only known after
+sequencing, so the bucket level plans against an allowance and the
+sequencing level checks the truth. An allowance miss is reported,
+never hidden (honesty rules).
 
 Level 2 (sequencing, CP-SAT): per line-day, the lots assigned by
 level 1 are sequenced with the exact setup matrix via a circuit model
-(minimize total changeover, hard capacity on production + changeover
-minutes). Small per line-day (tens of lots), exact.
+(minimize total changeover; hard capacity on production + changeover
+minutes). Tens of lots per line-day: exact and fast.
 
-Objective bound: the bucket MILP objective (setup proxy + lateness +
-earliness, capacity relaxed by the allowance) is a relaxation of the
-sequenced problem, so its optimum is a valid lower bound; the gap we
-log is final-validated-cost vs that bound, labeled as such.
+Rolling driver: solve the window, freeze the first `freeze_days`,
+net inventory/backorders per SKU, roll forward. The product's cadence
+is a weekly plan (freeze_days=7); freeze_days=1 is a daily replan.
 
-Everything recomputed from returned assignments (honesty rules);
-validate_window_plan checks any WindowPlan against the records alone.
+Bounds and honesty: the bucket MILP relaxes capacity (allowance) and
+approximates changeovers by a setup count, so its objective is a lower
+bound on the true sequenced proxy cost; the reported gap compares the
+recomputed plan cost (same weights) against that bound and is labeled
+as such. Solver statuses are never taken on faith: validate_window_plan
+and validate_full_run recompute everything from the returned
+assignments and the records alone.
 """
 
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -36,15 +42,16 @@ from ..records.models import Factory
 from ..solvers.highs_mip import MIP, solve_mip
 
 SETUP_W = 50.0      # one SKU-day setup ~ a campaign break
-LATE_W = 1000.0     # one unit late one day: never if capacity allows
+LATE_W = 1000.0     # one unit late one day: avoid whenever possible
 EARLY_W = 0.001     # one unit held one day: tie-breaks front-loading
-DEFAULT_CHG_ALLOWANCE = 0.15  # 15% of line-day reserved for changeovers
+DEFAULT_CHG_ALLOWANCE = 0.15  # share of line-day reserved for changeovers
+_EPS = timedelta(microseconds=1)
 
 
 @dataclass(frozen=True)
 class LotAssignment:
     line: str
-    day: int
+    day: int                # absolute day index from the run's horizon
     sku: str
     qty: float
     seq_pos: int            # 0-based position on the line-day
@@ -54,9 +61,10 @@ class LotAssignment:
 @dataclass(frozen=True)
 class BucketResult:
     status: str
-    objective: float        # recomputed from x
+    objective: float | None  # recomputed from x; None when unsolved
     mip_gap: float | None
-    qty: dict               # (sku, day, line) -> float, nonzero only
+    qty: dict                # (sku, day, line) -> float, nonzero only
+    skipped_future_demands: int
     n_binaries: int
     n_vars: int
 
@@ -67,9 +75,19 @@ class WindowPlan:
     days: int
     assignments: list[LotAssignment]
     bucket: BucketResult | None
-    seq_status: str                     # "ok" | per line-day failures
+    seq_status: str
     kpis: dict = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
+
+
+def due_day(due: datetime, horizon_start: datetime) -> int:
+    """Day index whose END is `due`: due at midnight ending day d -> d.
+
+    Demands are due at the end of a production day; production during
+    day d may serve dues ending day d. The microsecond epsilon maps a
+    midnight due to the day it closes, not the day it opens.
+    """
+    return (due - horizon_start - _EPS).days
 
 
 def _sku_data(factory: Factory) -> dict:
@@ -89,20 +107,29 @@ def _sku_data(factory: Factory) -> dict:
 def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                      cap_min: float, chg_allowance: float,
                      inv0: dict | None = None,
-                     extra_due_day0: dict | None = None) -> tuple[MIP, dict]:
-    """Assemble the level-1 MIP. Returns (MIP, index maps for decoding)."""
+                     extra_due_day0: dict | None = None
+                     ) -> tuple[MIP, dict]:
+    """Assemble the level-1 MIP over [horizon_start, +days).
+
+    Demands due outside the window are skipped and counted (rolling
+    windows re-encounter them later; pre-window dues must already be
+    folded into inv0 / extra_due_day0 by the rolling driver).
+    """
     sku = _sku_data(factory)
     inv0 = inv0 or {}
     back0 = extra_due_day0 or {}
     dem: dict[str, list[float]] = {}
+    skipped = 0
     for d in factory.demands:
-        day = (d.due - horizon_start).days
+        day = due_day(d.due, horizon_start)
         if not (0 <= day < days):
-            raise ValueError(f"demand {d.name}: due outside window")
+            skipped += 1
+            continue
         dem.setdefault(d.item, [0.0] * days)[day] += d.quantity
     for s, q in back0.items():
         dem.setdefault(s, [0.0] * days)[0] += q
-    active = sorted(s for s in dem if s in sku and sum(dem[s]) > inv0.get(s, 0.0) - 1e-9)
+    active = sorted(s for s, ds in dem.items()
+                    if s in sku and sum(ds) > inv0.get(s, 0.0) - 1e-9)
     lines = sorted({l for s in active for l in sku[s][1]})
     cap_eff = cap_min * (1.0 - chg_allowance)
 
@@ -120,7 +147,7 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
     n_vars = n
 
     c = np.zeros(n_vars)
-    for (s, t), j in yidx.items():
+    for j in yidx.values():
         c[j] = SETUP_W
     for j in loidx.values():
         c[j] = LATE_W
@@ -135,34 +162,32 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             rows.append(r); cols.append(j); vals.append(v)
         sense.append(sn); rhs.append(rh)
 
-    # capacity per (line, day)
+    # capacity per (line, day), net of the changeover allowance
     for l in lines:
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0 / sku[s][0])
                    for s in active if (s, t, l) in xidx]
             if ent:
                 add_row(ent, "L", cap_eff)
-    # linking: sum_l x <= M y ; M = min(cap_eff*rate, total demand)
+    # linking: sum_l x_itl <= M_it * y_it, tight M
     for s in active:
         M = min(cap_eff * sku[s][0], sum(dem[s]) + 1.0)
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0) for l in sku[s][1]]
             ent.append((yidx[(s, t)], -M))
             add_row(ent, "L", 0.0)
-    # coverage with lateness: cumprod + late >= max(0, D - inv0)
-    # earliness:          cumprod - early <= D - inv0
+    # coverage with lateness / earliness (cumulative, per SKU-day)
     for s in active:
         cum = 0.0
         for t in range(days):
             cum += dem[s][t]
             target = cum - inv0.get(s, 0.0)
-            ent, ent_e = [], []
-            for tau in range(t + 1):
-                for l in sku[s][1]:
-                    ent.append((xidx[(s, tau, l)], 1.0))
-                    ent_e.append((xidx[(s, tau, l)], 1.0))
+            ent = [(xidx[(s, tau, l)], 1.0)
+                   for tau in range(t + 1) for l in sku[s][1]]
             ent.append((loidx[(s, t)], 1.0))
             add_row(ent, "G", target)
+            ent_e = [(xidx[(s, tau, l)], 1.0)
+                     for tau in range(t + 1) for l in sku[s][1]]
             ent_e.append((eidx[(s, t)], -1.0))
             add_row(ent_e, "L", target)
 
@@ -170,39 +195,46 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
     ub = np.full(n_vars, np.inf)
     integ = np.zeros(n_vars)
     for j in yidx.values():
-        ub[j] = 1.0; integ[j] = 1
-    for j in list(loidx.values()) + list(eidx.values()):
-        pass  # continuous >= 0
+        ub[j] = 1.0
+        integ[j] = 1
     A = coo_matrix((vals, (rows, cols)), shape=(len(rhs), n_vars)).tocsr()
-    mip = MIP("buckets", c, A, tuple(sense), np.array(rhs), lb, ub, integ)
-    return mip, {"x": xidx, "y": yidx, "active": active, "sku": sku}
+    mip = MIP("buckets", c, A, tuple(sense), np.array(rhs, dtype=float),
+              lb, ub, integ)
+    return mip, {"x": xidx, "y": yidx, "active": active, "sku": sku,
+                 "skipped": skipped}
 
 
 def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                   cap_min: float, chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                   time_limit_s: float = 60.0, inv0: dict | None = None,
                   extra_due_day0: dict | None = None) -> BucketResult:
-    """Level 1 solve. Objective recomputed from the assignment."""
+    """Level 1 solve; objective recomputed from the assignment."""
     mip, maps = build_bucket_mip(factory, horizon_start, days, cap_min,
                                  chg_allowance, inv0, extra_due_day0)
     if not maps["active"]:
-        return BucketResult("no-demand", 0.0, 0.0, {}, 0, 0)
+        return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
+    n_bin = int(mip.integrality.sum())
     if res["x"] is None:
-        return BucketResult(str(res["status"]), math.inf, None, {},
-                            int(mip.integrality.sum()), len(mip.c))
+        return BucketResult(str(res["status"]), None, None, {},
+                            maps["skipped"], n_bin, len(mip.c))
     x = res["x"]
     qty = {k: float(x[j]) for k, j in maps["x"].items() if x[j] > 1e-6}
     return BucketResult(str(res["status"]), res["objective"],
-                        res.get("gap"), qty, int(mip.integrality.sum()),
+                        res.get("gap"), qty, maps["skipped"], n_bin,
                         len(mip.c))
 
 
 def solve_day_sequences(factory: Factory, bucket: BucketResult,
-                        cap_min: float, time_limit_s: float = 10.0
+                        cap_min: float, window_start_day: int = 0,
+                        time_limit_s: float = 10.0
                         ) -> tuple[list[LotAssignment], list[str]]:
-    """Level 2: per line-day CP-SAT circuit sequencing with the exact
-    setup matrix. Returns (assignments, problems)."""
+    """Level 2: exact per line-day sequencing with the setup matrix.
+
+    One CP-SAT circuit per line-day over its assigned lots plus a dummy
+    start node; minimize total changeover subject to the line-day
+    capacity. Emits absolute day indexes (window_start_day + t).
+    """
     from ortools.sat.python import cp_model
 
     sku = _sku_data(factory)
@@ -220,9 +252,15 @@ def solve_day_sequences(factory: Factory, bucket: BucketResult,
         if mtx is None:
             problems.append(f"{l} day {t}: no setup matrix")
             continue
-        prod = [math.ceil(q / sku[s][0]) for s, q in lots]
-        states = [sku[s][2] for s, q in lots]
+        prod = [math.ceil(q / sku[s.split("#")[0]][0] - 1e-9)
+                for s, q in lots]
+        states = [sku[s.split("#")[0]][2] for s, q in lots]
         n = len(lots)
+        budget = int(cap_min) - sum(prod)
+        if budget < 0:
+            problems.append(f"{l} day {t}: production {sum(prod)} min "
+                            f"alone exceeds capacity {cap_min}")
+            continue
         m = cp_model.CpModel()
         arcs, arc_cost = [], []
         for i in range(n):
@@ -232,20 +270,18 @@ def solve_day_sequences(factory: Factory, bucket: BucketResult,
                 lit = m.new_bool_var(f"a{i}_{j}")
                 arcs.append((i, j, lit))
                 d = mtx.duration_between(states[i], states[j])
+                if d is None:
+                    problems.append(f"{l} day {t}: no changeover rule "
+                                    f"{states[i]} -> {states[j]}")
+                    continue
                 arc_cost.append((lit, int(d.total_seconds() // 60)))
-        # dummy node n: tour start/end, zero cost both ways
         for i in range(n):
-            lit = m.new_bool_var(f"s_{i}")
+            lit = m.new_bool_var(f"start_{i}")
             arcs.append((n, i, lit)); arc_cost.append((lit, 0))
-            lit2 = m.new_bool_var(f"e_{i}")
-            arcs.append((i, n, lit2)); arc_cost.append((lit2, 0))
+            lit = m.new_bool_var(f"end_{i}")
+            arcs.append((i, n, lit)); arc_cost.append((lit, 0))
         m.add_circuit(arcs)
-        total_chg = sum(lit * c for lit, c in arc_cost)
-        budget = int(cap_min) - sum(prod)
-        if budget < 0:
-            problems.append(f"{l} day {t}: production {sum(prod)} min "
-                            f"alone exceeds capacity {cap_min}")
-            continue
+        total_chg = sum(lit * cst for lit, cst in arc_cost)
         m.add(total_chg <= budget)
         m.minimize(total_chg)
         solver = cp_model.CpSolver()
@@ -253,77 +289,305 @@ def solve_day_sequences(factory: Factory, bucket: BucketResult,
         status = solver.solve(m)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             problems.append(f"{l} day {t}: sequencing infeasible "
-                            f"({solver.status_name(status)}); "
-                            "changeover allowance too tight")
+                            f"({solver.status_name(status)}); changeover "
+                            "allowance too tight for this mix")
             continue
-        # extract tour from the dummy node
-        succ = {}
-        for (i, j, lit) in arcs:
-            if solver.value(lit):
-                succ[i] = j
+        succ = {i: j for (i, j, lit) in arcs if solver.value(lit)}
         order, node = [], n
         for _ in range(n):
             node = succ[node]
             order.append(node)
-        prev_state = None
+        prev = None
         for pos, i in enumerate(order):
-            chg = 0.0 if prev_state is None else \
-                matrices_duration(mtx, prev_state, states[i])
-            assignments.append(LotAssignment(l, t, lots[i][0], lots[i][1],
-                                             pos, chg))
-            prev_state = states[i]
+            chg = 0.0 if prev is None else matrices_duration(mtx, prev,
+                                                             states[i])
+            assignments.append(LotAssignment(l, window_start_day + t,
+                                             lots[i][0].split("#")[0],
+                                             lots[i][1], pos, chg))
+            prev = states[i]
     return assignments, problems
 
 
-def matrices_duration(mtx, a, b) -> float:
+def matrices_duration(mtx, a: str, b: str) -> float:
     d = mtx.duration_between(a, b)
-    return 0.0 if d is None else d.total_seconds() / 60.0
+    return math.inf if d is None else d.total_seconds() / 60.0
+
+
+def chunk_lots(sku: dict, qty: dict, cap_min: float
+               ) -> dict[int, list[tuple[str, float]]]:
+    """(sku, day) quantities -> per-day chunked lots named 'SKU#k'.
+
+    Chunks never exceed half a line-day of production so any two share
+    a line; chunks of one SKU share its setup state, so sequencing
+    places them adjacently at zero changeover when useful.
+    """
+    day_lots: dict[int, list[tuple[str, float]]] = {}
+    for (s, t), q in sorted(qty.items()):
+        rate = sku[s][0]
+        max_chunk = math.floor(0.5 * cap_min * rate)
+        n_chunks = max(1, math.ceil(q / max_chunk))
+        for k in range(n_chunks):
+            lo = k * max_chunk
+            chunk = min(q, lo + max_chunk) - lo
+            if chunk > 1e-6:
+                day_lots.setdefault(t, []).append((f"{s}#{k}", chunk))
+    return day_lots
+
+
+def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
+                    day: int, cap_min: float, window_start_day: int = 0,
+                    time_limit_s: float = 60.0,
+                    hint: dict | None = None
+                    ) -> tuple[list[LotAssignment], list[str]]:
+    """One day, one integrated CP-SAT model, exact at the true cost level.
+
+    Lots of the same setup state are interchangeable for changeover
+    purposes (same state -> zero changeover), so the model decides:
+    (i) which eligible line each chunk runs on (exactly one),
+    (ii) per line, a circuit over the distinct STATES present on it.
+    The exact lot-level cost follows: concatenate each state group's
+    chunks; changeovers happen only between state groups, priced by the
+    setup matrix. Capacity per line-day: production + exact state-tour
+    changeovers <= cap_min. No allowances, no reserves at this level.
+    A hint (chunk -> line, e.g. from the bucket level) seeds the search
+    but never constrains it (CP-SAT Primer, Coding Patterns).
+    """
+    from ortools.sat.python import cp_model
+
+    sku = _sku_data(factory)
+    matrices = {m.name: m for m in factory.setup_matrices}
+    res_mtx = {r.name: matrices.get(r.setup_matrix)
+               for r in factory.resources}
+    m = cp_model.CpModel()
+    prod = {name: math.ceil(q / sku[name.split("#")[0]][0] - 1e-9)
+            for name, q in chunks}
+    state = {name: sku[name.split("#")[0]][2] for name, q in chunks}
+    qty_of = dict(chunks)
+    x = {}
+    for name, _ in chunks:
+        for l in sku[name.split("#")[0]][1]:
+            x[(name, l)] = m.new_bool_var(f"x_{name}_{l}")
+    for name, _ in chunks:
+        m.add_exactly_one(x[(name, l)]
+                          for l in sku[name.split("#")[0]][1])
+    if hint:
+        for (name, l), var in x.items():
+            m.add_hint(var, 1 if hint.get(name) == l else 0)
+    lines = sorted({l for name, _ in chunks
+                    for l in sku[name.split("#")[0]][1]})
+    state_chunks: dict[tuple[str, str], list[str]] = {}
+    for l in lines:
+        for name, _ in chunks:
+            if (name, l) in x:
+                state_chunks.setdefault((l, state[name]), []).append(name)
+    line_data: dict[str, tuple] = {}
+    total_cost_terms: list[tuple] = []
+    for l in lines:
+        mtx = res_mtx.get(l)
+        if mtx is None:
+            return [], [f"{l}: no setup matrix"]
+        states = sorted(s for (ll, s) in state_chunks if ll == l)
+        if not states:
+            continue
+        p_st = {s: m.new_bool_var(f"p_{l}_{s}") for s in states}
+        for s in states:
+            members = state_chunks[(l, s)]
+            for name in members:
+                m.add(x[(name, l)] <= p_st[s])
+            m.add(sum(x[(name, l)] for name in members) >= p_st[s])
+        n = len(states)
+        D = n
+        arcs, arc_costs = [], []
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                d = mtx.duration_between(states[i], states[j])
+                if d is None:
+                    return [], [f"{l} day {day}: no changeover rule "
+                                f"{states[i]} -> {states[j]}"]
+                lit = m.new_bool_var(f"t_{l}_{i}_{j}")
+                arcs.append((i, j, lit))
+                arc_costs.append((lit, int(d.total_seconds() // 60)))
+                m.add(lit <= p_st[states[i]])
+                m.add(lit <= p_st[states[j]])
+            st = m.new_bool_var(f"st_{l}_{i}")
+            arcs.append((D, i, st)); arc_costs.append((st, 0))
+            m.add(st <= p_st[states[i]])
+            en = m.new_bool_var(f"en_{l}_{i}")
+            arcs.append((i, D, en)); arc_costs.append((en, 0))
+            m.add(en <= p_st[states[i]])
+        for i in range(n):
+            sl = m.new_bool_var(f"sl_{l}_{i}")
+            arcs.append((i, i, sl)); arc_costs.append((sl, 0))
+            m.add(sl == 1 - p_st[states[i]])
+        dsl = m.new_bool_var(f"dsl_{l}")
+        arcs.append((D, D, dsl)); arc_costs.append((dsl, 0))
+        for i in range(n):
+            m.add(dsl <= 1 - p_st[states[i]])
+        m.add_circuit(arcs)
+        members_all = [name for s in states for name in state_chunks[(l, s)]]
+        load = (sum(prod[c] * x[(c, l)] for c in members_all)
+                + sum(lit * cst for lit, cst in arc_costs))
+        m.add(load <= int(cap_min))
+        line_data[l] = (states, D, arcs)
+        total_cost_terms.extend(arc_costs)
+    m.minimize(sum(lit * cst for lit, cst in total_cost_terms))
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = time_limit_s
+    status = solver.solve(m)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return [], [f"day {day}: exact assignment+sequencing "
+                    f"{solver.status_name(status)}; the bucket level's "
+                    "day mix cannot be realized with true changeovers"]
+    assignments: list[LotAssignment] = []
+    for l, (states, D, arcs) in line_data.items():
+        present = [i for i in range(len(states))
+                   if solver.value(next(lit for (a, b, lit) in arcs
+                                        if a == i and b == i)) == 0]
+        if not present:
+            continue
+        succ = {i: j for (i, j, lit) in arcs
+                if i != j and solver.value(lit)}
+        order, node = [], D
+        while True:
+            node = succ.get(node, D)
+            if node == D:
+                break
+            order.append(node)
+        pos = 0
+        prev = None
+        for i in order:
+            s_i = states[i]
+            members = sorted(c for c in state_chunks[(l, s_i)]
+                             if solver.value(x[(c, l)]))
+            for k, name in enumerate(members):
+                if prev is None or k > 0:
+                    chg = 0.0  # line start, or same state as previous lot
+                else:
+                    chg = matrices_duration(res_mtx[l], prev, s_i)
+                assignments.append(LotAssignment(l, window_start_day + day,
+                                                 name.split("#")[0],
+                                                 qty_of[name], pos, chg))
+                pos += 1
+                prev = s_i
+    return assignments, []
 
 
 def solve_window(factory: Factory, horizon_start: datetime, days: int,
                  cap_min: float, chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                  bucket_time_s: float = 60.0, seq_time_s: float = 10.0,
                  inv0: dict | None = None,
-                 extra_due_day0: dict | None = None) -> WindowPlan:
-    """One window: buckets, then sequencing, then independent validation."""
+                 extra_due_day0: dict | None = None,
+                 window_start_day: int = 0) -> WindowPlan:
+    """One window: buckets -> sequencing -> independent validation."""
     bucket = solve_buckets(factory, horizon_start, days, cap_min,
                            chg_allowance, bucket_time_s, inv0,
                            extra_due_day0)
-    if bucket.qty is None or (bucket.objective is math.inf):
+    if bucket.objective is None:
         return WindowPlan(horizon_start, days, [], bucket,
                           f"bucket-level failed: {bucket.status}",
                           problems=[f"bucket level: {bucket.status}"])
-    assignments, problems = solve_day_sequences(factory, bucket, cap_min,
-                                                seq_time_s)
+    # collapse line-split quantities to (sku, day), chunk, solve each
+    # day exactly (assignment + sequencing in one model)
+    qty: dict[tuple[str, int], float] = {}
+    for (s, t, l), q in bucket.qty.items():
+        qty[(s, t)] = qty.get((s, t), 0.0) + q
+    sku = _sku_data(factory)
+    day_lots = chunk_lots(sku, qty, cap_min)
+    # bucket line split as per-chunk hints: chunk -> its SKU's largest
+    # bucket line that day
+    day_hint: dict[int, dict[str, str]] = {}
+    for (s, t, l), q in bucket.qty.items():
+        cur = day_hint.setdefault(t, {}).get(f"{s}")
+        best_line, best_q = None, -1.0
+        for (s2, t2, l2), q2 in bucket.qty.items():
+            if s2 == s and t2 == t and q2 > best_q:
+                best_line, best_q = l2, q2
+        day_lot_names = [n for n, _ in day_lots.get(t, [])
+                         if n.split("#")[0] == s]
+        for n in day_lot_names:
+            day_hint[t][n] = best_line
+    assignments: list[LotAssignment] = []
+    problems: list[str] = []
+    for t in sorted(day_lots):
+        day_asg, day_problems = solve_day_exact(
+            factory, day_lots[t], t, cap_min, window_start_day, seq_time_s,
+            hint=day_hint.get(t))
+        assignments.extend(day_asg)
+        problems.extend(day_problems)
     plan = WindowPlan(horizon_start, days, assignments, bucket,
                       "ok" if not problems else "sequencing problems",
-                      problems=problems)
-    v_problems, kpis = validate_window_plan(factory, plan, cap_min)
+                      problems=list(problems))
+    v_problems, kpis = validate_window_plan(factory, plan, cap_min,
+                                            inv0=inv0,
+                                            day0=window_start_day)
     plan.problems.extend(v_problems)
     plan.kpis = kpis
-    if bucket.objective and bucket.objective > 0 and kpis.get("cost") is not None:
-        gap = (kpis["cost"] - bucket.objective) / bucket.objective
-        plan.kpis["gap_vs_bucket_relaxation"] = gap  # labeled: relaxation
+    bound = bucket.objective
+    if bound and bound > 0 and kpis.get("proxy_cost") is not None:
+        # labeled: bucket objective is a RELAXATION bound (capacity
+        # allowance + setup-count proxy), not the true problem's bound
+        plan.kpis["gap_vs_bucket_relaxation"] = \
+            (kpis["proxy_cost"] - bound) / bound
     return plan
 
 
+def _daily_walk(factory: Factory, horizon_start: datetime, days: int,
+                assignments: list[LotAssignment], inv0: dict | None = None,
+                day0: int = 0) -> dict:
+    """Per-SKU day-by-day stock/backlog from returned assignments."""
+    inv0 = inv0 or {}
+    dem: dict[str, list[float]] = {}
+    for d in factory.demands:
+        day = due_day(d.due, horizon_start)
+        if 0 <= day < days:
+            dem.setdefault(d.item, [0.0] * days)[day] += d.quantity
+    prod: dict[str, list[float]] = {}
+    for a in assignments:
+        day = a.day - day0
+        if 0 <= day < days:
+            prod.setdefault(a.sku, [0.0] * days)[day] += a.qty
+    backlog_days = 0.0
+    early_days = 0.0
+    end_backlog = 0.0
+    for s in sorted(set(dem) | set(prod)):
+        stock = inv0.get(s, 0.0)
+        for t in range(days):
+            stock += prod.get(s, [0.0] * days)[t]
+            stock -= dem.get(s, [0.0] * days)[t]
+            if stock < 0:
+                backlog_days += -stock
+            else:
+                early_days += stock
+        end_backlog += max(0.0, -stock)
+    return {"backlog_unit_days": backlog_days, "early_unit_days": early_days,
+            "backlog_units_end": end_backlog}
+
+
 def validate_window_plan(factory: Factory, plan: WindowPlan,
-                         cap_min: float) -> tuple[list[str], dict]:
-    """Independent check from records + returned assignments only."""
+                         cap_min: float, inv0: dict | None = None,
+                         day0: int = 0) -> tuple[list[str], dict]:
+    """Independent check from records + returned assignments only.
+
+    Capacity per line-day with exact matrix changeovers in the returned
+    sequence order; per-SKU daily stock walk for lateness/earliness;
+    KPIs recomputed, never read from solver output.
+    """
     sku = _sku_data(factory)
     matrices = {m.name: m for m in factory.setup_matrices}
     res_mtx = {r.name: matrices.get(r.setup_matrix) for r in factory.resources}
     problems: list[str] = []
     by_ld: dict[tuple[str, int], list[LotAssignment]] = {}
     for a in plan.assignments:
-        by_ld.setdefault((a.line, a.day), []).append(a)
+        by_ld.setdefault((a.line, a.day - day0), []).append(a)
     chg_total = 0.0
     for (l, t), lots in sorted(by_ld.items()):
         lots.sort(key=lambda a: a.seq_pos)
         mtx = res_mtx.get(l)
         total = 0.0
         prev = None
-        seen_pos = set()
+        seen_pos: set[int] = set()
         for a in lots:
             if a.seq_pos in seen_pos:
                 problems.append(f"{l} day {t}: duplicate seq_pos {a.seq_pos}")
@@ -333,38 +597,102 @@ def validate_window_plan(factory: Factory, plan: WindowPlan,
                 continue
             rate, lines, state = sku[a.sku]
             if l not in lines:
-                problems.append(f"{l} day {t}: {a.sku} not eligible")
+                problems.append(f"{l} day {t}: {a.sku} not eligible on {l}")
             total += a.qty / rate
-            if prev is not None and mtx is not None:
-                d = mtx.duration_between(prev, state)
-                if d is None:
-                    problems.append(f"{l} day {t}: no rule {prev}->{state}")
+            if prev is not None:
+                if mtx is None:
+                    problems.append(f"{l}: no setup matrix")
                 else:
-                    total += d.total_seconds() / 60.0
-                    chg_total += d.total_seconds() / 60.0
-                    if abs(d.total_seconds() / 60.0 - a.chg_from_prev_min) > 0.5:
-                        problems.append(f"{l} day {t} pos {a.seq_pos}: "
-                                        "recorded changeover mismatch")
+                    d = mtx.duration_between(prev, state)
+                    if d is None:
+                        problems.append(f"{l} day {t}: no rule "
+                                        f"{prev} -> {state}")
+                    else:
+                        chg = d.total_seconds() / 60.0
+                        total += chg
+                        chg_total += chg
+                        if abs(chg - a.chg_from_prev_min) > 0.5:
+                            problems.append(
+                                f"{l} day {t} pos {a.seq_pos}: recorded "
+                                f"changeover {a.chg_from_prev_min} != {chg}")
             prev = state
         if total > cap_min + 0.05:
             problems.append(f"{l} day {t}: {total:.1f} min > {cap_min}")
-    # coverage: produced before due vs demand
-    dem: dict[str, list] = {}
-    for d in factory.demands:
-        dem.setdefault(d.item, []).append(d)
-    prod: dict[str, list] = {}
-    for a in plan.assignments:
-        prod.setdefault(a.sku, []).append(a)
-    # lateness KPI: backlog per SKU at window end (units still owed),
-    # recomputed from the returned assignments.
-    late_units = 0.0
-    for s, dems in dem.items():
-        produced_total = sum(a.qty for a in prod.get(s, []))
-        due_in_window = sum(d.quantity for d in dems
-                            if (d.due - plan.horizon_start).days <= plan.days)
-        late_units += max(0.0, due_in_window - produced_total)
+    walk = _daily_walk(factory, plan.horizon_start, plan.days,
+                       plan.assignments, inv0, day0)
+    setups = len({(a.sku, a.day) for a in plan.assignments})
+    proxy_cost = (SETUP_W * setups + LATE_W * walk["backlog_unit_days"]
+                  + EARLY_W * walk["early_unit_days"])
     kpis = {"changeover_minutes": chg_total,
-            "late_units_window_end": late_units,
+            "setups": setups,
             "assignments": len(plan.assignments),
-            "cost": None}
+            "proxy_cost": proxy_cost,
+            **walk}
     return problems, kpis
+
+
+@dataclass
+class RollingResult:
+    horizon_start: datetime
+    days: int                    # total simulated days
+    assignments: list[LotAssignment]   # frozen only, absolute days
+    windows: list[WindowPlan]
+    problems: list[str]
+    kpis: dict
+
+
+def solve_rolling(factory: Factory, horizon_start: datetime,
+                  window_days: int, freeze_days: int, n_windows: int,
+                  cap_min: float,
+                  chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
+                  bucket_time_s: float = 60.0,
+                  seq_time_s: float = 10.0) -> RollingResult:
+    """Rolling-horizon driver: solve, freeze freeze_days, roll, repeat.
+
+    Inventory/backlog netting per SKU over the frozen days carries the
+    state forward; overproduction rides as inv0, shortfalls as
+    backordered demand due on day 0 of the next window.
+    """
+    if not (1 <= freeze_days <= window_days):
+        raise ValueError("freeze_days must be in [1, window_days]")
+    inv: dict[str, float] = {}
+    back: dict[str, float] = {}
+    frozen: list[LotAssignment] = []
+    windows: list[WindowPlan] = []
+    problems: list[str] = []
+    for w in range(n_windows):
+        start_day = w * freeze_days
+        ws = horizon_start + timedelta(days=start_day)
+        plan = solve_window(factory, ws, window_days, cap_min,
+                            chg_allowance, bucket_time_s, seq_time_s,
+                            inv0=inv, extra_due_day0=back,
+                            window_start_day=start_day)
+        windows.append(plan)
+        problems.extend(f"window {w}: {p}" for p in plan.problems)
+        if plan.bucket is None or plan.bucket.objective is None:
+            problems.append(f"window {w}: bucket level failed "
+                            f"({plan.bucket.status if plan.bucket else '?'})")
+            break
+        keep = [a for a in plan.assignments if
+                start_day <= a.day < start_day + freeze_days]
+        frozen.extend(keep)
+        prod_f: dict[str, float] = defaultdict(float)
+        for a in keep:
+            prod_f[a.sku] += a.qty
+        dem_f: dict[str, float] = defaultdict(float)
+        for d in factory.demands:
+            dd = due_day(d.due, horizon_start)
+            if start_day <= dd < start_day + freeze_days:
+                dem_f[d.item] += d.quantity
+        for s in set(inv) | set(back) | set(prod_f) | set(dem_f):
+            net = inv.get(s, 0.0) + prod_f.get(s, 0.0) \
+                - dem_f.get(s, 0.0) - back.get(s, 0.0)
+            inv[s] = max(0.0, net)
+            back[s] = max(0.0, -net)
+    total_days = n_windows * freeze_days
+    full = WindowPlan(horizon_start, total_days, frozen, None, "frozen")
+    v_problems, kpis = validate_window_plan(factory, full, cap_min)
+    problems.extend(v_problems)
+    kpis["backlog_units_end"] = sum(back.values())
+    return RollingResult(horizon_start, total_days, frozen, windows,
+                         problems, kpis)
