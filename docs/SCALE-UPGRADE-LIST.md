@@ -175,11 +175,15 @@ already pipelines.
   pipelining is already automatic.
 - What would actually recover the lost ~36%: (a) fewer, longer jobs
   (less exposure to the ~2/min start metering; e.g. 40 shards instead
-  of 48 for the same plant count = 2 exact waves), (b) longest-first
-  matrix ordering (LPT) so the tail is short jobs - free,
-  deterministic, one line in the matrix generator, (c) adaptive shard
-  sizing (already on this list). Staggered run starts implement none
-  of these and are NOT adopted.
+  of 48 for the same plant count = 2 exact waves), (b) adaptive shard
+  sizing (already on this list; smaller stragglers shrink the tail).
+  Staggered run starts implement none of these and are NOT adopted.
+- LPT matrix ordering REJECTED after measurement (same day): the
+  step-2 run's actual job-start order (public API stamps) is NOT
+  matrix order - shard start sequence began 19, 26, 29, 37, 41, 47,
+  18, ... i.e. GitHub does not start matrix jobs in definition
+  order, so ordering the matrix list cannot schedule anything. Do not
+  implement LPT via matrix ordering; the lever is shard sizing only.
 
 ## What else the system can be pushed to do (user ask 2026-11-25 4:57 PM; grounded in today's measured findings)
 
@@ -192,8 +196,9 @@ already pipelines.
    job per cluster (state via artifacts); 12 clusters x 16 plants =
    192 coupled plants each with a per-cluster proven gap. The honest
    "coupled at scale" headline.
-3. UTILIZATION 63.8% -> 85%+: LPT matrix ordering + shard count near
-   a multiple of 20 (measured basis in the staggering verdict above).
+3. UTILIZATION 63.8% -> 85%+: shard count near a multiple of 20 +
+   adaptive sizing (LPT matrix ordering measured NOT to work -
+   GitHub ignores matrix order; see the staggering verdict above).
 4. EXTERNAL VERIFIABILITY: MIPLIB 2017 + CLSP/Trigeiro published
    optima as free targets; no competitor publishes bounds - the sweep
    makes the "show me yours" claim concrete.
