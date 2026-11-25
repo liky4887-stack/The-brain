@@ -141,9 +141,19 @@ Corresponds to plan-beating-dios Phase 2.
   under 60 s, under 5% of orders moved, cost within 2% of a full
   overnight re-solve; forecasts beat seasonal-naive; four-week shadow
   pilot with both plans scored.
-- Concrete next step: the local re-solve mechanic (fix untouched
-  variables, re-solve a window) on the Stage 2 model - it is the
-  riskiest claim and the cheapest to prove early.
+- Local re-solve mechanic MERGED (2026-11-25,
+  packages/brain-core/brain_core/reschedule/local.py): freeze outside
+  scope, re-solve event days with the line blacklisted, absorber days
+  build ahead, forward activation, pool never dropped, stability
+  metric + same independent validator. Gate PASSED at Makkook scale
+  (LINE-01 down day 2, known at horizon start): local re-solve 0.4s
+  (gate 60s), 0.968% of units moved (gate 5%), proxy cost +0.015% vs
+  the full overnight re-solve honoring the event (gate 2%), 0 late.
+- Remaining Stage 3: objective weight sliders + side-by-side
+  scenarios; forecasts with ranges feeding safety stock; audit log
+  and decision-latency timestamps; binding-constraint and
+  infeasibility explanations in plain words. Gates: forecasts beat
+  seasonal-naive; four-week shadow pilot with both plans scored.
 
 ## Stage 4 - Beat DIOS at scale
 
