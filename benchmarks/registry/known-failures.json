@@ -37,6 +37,24 @@
     "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
     "step": 0
    }
+  },
+  "9f1a8959beb4": {
+   "signature": "9f1a8959beb4",
+   "summary": "publish: checkout -B onto results branch refuses to clobber local RESULT.json -> exit 1 before push (gate2m #6 45622543829, scale #3 45622547998)",
+   "status": "fixed",
+   "fix_commit": "86581198b72f03632ddf9239a5dbd51e9e0e0660",
+   "attempts": 1,
+   "first_seen": {
+    "run_id": "45622543829",
+    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+    "step": 1
+   },
+   "last_seen": {
+    "run_id": "45622547998",
+    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+    "step": 1
+   },
+   "avoidance": "rm -f the RESULT path after the /tmp backup, before checkout -B onto the results branch"
   }
  }
 }
