@@ -134,27 +134,46 @@ cluster gap stated, e.g. "16 plants coupled, gap <= x% proven, wall y s
 measured on the free fabric". Scaling out clusters is throughput, not
 coupling depth; both numbers are reported separately.
 
-## The makko.ai reference (user-requested, read 2026-11-25 as public
-untrusted content)
+## The makkook.ai reference (user-requested, read 2026-11-25 as
+public untrusted content; patterns only, nothing run or signed up)
 
-What the site publicly claims: Makko is an AI 2D game studio. Its
-stated pattern is a staged pipeline - vision -> concept art ->
-characters -> animation -> playable game - held together by a
-"Collection": one shared context that keeps every generated asset
-consistent with the whole ("Collections keep everything consistent",
-"Expand your world. Everything stays consistent").
+The user named "مكوك" = makkook.ai (Cairo/Manama industrial decision
+vendor), NOT makko.ai (an unrelated AI 2D game studio; disregarded).
 
-What the site does NOT show: any optimization method, any mathematics,
-any operations/scheduling content, or any detail of how consistency is
-enforced. There is nothing to copy but the pattern.
+What makkook.ai publicly claims:
+- DIOS platform: encode the whole operation (objectives, physical
+  constraints, labor, demand, cost) into ONE structured decision
+  model; compute "the mathematically provable best answer"; execute
+  and re-optimize when reality changes; "decisions compose into
+  systems" (forecast -> planning -> scheduling -> workforce ->
+  logistics, continuously).
+- Their glass-manufacturing case (the closest public detail): multiple
+  SHARED furnaces and downstream lines; four engines under one
+  Planning Cockpit - (1) Demand & Capacity Scenario Engine,
+  (2) Multi-Horizon Production Planning Optimizer, (3) Changeover-
+  Aware Sequencing Engine, (4) Execution-Aware Replanning Engine;
+  frozen windows for plan stability; full audit/version history.
+  Stated stack: "Constraint Optimization (MILP/CP-SAT),
+  Multi-Horizon Planning, Execution-Aware Replanning".
 
-What we adopt, in our own way: the Collection pattern maps exactly
-onto the coupling design above. The shared pools (supplier, labor/
-transport) are our "collection" - ONE global state that every plant's
-local plan must stay consistent with. Consistency is not checked after
-the fact by stitching independent plans (the current independent-
-plants design); it is enforced during planning by the coordinator
-(Lagrangian multipliers + primal repair) and re-verified globally by
-the independent validator (P1-P3). The staged pipeline maps onto our
-rolling two-level flow: global bucket plan, then per-day exact
-sequencing, global consistency re-validated at the end.
+What it does NOT show: any method detail, any bound/gap, any benchmark
+numbers (their "Published Papers" counter reads 0; the "6.5 million
+decisions" article 404s). Claims like "billions of permutations in
+milliseconds" and "provable best answer" are marketing; our honesty
+bar (proven gap, measured wall) is strictly higher and stays.
+
+What we adopt, in our own way (their strategy, our guarantees):
+1. SHARED ASSETS as the coupling: their shared furnaces/lines are our
+   shared supplier capacity and shared labor/transport pool - the
+   linking constraints above. This matches their operational strategy
+   of planning across shared assets in one model.
+2. SPECIALIZED ENGINES UNDER ONE COORDINATOR: their four engines map
+   onto ours - scenario/generator, bucket-level multi-horizon
+   optimizer, changeover-aware day sequencing, rolling replan with
+   frozen windows (freeze_days already = 3). The new piece Phase D
+   adds is exactly their "single cockpit": one coordinator (Lagrangian
+   multipliers + primal repair) that keeps every engine's plan
+   consistent with the shared assets, plus our independent validator
+   (their "audit history", ours re-verifies numerically).
+3. CLOSED LOOP: execution signals feed replanning - already our
+   rolling-window design; the coupled cluster inherits it.
