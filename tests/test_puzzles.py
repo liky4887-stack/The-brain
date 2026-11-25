@@ -16,6 +16,12 @@ knows nothing of the model internals; small instances are also checked
 against exhaustive baselines.
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "brain-core"))
+
+
 from itertools import combinations
 
 from brain_core.puzzles import (
