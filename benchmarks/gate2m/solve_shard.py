@@ -42,6 +42,65 @@ def rss_mb() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
 
 
+def child_rss_mb() -> float:
+    """Peak RSS of the largest TERMINATED child (Linux ru_maxrss):
+    the overload signal for worker processes."""
+    return resource.getrusage(
+        resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0
+
+
+def not_attempted_record(i: int, guard: str) -> dict:
+    """A plant the guard stopped us from STARTING. Honest status: not
+    a crash, not a solve failure - the shard degraded gracefully
+    instead of being OOM-killed or hitting the job timeout."""
+    return {"plant": i, "seed": 1000 + i, "gen_s": 0.0, "solve_s": 0.0,
+            "window_days": 7, "freeze_days": 3, "n_windows": 2,
+            "horizon_start": "", "cap_min": 0.0,
+            "problems": [f"not attempted: {guard} stopped the shard "
+                         f"before this plant started"],
+            "kpis": {}, "windows": [], "assignments": []}
+
+
+def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
+            runner=run_plant_safe, clock=time.monotonic,
+            child_rss=child_rss_mb):
+    """Wave-based submission with overload guards. Never let a shard be
+    killed mid-plant by the job timeout or the OOM killer: stop
+    STARTING new plants past the wall guard or when the children peak
+    past the memory guard, and record unstarted plants honestly."""
+    records: dict[int, dict] = {}
+    pending = list(idx)
+    stopped_by = None
+    if workers > 1 and len(pending) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        pool = ProcessPoolExecutor(max_workers=workers)
+    else:
+        pool = None
+    try:
+        while pending:
+            if clock() - t0 > wall_guard_s:
+                stopped_by = f"wall guard ({wall_guard_s:.0f}s)"
+                break
+            wave, pending = pending[:max(1, workers)], pending[max(1, workers):]
+            if pool is not None:
+                got = list(pool.map(runner, wave))
+            else:
+                got = [runner(i) for i in wave]
+            for rec in got:
+                records[rec["plant"]] = rec
+            if pending and child_rss() > mem_guard_mb:
+                stopped_by = (f"memory guard (children peak "
+                              f"{child_rss():.0f} MB > {mem_guard_mb:.0f} MB)")
+                break
+    finally:
+        if pool is not None:
+            pool.shutdown()
+    if stopped_by:
+        for i in pending:
+            records[i] = not_attempted_record(i, stopped_by)
+    return [records[i] for i in idx], stopped_by
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shard", type=int, required=True)
@@ -53,23 +112,29 @@ def main() -> None:
     ap.add_argument("--seq-workers", type=int, default=None,
                     help="CP-SAT workers per day-sequencing solve; set 1 "
                          "when --workers already saturates the cores")
+    ap.add_argument("--wall-guard-s", type=float, default=2700.0,
+                    help="stop STARTING new plants past this wall "
+                         "(job timeout is 60 min; default leaves merge "
+                         "margin)")
+    ap.add_argument("--mem-guard-mb", type=float, default=12288.0,
+                    help="stop STARTING new plants when the children "
+                         "peak RSS passes this (runner has 16 GB)")
     a = ap.parse_args()
     global SEQ_WORKERS
     SEQ_WORKERS = a.seq_workers
     idx = shard_indices(a.shard, a.shards, a.plants)
     t0 = time.monotonic()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    if a.workers > 1 and len(idx) > 1:
-        from concurrent.futures import ProcessPoolExecutor
-        with ProcessPoolExecutor(max_workers=a.workers) as pool:
-            records = list(pool.map(run_plant_safe, idx))
-    else:
-        records = [run_plant_safe(i) for i in idx]
+    records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
+                                  a.mem_guard_mb)
     wall = time.monotonic() - t0
     os.makedirs(a.out, exist_ok=True)
     payload = {"shard": a.shard, "shards": a.shards, "indices": idx,
                "started_utc": started, "wall_s": round(wall, 1),
                "rss_mb_peak_main": round(rss_mb(), 1),
+               "guards": {"wall_guard_s": a.wall_guard_s,
+                          "mem_guard_mb": a.mem_guard_mb,
+                          "stopped_by": stopped_by},
                "records": records}
     path = os.path.join(a.out, f"shard-{a.shard}.json")
     json.dump(payload, open(path, "w"))

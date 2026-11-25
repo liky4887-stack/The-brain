@@ -21,6 +21,29 @@ import time
 from common import revalidate_plant
 
 
+def _accumulate(r: dict, problems: list, tot: dict,
+                solve_times: list) -> None:
+    """Re-validate one plant record and fold it into the totals."""
+    if r.get("crash_traceback"):
+        problems.append(f"plant {r['plant']}: CRASHED on runner - "
+                        + r["crash_traceback"].splitlines()[-1])
+        return
+    v_problems, kpis = revalidate_plant(r)
+    problems.extend(f"plant {r['plant']}: {p}" for p in v_problems)
+    problems.extend(f"plant {r['plant']} (runner): {p}"
+                    for p in r["problems"])
+    for w in r["windows"]:
+        if w:
+            tot["vars"] += w["vars"]
+            tot["rows"] += w["rows"]
+            tot["binaries"] += w["binaries"]
+            tot["windows"] += 1
+    tot["assignments"] += len(r["assignments"])
+    tot["changeover_minutes"] += kpis["changeover_minutes"]
+    tot["backlog_units_end"] += kpis["backlog_units_end"]
+    solve_times.append(r["solve_s"])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shards", type=int, required=True)
@@ -30,21 +53,22 @@ def main() -> None:
     a = ap.parse_args()
 
     t0 = time.monotonic()
-    shards = []
+    # Stream shard files one at a time (overload protection: at the top
+    # of the ladder 256 shard files would otherwise all sit in RAM).
+    # Only aggregates, walls and problems survive each iteration.
     missing: list[int] = []
+    shard_walls: list[float] = []
+    shard_iter = []
     for k in range(a.shards):
         path = os.path.join(a.artifacts, f"shard-{k}.json")
         if os.path.exists(path):
-            shards.append(json.load(open(path)))
+            shard_iter.append(json.load(open(path)))
         else:
             # The shard JOB died at runner level (timeout, OOM-kill,
             # cancel): no artifact at all. That is a measured fabric
             # limit, not a harness crash: record it as a problem so the
             # verdict stays honest and the merge still publishes.
             missing.append(k)
-    records = [r for s in shards for r in s["records"]]
-    records.sort(key=lambda r: r["plant"])
-
     problems: list[str] = [
         f"shard {k}: artifact missing (runner-level failure: "
         f"timeout/OOM/cancel)" for k in missing]
@@ -52,36 +76,25 @@ def main() -> None:
            "assignments": 0, "changeover_minutes": 0.0,
            "backlog_units_end": 0.0}
     solve_times = []
-    for r in records:
-        if r.get("crash_traceback"):
-            problems.append(f"plant {r['plant']}: CRASHED on runner - "
-                            + r["crash_traceback"].splitlines()[-1])
-            continue
-        v_problems, kpis = revalidate_plant(r)
-        problems.extend(f"plant {r['plant']}: {p}" for p in v_problems)
-        problems.extend(f"plant {r['plant']} (runner): {p}"
-                        for p in r["problems"])
-        for w in r["windows"]:
-            if w:
-                tot["vars"] += w["vars"]
-                tot["rows"] += w["rows"]
-                tot["binaries"] += w["binaries"]
-                tot["windows"] += 1
-        tot["assignments"] += len(r["assignments"])
-        tot["changeover_minutes"] += kpis["changeover_minutes"]
-        tot["backlog_units_end"] += kpis["backlog_units_end"]
-        solve_times.append(r["solve_s"])
-    merge_s = time.monotonic() - t0
+    n = 0
+    for shard in shard_iter:
+        shard_walls.append(shard["wall_s"])
+        for r in shard["records"]:
+            n += 1
+            _accumulate(r, problems, tot, solve_times)
+        del shard["records"]   # free before the next shard loads
 
-    n = len(records)
-    shard_walls = [s["wall_s"] for s in shards]
+    merge_s = time.monotonic() - t0
     # Single-32-core-box estimate (EXTRAPOLATION, not measured): plants
     # are independent single-threaded solves; 32 workers => ceil(n/32)
     # waves; each wave bounded by the slowest plant in it. Reported with
     # the conservative bound (waves x global slowest plant).
     import math
-    waves = math.ceil(n / 32)
-    est_single_box_s = waves * max(solve_times) + merge_s
+    waves = math.ceil(max(n, 1) / 32)
+    # With zero healthy records there is nothing to extrapolate from:
+    # report 0.0 rather than crashing the publish path.
+    est_single_box_s = (waves * max(solve_times) + merge_s) \
+        if solve_times else 0.0
 
     result = {
         "gate": "2M-constraint / 1.4M-variable rolling plan",
@@ -90,18 +103,22 @@ def main() -> None:
         "shards_expected": a.shards,
         "shards_missing": missing,
         "measured": {
-            "plants": n, "shards": len(shards),
+            "plants": n, "shards": len(shard_iter),
             "aggregate_vars": tot["vars"], "aggregate_rows": tot["rows"],
             "aggregate_binaries": tot["binaries"],
             "windows": tot["windows"],
             "assignments_validated": tot["assignments"],
             "validation_problems": problems[:20],
             "n_validation_problems": len(problems),
-            "per_plant_solve_s": {"min": round(min(solve_times), 1),
-                                  "mean": round(sum(solve_times) / n, 1),
-                                  "max": round(max(solve_times), 1)},
+            "per_plant_solve_s": (
+                {"min": round(min(solve_times), 1),
+                 "mean": round(sum(solve_times) / n, 1),
+                 "max": round(max(solve_times), 1)}
+                if solve_times else {"min": 0.0, "mean": 0.0,
+                                     "max": 0.0}),
             "shard_wall_s": sorted(shard_walls, reverse=True),
-            "distributed_wall_s": round(max(shard_walls) + merge_s, 1),
+            "distributed_wall_s": (round(max(shard_walls) + merge_s, 1)
+                              if shard_walls else round(merge_s, 1)),
             "merge_validate_s": round(merge_s, 1),
             "kpis": {"changeover_minutes": round(tot["changeover_minutes"], 1),
                      "backlog_units_end": tot["backlog_units_end"]},
