@@ -313,3 +313,43 @@ def test_bucket_unit_cost_extra_shifts_production():
     day0_pen = sum(q for (s, t, l), q in pen.qty.items() if t == 0)
     assert day0_pen < day0_base
     assert (pen.objective or 0) > (base.objective or 0)
+
+
+def test_dense_day_budget_wiring(monkeypatch):
+    """fc9f56ec5ce7 regression: a day with more than DENSE_DAY_CHUNKS lots
+    starts at DENSE_DAY_BUDGET_S with DENSE_DAY_MAX_S as escalation cap;
+    normal days keep the caller's seq_time_s and the 120 s cap. Measured
+    need: plant 766 w1d4 (121 chunks) decided at 300 s, plant 594 w1d5
+    (124 chunks) decided at 600 s, both UNKNOWN at 120 s; no UNKNOWNs at
+    <=110 chunks in 249,179 validated assignments."""
+    from brain_core.rolling import two_level as tl
+
+    def run(n_skus):
+        dems = [Demand(name=f"D{i}", item=f"S{i}", location="P",
+                       due=H0 + timedelta(days=1), quantity=1.0)
+                for i in range(n_skus)]
+        f = tiny_factory(dems, rates={f"S{i}": 10.0
+                                      for i in range(n_skus)})
+        seen = []
+
+        def spy(factory, chunks, day, cap_min, window_start_day,
+                time_limit_s, **kw):
+            seen.append((len(chunks), time_limit_s, kw.get("max_limit_s")))
+            return [], [f"day {day}: spy stop"]
+
+        monkeypatch.setattr(tl, "solve_day_exact", spy)
+        solve_window(f, H0, 1, 96 * 15, chg_allowance=0.0,
+                     bucket_time_s=30, seq_time_s=5)
+        return seen
+
+    dense = run(120)
+    assert dense and all(n > tl.DENSE_DAY_CHUNKS for n, _, _ in dense)
+    for _, limit, cap in dense:
+        assert limit == max(5, tl.DENSE_DAY_BUDGET_S)
+        assert cap == tl.DENSE_DAY_MAX_S
+
+    normal = run(50)
+    assert normal and all(n <= tl.DENSE_DAY_CHUNKS for n, _, _ in normal)
+    for _, limit, cap in normal:
+        assert limit == 5
+        assert cap == 120.0

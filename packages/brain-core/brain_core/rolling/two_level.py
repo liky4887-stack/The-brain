@@ -68,6 +68,10 @@ DEFAULT_WEIGHTS = ObjectiveWeights()
 DEFAULT_CHG_ALLOWANCE = 0.15  # share of line-day reserved for changeovers
 
 MAX_DAY_REPAIRS = 4   # evictions per infeasible day before reporting
+DENSE_DAY_CHUNKS = 110   # measured: UNKNOWNs at 121-124 chunks
+# (fc9f56ec5ce7), none at <=110 in 249,179 assignments
+DENSE_DAY_BUDGET_S = 300.0
+DENSE_DAY_MAX_S = 600.0
 
 
 def _min_incoming_changeover(factory: Factory) -> dict:
@@ -439,7 +443,8 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     weights: "ObjectiveWeights" = None,
                     num_workers: int | None = None,
                     unknown_attempts: int = 3,
-                    notes: list | None = None
+                    notes: list | None = None,
+                    max_limit_s: float = 120.0
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -625,7 +630,7 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         status = solver.solve(m)
         if status != cp_model.UNKNOWN or attempt == max(1, unknown_attempts) - 1:
             break
-        limit = min(limit * 4.0, 120.0)
+        limit = min(limit * 4.0, max_limit_s)
     if status == cp_model.UNKNOWN and fixed is None and hint:
         # Fix-and-optimize fallback (measured need: plant 155 day 4,
         # 138 chunks, single worker, still UNKNOWN at 110 s even with a
@@ -671,7 +676,7 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         if pinned:
             asg, probs = solve_day_exact(
                 factory, chunks, day, cap_min, window_start_day,
-                min(max(60.0, time_limit_s), 120.0), hint=hint,
+                min(max(60.0, time_limit_s), max_limit_s), hint=hint,
                 fixed=pinned,
                 line_blacklist=line_blacklist, weights=weights,
                 num_workers=num_workers, unknown_attempts=1,
@@ -787,10 +792,20 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
         day_asg: list[LotAssignment] = []
         day_problems: list[str] = []
         for attempt in range(MAX_DAY_REPAIRS + 1):
+            # Dense-day budget (measured: registry fc9f56ec5ce7 -
+            # days above the ~130-chunk hint-saturation point can
+            # stay UNKNOWN at the 120 s cap even with the full
+            # 3b7e07ee1b2f heal chain; 2 of 249,179 assignments at
+            # 53M vars). Dense days start at a bigger budget and a
+            # higher escalation cap; normal days are untouched.
+            dense = len(lots) > DENSE_DAY_CHUNKS
             day_asg, day_problems = solve_day_exact(
-                factory, lots, t, cap_min, window_start_day, seq_time_s,
+                factory, lots, t, cap_min, window_start_day,
+                max(seq_time_s, DENSE_DAY_BUDGET_S) if dense
+                else seq_time_s,
                 hint=day_hint.get(t), weights=weights,
-                num_workers=seq_num_workers, notes=day_notes)
+                num_workers=seq_num_workers, notes=day_notes,
+                max_limit_s=DENSE_DAY_MAX_S if dense else 120.0)
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):
