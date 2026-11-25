@@ -56,17 +56,26 @@ Honest caveat: variable count GROWS; on a 16 GB runner the net effect
 is uncertain - implement behind a flag, measure both ways, keep the
 winner. That is why this is not rank 1.
 
-### 3. Propagation-based domain reduction before CP-SAT
+### 3. Day-grain propagation to prune bucket-MILP variables (REVISED)
 Source: Handbook of CP ch.22.3 (docs/skills/handbook-constraint-
 programming.md); propagators already implemented and brute-force
 tested: propagation/edge_finding.py, timetable.py, energy.py.
-Mechanism: CP-SAT accepts no custom propagators, so run edge-finding /
-timetable / energy reasoning as PREPROCESSING on each day model:
-shrink chunk-line eligibility and day windows, then hand CP-SAT the
-reduced domains. Directly attacks the measured runner-only UNKNOWN
-class (day-4 under contention).
-Effect (ESTIMATED): fewer UNKNOWN escalations, 10-30% faster day
-solves. Cost: low-medium. Rank 3: cheap, kills a real failure class.
+Revision (honest finding, 2026-11-25): the ORIGINAL framing - tighten
+per-activity time windows inside solve_day_exact - does not map onto
+the day model. Chunks there carry no individual time windows; the
+model is chunk->line assignment plus a state circuit, and its UNKNOWNs
+were runner contention, already fixed (seq-workers=1 + escalation).
+Revised mechanism: apply timetable/energy reasoning at DAY grain -
+activity = chunk, window = [earliest start day, due day] from demand
+due dates, duration = production minutes (+ a sound changeover lower
+bound) - to tighten each chunk's day window, then DROP (sku, day,
+line) triples outside tightened windows from the bucket MILP. Fewer
+variables in the LARGEST model in the stack. Soundness rule: only a
+cumulative (all-lines) relaxation may prune; per-line arguments that
+ignore load sharing across lines are unsound and are not used.
+Effect (ESTIMATED): 10-30% fewer bucket binaries on due-date-tight
+plants. Cost: medium. The day-level UNKNOWN class is closed by the
+contention fix, not by this item.
 
 ### 4. Symmetry breaking among identical lines
 Source: Williams ch.6 (pattern in modeling/patterns.py, brute-force
@@ -121,8 +130,8 @@ highest cost. Deferred behind 1-5.
 
 ## Execution order
 
-3 + 4 first (cheap, low risk, attack a measured failure class), then
-1 (the big formulation win), re-measure the fabric ceiling after each
+4 first (done: day-model symmetry breaking), then
+1, then 3 in its revised day-grain form (the big formulation win), re-measure the fabric ceiling after each
 landing, then 2 behind a flag, then 5/6. Each landing: full suite,
 golden optima unchanged, LP bound not weaker, fabric benchmark
 measured, verification-harness claim filed.
