@@ -74,6 +74,11 @@ jobs:
           # branch TRACKS this path, and checkout refuses to clobber an
           # untracked file
           mkdir -p /tmp/res && cp benchmarks/gate2m/RESULT.json /tmp/res/ || true
+          # remove the local copy: checkout -B onto the results
+          # branch, which TRACKS this path, refuses to clobber an
+          # untracked/differing file and exits 1 (runs gate2m #6 and
+          # scale #3 lost RESULT.json to exactly this)
+          rm -f benchmarks/gate2m/RESULT.json
           git fetch origin gate2m-results || true
           if git rev-parse --verify -q origin/gate2m-results > /dev/null; then
             git checkout -B gate2m-results origin/gate2m-results
