@@ -66,7 +66,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B gate2m-results
+          # Base the results branch on its REMOTE tip: runs start from
+          # different code SHAs, so branching from the local checkout
+          # diverges and the push is rejected (runs #4 and scale #2 lost
+          # their RESULT.json to exactly this).
+          # stash the fresh RESULT across the checkout: the results
+          # branch TRACKS this path, and checkout refuses to clobber an
+          # untracked file
+          mkdir -p /tmp/res && cp benchmarks/gate2m/RESULT.json /tmp/res/ || true
+          git fetch origin gate2m-results || true
+          if git rev-parse --verify -q origin/gate2m-results > /dev/null; then
+            git checkout -B gate2m-results origin/gate2m-results
+          else
+            git checkout -B gate2m-results
+          fi
+          mkdir -p benchmarks/gate2m
+          cp /tmp/res/RESULT.json benchmarks/gate2m/RESULT.json || true
           git add benchmarks/gate2m/RESULT.json || exit 0
           git commit -m "gate2m result: run ${{ github.run_id }} (${{ github.sha }})" || exit 0
-          git push origin gate2m-results
+          git push origin gate2m-results || (git pull --rebase origin gate2m-results && git push origin gate2m-results)
