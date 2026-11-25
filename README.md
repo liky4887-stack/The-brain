@@ -11,7 +11,8 @@ Stages 0-4 of the ground-zero blueprint (docs/notes-03): the engine core,
 plus modules distilled from the owner's reference books (see
 docs/BOOKS.md): each book is read twice, distilled into a skill in
 docs/skills/, and converted into tested code at the same craft standard.
-No API, no UI, no database yet (Stage 5).
+No API, no UI, no database yet. The owner's stage framing and the path
+forward (Stage 0 consolidation, then Stages 1-4) live in docs/ROADMAP.md.
 
 ## Layout
 
