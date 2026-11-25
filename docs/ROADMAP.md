@@ -218,8 +218,16 @@ Corresponds to plan-beating-dios Phase 3.
   days - decomposed wall 60.5s bounded by the slowest cell (60.4s)
   vs the 120.8s sequential lower bound; 0 late; 6,240 vs naive 8,280
   changeover minutes (-24.6%); both plans valid.
-- Remaining Stage 4: time decomposition at scale + MILP
-  neighbourhood search; simulation twin with per-plan robustness
+- MILP neighbourhood search MERGED (2026-11-25,
+  packages/brain-core/brain_core/lns/bucket.py): fix-and-free LNS on
+  the bucket MILP; objectives always recomputed over the full
+  variable set; honest never-worse contract (an incumbent without an
+  objective is refused). Gate PASSED at 6 lines x 400 SKUs x 7 days
+  (evidence /tmp/gate4-lns.json): a 2s incumbent + LNS reaches
+  5528.43 in ~14.3s total, BEATING the 20s single-solve incumbent
+  (5533.02); on an already-good 20s incumbent the 30-40%-free
+  neighbourhoods are measured incumbent-optimal.
+- Remaining Stage 4: time decomposition at scale; simulation twin with per-plan robustness
   score; LLM copilot over the API (drafts/answers, never decides);
   routing (PyVRP/OSRM) and staffing (Timefold); multi-tenant
   deployment with an on-prem installer; optional commercial solver

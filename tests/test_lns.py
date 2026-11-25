@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "brain-core"))
 
 from brain_core.lns import lns_improve
@@ -74,3 +76,23 @@ def test_lns_refuses_incumbent_without_objective():
     assert not res.improved
     assert res.iterations_run == 0
     assert "refused" in res.history[0]["note"]
+
+
+@pytest.mark.benchmark
+def test_lns_gate_scale_evidence():
+    """Stage 4 slice-2 gate: at 6x400x7 scale, LNS on a cheap (5s)
+    incumbent measurably improves the recomputed objective within its
+    wall budget. Evidence snapshot in /tmp/gate4-lns.json."""
+    params = FnbParams(n_lines=6, n_skus=400, days=7,
+                       active_fraction=0.25, utilization=0.65,
+                       n_raw_materials=30, seed=1000)
+    p = generate_fnb_factory(params)
+    inc = solve_buckets(p.factory, p.params.horizon_start, 7, 96 * 15,
+                        time_limit_s=5)
+    assert inc.objective is not None
+    res = lns_improve(p.factory, p.params.horizon_start, 7, 96 * 15,
+                      inc, iterations=5, free_fraction=0.4,
+                      neigh_time_s=10, wall_budget_s=90, seed=1)
+    assert res.improved
+    assert res.objective < res.start_objective - 1e-6
+    assert res.wall_s <= 95.0
