@@ -224,3 +224,26 @@ digital text, no OCR gate needed; each read twice):
   central path and Newton step - the same system our solve_nlp_ipm
   (Gould et al. Algorithm 4.1) implements; corroboration, nothing new
   implemented.
+- Hürlimann, "Puzzles and Games: A Mathematical Modeling Approach"
+  (6th ed., July 2025, ISBN 978-0-359-27269-3, 420 pp; digital pdfTeX
+  text, no OCR needed). Distilled into docs/skills/huerlimann-puzzles-games.md.
+  Implemented ten of the book's 97 worked models as
+  packages/brain-core/brain_core/puzzles/ (chess.py, logic.py,
+  numeric.py), all on CP-SAT: chess1 knight TOTAL domination (sec 3.1,
+  every square attacked incl. occupied - the book's constraint ORs
+  only attacking positions; 8x8 = 14), chess4 queen domination (sec
+  3.4; 5), chess5 max non-attacking queens with full enumeration (sec
+  3.5; 8 queens, 92 solutions), einstein zebra variant (sec 5.1;
+  German owns the fish, full locked house-by-house assignment), alcuin
+  Wolf-Goat-Cabbage time-indexed model with the book's aggregate
+  right-bank cuts (sec 5.2; 7 crossings), sendmore (sec 5.9;
+  9567+1085=10652), change (sec 2.27; unique 1x50c+1x25c+4x10c),
+  SevenEleven via chained multiplication equalities (sec 2.28;
+  {120,125,150,316}), golomb ruler (sec 5.4; G(4)=6, G(5)=11,
+  G(6)=17), magicsq (sec 5.24; constant 15), sudoku binary formulation
+  (sec 5.27; general solver, tested on a standard published puzzle
+  since the book's givens are an image). tests/test_puzzles.py: locked
+  book answers plus independent validators (board coverage, non-attack,
+  all 15 Einstein rules, river safety per crossing, distinct Golomb
+  distances, magic sums, sudoku row/col/block) and exhaustive
+  baselines for 4x4 knight total domination and order-4 Golomb.
