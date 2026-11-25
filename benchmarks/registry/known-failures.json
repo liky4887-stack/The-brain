@@ -2,7 +2,7 @@
  "version": 1,
  "entries": {
   "3b7e07ee1b2f": {
-   "attempts": 3,
+   "attempts": 4,
    "first_seen": {
     "run_id": "45616135861",
     "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
@@ -10,15 +10,15 @@
    },
    "signature": "3b7e07ee1b2f",
    "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)",
-   "status": "open",
-   "fix_commit": "2b72542842580f6664705b67afab6f75f3d4dafc",
-   "avoidance": "auto greedy warm start merged 2b72542 (decides <=133 chunks); next for 138+ chunks: fix-and-optimize fallback (fix greedy line choice for the largest half of chunks via the existing fixed= parameter, solve the rest exactly); last resort: raise day ceiling",
+   "status": "fixed",
+   "fix_commit": "38e229be21cb592c84046314b97924f56f76711d",
+   "avoidance": "capacity-aware warm start always on; fix-and-optimize fallback after UNKNOWN escalation (pins largest quarter, 90% capacity margin, 60-120 s cap); a failed fallback reports the original undecided status, never INFEASIBLE-under-pins",
    "last_seen": {
     "run_id": "45616135861",
     "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
     "step": 1
    },
-   "root_cause": "measured: single-worker CP-SAT with no incumbent seed stalls on dense day models; symmetry breaking alone insufficient; greedy warm-start hint (a08db9c) seeds an incumbent and decides 124-133 chunk days (plant 43 d4/d5, plant 76 d4) at 100s, but plant 155 day 4 (138 chunks) still UNKNOWN at 110s; capacity-aware (minutes + changeover estimate) greedy seeding also measured: still UNKNOWN at 100s on plant 155 day 4, so seeding alone saturates at ~133 chunks"
+   "root_cause": "measured: dense day models with a single CP-SAT worker stall without an incumbent seed; quantity-only greedy seeds overload lines on the densest days. Capacity-aware hint decides all three repro instances at 100 s: plant 43 d4 (124 chunks), 43 d5 (133), 155 d4 (138); plant 76 d4 (127) decides via the fix-and-optimize fallback with the restriction recorded in kpis['restricted_days']"
   },
   "ec7d0c9923f8": {
    "attempts": 0,
