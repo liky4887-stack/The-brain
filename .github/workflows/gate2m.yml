@@ -33,7 +33,7 @@ jobs:
         run: |
           cd benchmarks/gate2m
           python solve_shard.py --shard ${{ matrix.shard }} --shards 12 \
-            --plants 96 --workers 4
+            --plants 96 --workers 4 --seq-workers 1
       - uses: actions/upload-artifact@v4
         with:
           name: shard-${{ matrix.shard }}

@@ -55,7 +55,8 @@ def run_plant(i: int, window_days: int = WINDOW_DAYS,
               freeze_days: int = FREEZE_DAYS, n_windows: int = N_WINDOWS,
               bucket_time_s: float = BUCKET_TIME_S,
               seq_time_s: float = SEQ_TIME_S,
-              params: FnbParams | None = None) -> dict:
+              params: FnbParams | None = None,
+              seq_num_workers: int | None = None) -> dict:
     """Generate plant i and plan it with the production rolling path.
 
     solve_rolling ends by running the SAME independent validator on the
@@ -69,7 +70,8 @@ def run_plant(i: int, window_days: int = WINDOW_DAYS,
                         window_days=window_days, freeze_days=freeze_days,
                         n_windows=n_windows,
                         cap_min=p.day_capacity_minutes,
-                        bucket_time_s=bucket_time_s, seq_time_s=seq_time_s)
+                        bucket_time_s=bucket_time_s, seq_time_s=seq_time_s,
+                        seq_num_workers=seq_num_workers)
     solve_s = time.monotonic() - t0
     return {
         "plant": i, "seed": p.params.seed, "gen_s": round(gen_s, 2),

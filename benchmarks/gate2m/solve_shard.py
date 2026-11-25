@@ -16,12 +16,19 @@ import traceback
 from common import run_plant, shard_indices
 
 
+SEQ_WORKERS = None  # set by main() before pool.map (worker init is local)
+
+
+def _run_with_workers(i: int) -> dict:
+    return run_plant(i, seq_num_workers=SEQ_WORKERS)
+
+
 def run_plant_safe(i: int) -> dict:
     """One plant, failure-isolated: an exception or validation problems
     land IN THE RECORD so the merge step reports them with full detail
     instead of killing the shard with an opaque exit code."""
     try:
-        return run_plant(i)
+        return _run_with_workers(i)
     except Exception as e:
         return {"plant": i, "seed": 1000 + i, "gen_s": 0.0,
                 "solve_s": 0.0, "window_days": 7, "freeze_days": 3,
@@ -43,7 +50,12 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "out"))
+    ap.add_argument("--seq-workers", type=int, default=None,
+                    help="CP-SAT workers per day-sequencing solve; set 1 "
+                         "when --workers already saturates the cores")
     a = ap.parse_args()
+    global SEQ_WORKERS
+    SEQ_WORKERS = a.seq_workers
     idx = shard_indices(a.shard, a.shards, a.plants)
     t0 = time.monotonic()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

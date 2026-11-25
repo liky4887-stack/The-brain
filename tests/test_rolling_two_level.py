@@ -213,3 +213,46 @@ def test_gate_scale_window_under_15_minutes():
     assert plan.problems == []
     assert plan.kpis["backlog_units_end"] == pytest.approx(0.0)
     assert "gap_vs_bucket_relaxation" in plan.kpis
+
+
+def test_day_exact_unknown_escalates_then_reports_undecided():
+    """A day solve that cannot decide inside the limit must escalate
+    (limit x4 per attempt) and, failing all attempts, report UNKNOWN
+    honestly as 'undecided, not disproven' - never as infeasible."""
+    from datetime import datetime
+    from brain_core.rolling.two_level import solve_day_exact
+    from brain_core.synthetic import FnbParams, generate_fnb_factory
+    p = generate_fnb_factory(FnbParams(seed=3, n_lines=3, n_skus=40,
+                                       days=2, active_fraction=0.9,
+                                       utilization=0.5, n_raw_materials=5,
+                                       families=("DAIRY", "BAKERY",
+                                                 "SAUCE")))
+    sku0 = next(op.item for op in p.factory.operations if op.item)
+    chunks = [(sku0, 100.0)]
+    asg, problems = solve_day_exact(p.factory, chunks, 0,
+                                    p.day_capacity_minutes,
+                                    time_limit_s=0.0001,
+                                    unknown_attempts=2)
+    # 0.1ms cannot decide any model: both attempts UNKNOWN
+    assert asg == []
+    assert problems and "undecided, not disproven" in problems[0]
+    assert "INFEASIBLE" not in problems[0]
+
+
+def test_day_exact_infeasible_is_not_retried():
+    """INFEASIBLE is a proof: no escalation, message says so."""
+    from brain_core.rolling.two_level import solve_day_exact
+    from brain_core.synthetic import FnbParams, generate_fnb_factory
+    p = generate_fnb_factory(FnbParams(seed=3, n_lines=3, n_skus=40,
+                                       days=2, active_fraction=0.9,
+                                       utilization=0.5, n_raw_materials=5,
+                                       families=("DAIRY", "BAKERY",
+                                                 "SAUCE")))
+    sku0 = next(op.item for op in p.factory.operations if op.item)
+    chunks = [(sku0, 1e6)]  # production minutes alone far over capacity
+    asg, problems = solve_day_exact(p.factory, chunks, 0,
+                                    p.day_capacity_minutes,
+                                    time_limit_s=5.0, unknown_attempts=3)
+    assert asg == []
+    assert problems and "INFEASIBLE" in problems[0]
+    assert "cannot be realized" in problems[0]
