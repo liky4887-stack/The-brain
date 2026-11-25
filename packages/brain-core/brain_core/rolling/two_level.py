@@ -45,6 +45,22 @@ SETUP_W = 50.0      # one SKU-day setup ~ a campaign break
 LATE_W = 1000.0     # one unit late one day: avoid whenever possible
 EARLY_W = 0.001     # one unit held one day: tie-breaks front-loading
 DEFAULT_CHG_ALLOWANCE = 0.15  # share of line-day reserved for changeovers
+
+MAX_DAY_REPAIRS = 4   # evictions per infeasible day before reporting
+
+
+def _min_incoming_changeover(factory: Factory) -> dict:
+    """state -> smallest non-self changeover into it across all setup
+    matrices (minutes). Allergen-class states surface as high values.
+    """
+    out: dict[str, float] = {}
+    for mtx in factory.setup_matrices:
+        for r in mtx.rules:
+            minutes = r.duration.total_seconds() / 60.0
+            cur = out.get(r.to_setup)
+            if cur is None or minutes < cur:
+                out[r.to_setup] = minutes
+    return out
 _EPS = timedelta(microseconds=1)
 
 
@@ -510,15 +526,52 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
             day_hint[t][n] = best_line
     assignments: list[LotAssignment] = []
     problems: list[str] = []
-    for t in sorted(day_lots):
-        day_asg, day_problems = solve_day_exact(
-            factory, day_lots[t], t, cap_min, window_start_day, seq_time_s,
-            hint=day_hint.get(t))
+    repair_moves: list[str] = []
+    min_in = _min_incoming_changeover(factory)
+    pending: dict[int, list[tuple[str, float]]] = {t: list(lots)
+                                                   for t, lots in
+                                                   day_lots.items()}
+    for t in range(days):
+        lots = pending.pop(t, [])
+        if not lots:
+            continue
+        day_asg: list[LotAssignment] = []
+        day_problems: list[str] = []
+        for attempt in range(MAX_DAY_REPAIRS + 1):
+            day_asg, day_problems = solve_day_exact(
+                factory, lots, t, cap_min, window_start_day, seq_time_s,
+                hint=day_hint.get(t))
+            if not day_problems:
+                break
+            if not any("INFEASIBLE" in p for p in day_problems):
+                break  # UNKNOWN/error: not repairable by eviction
+            if attempt == MAX_DAY_REPAIRS:
+                break
+            # evict the highest-pressure chunk: allergen-class states
+            # (largest unavoidable incoming changeover) first, then the
+            # biggest production block; it rolls into the next day.
+            def _pressure(i):
+                name, q = lots[i]
+                s = name.split("#")[0]
+                return (min_in.get(sku[s][2], 0.0), q / sku[s][0])
+            evict_i = max(range(len(lots)), key=_pressure)
+            name, q = lots.pop(evict_i)
+            repair_moves.append(
+                f"day {t}: {name} ({q:.0f} units) moved to day {t + 1} "
+                "after infeasible day mix")
+            if t + 1 < days:
+                pending.setdefault(t + 1, []).append((name, q))
+            else:
+                problems.append(
+                    f"day {t}: {name} ({q:.0f} units) could not be "
+                    "produced inside the horizon (repair moved it past "
+                    "the last day)")
         assignments.extend(day_asg)
         problems.extend(day_problems)
     plan = WindowPlan(horizon_start, days, assignments, bucket,
                       "ok" if not problems else "sequencing problems",
                       problems=list(problems))
+    plan.kpis["repair_moves"] = repair_moves
     v_problems, kpis = validate_window_plan(factory, plan, cap_min,
                                             inv0=inv0,
                                             day0=window_start_day)
