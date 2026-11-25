@@ -1,6 +1,17 @@
 {
  "gate": "2M-constraint / 1.4M-variable rolling plan",
  "verdict": "OPEN",
+ "shards_expected": 12,
+ "shards_missing": [],
+ "environment": {
+  "highspy": "absent",
+  "numpy": "2.2.6",
+  "ortools": "9.12.4544",
+  "python": "3.11.18",
+  "scipy": "1.15.3",
+  "seq_workers": 1,
+  "workers": 4
+ },
  "measured": {
   "plants": 96,
   "shards": 12,
@@ -10,39 +21,38 @@
   "windows": 192,
   "assignments_validated": 31216,
   "validation_problems": [
-   "plant 14 (runner): window 1: day 4: exact assignment+sequencing UNKNOWN; the bucket level's day mix cannot be realized with true changeovers",
-   "plant 82 (runner): window 1: day 4: exact assignment+sequencing UNKNOWN; the bucket level's day mix cannot be realized with true changeovers"
+   "plant 14 (runner): window 1: day 4: exact assignment+sequencing UNKNOWN after 120s; undecided, not disproven - retry with a larger sequencing time limit"
   ],
-  "n_validation_problems": 2,
+  "n_validation_problems": 1,
   "per_plant_solve_s": {
-   "min": 132.9,
-   "mean": 160.4,
-   "max": 189.7
+   "min": 129.9,
+   "mean": 157.6,
+   "max": 316.3
   },
   "shard_wall_s": [
-   364.2,
-   358.3,
-   355.7,
-   347.8,
-   347.1,
-   345.5,
-   342.6,
-   340.3,
-   337.4,
-   320.0,
-   317.2,
-   316.8
+   486.9,
+   463.6,
+   375.3,
+   370.7,
+   355.3,
+   348.1,
+   348.0,
+   346.8,
+   328.7,
+   322.4,
+   312.7,
+   293.9
   ],
-  "distributed_wall_s": 381.5,
-  "merge_validate_s": 17.3,
+  "distributed_wall_s": 510.7,
+  "merge_validate_s": 23.8,
   "kpis": {
-   "changeover_minutes": 79260.0,
-   "backlog_units_end": 3.693685357575305e-10
+   "changeover_minutes": 289260.0,
+   "backlog_units_end": 1.4910028767189942e-10
   }
  },
  "extrapolated_single_32core_box": {
   "method": "ceil(plants/32) waves x slowest measured plant + measured merge/validation; per-core speed assumed similar; memory-bandwidth contention NOT measured",
-  "est_wall_s": 586.4,
+  "est_wall_s": 972.7,
   "gate_budget_s": 1800,
   "fits": true
  }
