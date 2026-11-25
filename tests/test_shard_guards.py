@@ -56,6 +56,34 @@ def test_no_guard_all_done():
     assert all(not r["problems"] for r in records)
 
 
+def test_duplicate_plant_is_a_verdict_problem(tmp_path):
+    """De-duplication is verified, not assumed: the same plant id in
+    two shards must fail the verdict loudly."""
+    art = tmp_path / "art"
+    art.mkdir()
+    crash = {"plant": 7, "seed": 1007, "gen_s": 0.0, "solve_s": 0.0,
+             "window_days": 7, "freeze_days": 3, "n_windows": 2,
+             "horizon_start": "", "cap_min": 0.0,
+             "problems": ["plant crashed: boom"],
+             "crash_traceback": "line1\nboom",
+             "kpis": {}, "windows": [], "assignments": []}
+    for k in (0, 1):
+        json.dump({"shard": k, "shards": 2, "wall_s": 5.0,
+                   "records": [crash]},
+                  open(art / f"shard-{k}.json", "w"))
+    out = tmp_path / "out"
+    subprocess.run(
+        [sys.executable,
+         str(Path(__file__).resolve().parents[1] / "benchmarks" /
+             "gate2m" / "merge_validate.py"),
+         "--shards", "2", "--artifacts", str(art), "--out", str(out)],
+        capture_output=True, text=True)
+    res = json.load(open(out / "RESULT.json"))
+    assert res["verdict"] == "OPEN"
+    assert any("SOLVED TWICE" in pr
+               for pr in res["measured"]["validation_problems"])
+
+
 def test_streaming_merge_matches_expectations(tmp_path):
     """Two shard artifacts (one healthy-ish, one crash) + one missing:
     the merge must still publish a RESULT with both problems recorded
