@@ -4,6 +4,9 @@ The user supplied a reading list as TITLES ONLY (docs/notes-01); books are
 arriving as he sends them, and each one is distilled into a skill plus
 reusable code before it is relied on.
 
+Distilled skills derived from these books are versioned in docs/skills/ so
+they survive as part of the project record.
+
 Available to the build (full text provided by the user):
 - Williams, Model Building in Mathematical Programming, 5th ed. (Wiley
   2013). Received 2026-11-25, read in two passes (full structure, then a
@@ -14,6 +17,17 @@ Available to the build (full text provided by the user):
   tests/test_modeling_patterns.py. Its formulation-strength rules (realistic
   big-M, disaggregate over aggregate, kill symmetry) are the standard every
   future model in this repo is held to.
+
+- Li, Optimization Modeling for Supply Chain Applications (World
+  Scientific). Received 2026-11-25, read in two passes (full structure,
+  then deep read of ch.2, 3, 6, 8, 11 with structure review of 4, 7,
+  12-14). Distilled into docs/skills/li-supply-chain-optimization.md.
+  Its linear-ordering scheduling formulation (ch.11.2.3), generalized to
+  weighted tardiness, is implemented as an independent second solver in
+  packages/brain-core/brain_core/solvers/ordering_solver.py;
+  tests/test_ordering_solver.py cross-validates it against the interval
+  formulation AND the exhaustive baseline on every example and exhaustive
+  golden scenario - three independent routes, one optimum.
 
 Still titles only: Bertsimas & Tsitsiklis; Wolsey; Chen/Batson/Dang;
 Apt; the CP Handbook; the CPAIOR volume; MO-Book.
