@@ -190,3 +190,37 @@ text, no OCR gate needed; each read twice):
   tests/test_nlp_ipm.py locks three convex problems with known optima,
   cross-checks 15 quadratic objectives against solve_qp_ipm, verifies
   full KKT residuals, and checks the loud infeasible-start rejection.
+
+Three more interior-point papers received together 2026-11-25 (all
+digital text, no OCR gate needed; each read twice):
+
+- Alizadeh, Haeberly & Overton, "Primal-Dual Interior-Point Methods
+  for Semidefinite Programming: Convergence Rates, Stability and
+  Numerical Results" (SIAM J. Optim. 8(3), 1998). Distilled into
+  docs/skills/alizadeh-haeberly-overton-sdp.md. Implemented from sec. 2
+  and 7: packages/brain-core/brain_core/sdp/interior_point.py,
+  solve_sdp_ipm - the paper's recommended XZ+ZX method with Mehrotra
+  predictor-corrector (sigma from (7.1), exponent 3): min C.X s.t.
+  Ak.X = bk, X psd. Newton via the Schur complement (2.12)-(2.16) with
+  Lyapunov solves in the eigenbasis of Z; step bounds (2.18)-(2.19)
+  from Cholesky + Jacobi eigenvalues (pure Python, no numpy). The
+  paper's sec. 4-5 conditioning analysis drove the stopping rule:
+  relative duality gap, with a numerically-zero boundary eigenvalue
+  treated as the float limit rather than a hard failure.
+  tests/test_sdp_ipm.py: locked rank-one 2x2 optimum; 15 planted
+  strictly complementary KKT points (optimal by convexity; worst
+  relative objective error 4.8e-7); diagonal SDP = LP vs the exact
+  simplex; MAXCUT relaxation vs brute-force cuts; full KKT residual
+  checks.
+- Dadush, "Primal-Dual Interior Point Methods" (PGMO Lectures, 2025).
+  Distilled into docs/skills/dadush-pgmo-ipm.md. Feasible-start MTY
+  predictor-corrector with convergence analysis plus straight-line
+  complexity theory (strongly-polynomial LP with <=2 variables per
+  inequality; exponential IPM lower-bound examples). Corroborates the
+  LP stack; nothing new implemented (our LP solver is the
+  infeasible-start variant, which the lecture's sec. 4 motivates).
+- Pena, "Primal-Dual Interior-Point Methods" (CMU 10-725 slides).
+  Distilled into docs/skills/pena-cmu-ipm-slides.md. Convex-NLP
+  central path and Newton step - the same system our solve_nlp_ipm
+  (Gould et al. Algorithm 4.1) implements; corroboration, nothing new
+  implemented.
