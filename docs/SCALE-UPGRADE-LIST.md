@@ -212,8 +212,30 @@ already pipelines.
    coverage ratchet, generator-stats publication.
 
 ### Benchmark sources pinned (2026-11-25, for the sweep)
+License verification (done 2026-11-25, live pages):
+- Zenodo 10.5281/zenodo.17493292 (Willms & Brandenburg 2025, benchmark
+  dataset for production planning + detailed scheduling in process
+  industries): CC-BY 4.0 (verified on the record page). USABLE with
+  citation.
+- Mendeley 10.17632/gdm7nkn6b3 (FJSP with dual-mode parallel batching,
+  35 instances + preprocessing/plotting code): data CC BY 4.0, code
+  MIT (stated on the dataset page). USABLE with citation. Targets the
+  day-model (level 2) side of the sweep.
+- MIPLIB 2017 (miplib.zib.de): no explicit license text on the site
+  (checked homepage 2026-11-25); the collection is published openly
+  for benchmarking with a citation request (DOI
+  10.1007/s12532-020-00194-3). USABLE with citation; download at sweep
+  time, do NOT vendor instances into the repo.
 - Trigeiro/Thomas/McClain 1989 CLSP instances:
-  github.com/gsamaro/trigeiro_fdata (check license before use) and
-  suerie.de/testsets.html (TU Darmstadt CLSP test sets + instance
-  description PDF). Published optima travel with the literature.
-- MIPLIB 2017: miplib.zib.de (free; cite DOI 10.1007/s12532-020-00194-3).
+  github.com/gsamaro/trigeiro_fdata has NO license (GitHub license API
+  + repo page, 2026-11-25) -> all rights reserved; do not vendor.
+  suerie.de/testsets.html (TU Darmstadt CLSP/CLSPL test sets) also
+  carries no explicit license; academic redistribution with citation
+  is customary. Sweep stance: use the published TTM 1989 optima as
+  reference numbers, obtain instances from suerie.de with citation,
+  record the license caveat in the sweep writeup.
+- EMRPS/refinery-planning-benchmark (arXiv:2503.22057): NO license
+  (GitHub license API + README, 2026-11-25); README asks only for
+  citation of the arXiv preprint. Academic use with citation; do not
+  vendor; note instances carry no proven optima ("global optimum
+  cannot be guaranteed" per README).
