@@ -84,7 +84,14 @@ Stage 1 (environment) and the data side of Stage 5.
 
 ## Stage 2 - MVP: one food plant, weekly plan
 
-Corresponds to plan-beating-dios Phase 1.
+Corresponds to plan-beating-dios Phase 1. **In progress** (started
+2026-11-25, owner go-ahead by voice note): slice 1 merged - the
+synthetic Makkook-scale F&B generator
+(`packages/brain-core/brain_core/synthetic/fnb_factory.py`): 17 lines,
+96 x 15-minute slots per line-day, 4,001 SKUs, sequence-dependent
+changeovers with allergen washdowns, feasible-by-construction ground
+truth checked independently. Remaining slices: rolling-horizon
+two-level solve, ingestion, cockpit data API, back-test.
 
 - Contains: ingestion (dlt + Pandera) from an Odoo/CSV export with a
   data-quality score; rolling-horizon solve - daily buckets by MILP

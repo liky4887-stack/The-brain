@@ -13,7 +13,8 @@ the repo owner.
 4. License-check every dependency before it enters the tree. No AGPL in a
    paid product (Ultralytics, pm4py, OCA Odoo connector are out unless a
    commercial license is bought). Current dependencies: ortools
-   (Apache-2.0), pydantic (MIT), pytest (MIT, dev only).
+   (Apache-2.0), pydantic (MIT), numpy (BSD-3), scipy (BSD-3, bundles
+   HiGHS MIT), pytest (MIT, dev only).
 5. The validator is independent of the solver and checks every returned
    plan. A solver status is never taken on faith.
 6. Honest statuses: infeasible, time-limited and errored runs are reported
