@@ -391,7 +391,9 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     hint: dict | None = None,
                     fixed: dict | None = None,
                     line_blacklist: frozenset | None = None,
-                    weights: "ObjectiveWeights" = None
+                    weights: "ObjectiveWeights" = None,
+                    num_workers: int | None = None,
+                    unknown_attempts: int = 3
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -507,12 +509,28 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                 (var, int(round(per_min * prod[name] * 1000))))
     m.minimize(sum(lit * cst for lit, cst in total_cost_terms))
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = time_limit_s
-    status = solver.solve(m)
+    if num_workers is not None:
+        solver.parameters.num_workers = num_workers
+    # UNKNOWN means "undecided within the limit", not "unrealizable":
+    # escalate the limit (x4 per attempt, capped) before reporting.
+    # INFEASIBLE is a proof and is never retried.
+    limit = time_limit_s
+    status = None
+    for attempt in range(max(1, unknown_attempts)):
+        solver.parameters.max_time_in_seconds = limit
+        status = solver.solve(m)
+        if status != cp_model.UNKNOWN or attempt == max(1, unknown_attempts) - 1:
+            break
+        limit = min(limit * 4.0, 120.0)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return [], [f"day {day}: exact assignment+sequencing "
-                    f"{solver.status_name(status)}; the bucket level's "
-                    "day mix cannot be realized with true changeovers"]
+        name = solver.status_name(status)
+        if name == "INFEASIBLE":
+            return [], [f"day {day}: exact assignment+sequencing "
+                        "INFEASIBLE; the bucket level's day mix cannot "
+                        "be realized with true changeovers"]
+        return [], [f"day {day}: exact assignment+sequencing {name} "
+                    f"after {limit:.0f}s; undecided, not disproven - "
+                    "retry with a larger sequencing time limit"]
     assignments: list[LotAssignment] = []
     for l, (states, D, arcs) in line_data.items():
         present = [i for i in range(len(states))
@@ -554,7 +572,8 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                  extra_due_day0: dict | None = None,
                  window_start_day: int = 0,
                  cap_override: dict | None = None,
-                 weights: ObjectiveWeights = DEFAULT_WEIGHTS
+                 weights: ObjectiveWeights = DEFAULT_WEIGHTS,
+                 seq_num_workers: int | None = None
                  ) -> WindowPlan:
     """One window: buckets -> sequencing -> independent validation."""
     bucket = solve_buckets(factory, horizon_start, days, cap_min,
@@ -605,7 +624,8 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
         for attempt in range(MAX_DAY_REPAIRS + 1):
             day_asg, day_problems = solve_day_exact(
                 factory, lots, t, cap_min, window_start_day, seq_time_s,
-                hint=day_hint.get(t), weights=weights)
+                hint=day_hint.get(t), weights=weights,
+                num_workers=seq_num_workers)
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):
@@ -779,7 +799,8 @@ def solve_rolling(factory: Factory, horizon_start: datetime,
                   chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                   bucket_time_s: float = 60.0,
                   seq_time_s: float = 10.0,
-                  window_solver=None) -> RollingResult:
+                  window_solver=None,
+                  seq_num_workers: int | None = None) -> RollingResult:
     """Rolling-horizon driver: solve, freeze freeze_days, roll, repeat.
 
     Inventory/backlog netting per SKU over the frozen days carries the
@@ -804,7 +825,8 @@ def solve_rolling(factory: Factory, horizon_start: datetime,
         plan = solve(factory, ws, window_days, cap_min,
                      chg_allowance, bucket_time_s, seq_time_s,
                      inv0=inv, extra_due_day0=back,
-                     window_start_day=start_day)
+                     window_start_day=start_day,
+                     seq_num_workers=seq_num_workers)
         windows.append(plan)
         problems.extend(f"window {w}: {p}" for p in plan.problems)
         if plan.bucket is None or plan.bucket.objective is None:
