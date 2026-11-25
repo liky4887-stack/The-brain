@@ -35,17 +35,28 @@ Per plant, per rolling window (rolling/two_level.py):
 
 ## Ranked list
 
-### 1. Flow-cover and (l,S) valid inequalities in the bucket MILP
+### 1. Lot-sizing cuts via an explicit state reformulation (REVISED)
 Source: Wolsey ch.9 (cover and flow-cover families, separation;
 skill: docs/skills/wolsey-integer-programming.md), sec. 14.4
 multi-item lot-sizing (The-brain's own problem family).
-Mechanism: add separated flow-cover inequalities on the
-production-inventory linking of build_bucket_mip. Tighter LP
-relaxation => fewer HiGHS branch nodes inside the same 60 s budget.
-Effect (ESTIMATED): bucket level 1.3-2x faster at fixed size, or
-~1.5x bigger window at fixed time; multiplies across all shards.
-Cost: medium (separation is O(T^2) per SKU, already understood).
-Fabric fit: pure CPU, no memory growth. Rank 1: best effect/cost.
+Revision (honest finding, 2026-11-25, from reading build_bucket_mip):
+the bucket model's coverage is SOFT - cumulative production rows with
+lateness (lo) and earliness (e) slacks, no explicit inventory/backlog
+state variables. With backlogging, a period's production can serve
+ANY demand day (early or late), so the classic (l,S)/flow-cover
+families (which assume demand intervals) have no bite as-is. The
+correct first step is a reformulation: explicit inventory/backlog
+balance s_t - s_{t-1} - b_t + b_{t-1} = X_t - dem_t (feasible set
+provably unchanged, slacks eliminated), which then admits the
+backlogging-aware (l,S) family. Both steps carry the repo-standard
+proof: brute-force enumeration of tiny instances, every generated cut
+checked against every feasible point; LP bound never weaker; fabric
+wall measured before/after.
+Effect (ESTIMATED, now with lower confidence): bucket level faster at
+fixed size; keep only if the measured LP bound improves on a real
+window. Cost: medium-high (reformulation + separation + proofs).
+Fabric fit: pure CPU. Keeps rank 1 on expected value, with the
+applicability caveat recorded.
 
 ### 2. Disaggregated per-line setup linking in the bucket MILP
 Source: Williams ch.3 disaggregation rule + Wolsey ch.14.3
