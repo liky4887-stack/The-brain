@@ -248,9 +248,16 @@ Corresponds to plan-beating-dios Phase 3.
   these answers, never compute them (DECISIONS). Gate: 50-question
   catalog, every number checked against an independent computation in
   the test.
-- Remaining Stage 4: time decomposition at scale; routing
-  (PyVRP/OSRM) and staffing (Timefold); multi-tenant deployment with
-  an on-prem installer; optional commercial solver pass-through.
+- Routing MERGED (2026-11-25, packages/brain-core/brain_core/routing/
+  cvrp.py): CVRP via PyVRP 0.11.3 (MIT - license-checked, decision 4;
+  recorded in DECISIONS.md and pyproject). Costs recomputed from
+  returned routes on the rounded Euclidean matrix (CVRPLIB
+  convention), gaps measured. Gate PASSED: X-n101-k25 solved to the
+  optimal BKS 27,591 (gap 0.000%, 60s wall; evidence
+  /tmp/gate4-routing.json; instance + BKS from the CVRPLIB site).
+- Remaining Stage 4: time decomposition at scale; staffing
+  (Timefold); multi-tenant deployment with an on-prem installer;
+  optional commercial solver pass-through.
 
 ## Working rules across all stages
 
