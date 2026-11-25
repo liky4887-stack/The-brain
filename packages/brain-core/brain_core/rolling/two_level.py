@@ -104,6 +104,7 @@ class BucketResult:
     skipped_future_demands: int
     n_binaries: int
     n_vars: int
+    n_rows: int = 0  # model-size provenance for scale evidence
 
 
 @dataclass
@@ -264,14 +265,15 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
     n_bin = int(mip.integrality.sum())
+    n_rows = int(mip.A.shape[0])
     if res["x"] is None:
         return BucketResult(str(res["status"]), None, None, {},
-                            maps["skipped"], n_bin, len(mip.c))
+                            maps["skipped"], n_bin, len(mip.c), n_rows)
     x = res["x"]
     qty = {k: float(x[j]) for k, j in maps["x"].items() if x[j] > 1e-6}
     return BucketResult(str(res["status"]), res["objective"],
                         res.get("gap"), qty, maps["skipped"], n_bin,
-                        len(mip.c))
+                        len(mip.c), n_rows)
 
 
 def solve_day_sequences(factory: Factory, bucket: BucketResult,

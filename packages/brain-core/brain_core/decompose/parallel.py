@@ -89,7 +89,8 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
             None, qty,
             sum(b.skipped_future_demands for b in cell_buckets),
             sum(b.n_binaries for b in cell_buckets),
-            sum(b.n_vars for b in cell_buckets))
+            sum(b.n_vars for b in cell_buckets),
+            sum(b.n_rows for b in cell_buckets))
     else:
         merged_bucket = BucketResult(
             "merged-cells:cell-failed", None, None, {},
