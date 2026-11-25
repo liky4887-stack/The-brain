@@ -43,8 +43,14 @@ def main() -> None:
            "backlog_units_end": 0.0}
     solve_times = []
     for r in records:
+        if r.get("crash_traceback"):
+            problems.append(f"plant {r['plant']}: CRASHED on runner - "
+                            + r["crash_traceback"].splitlines()[-1])
+            continue
         v_problems, kpis = revalidate_plant(r)
         problems.extend(f"plant {r['plant']}: {p}" for p in v_problems)
+        problems.extend(f"plant {r['plant']} (runner): {p}"
+                        for p in r["problems"])
         for w in r["windows"]:
             if w:
                 tot["vars"] += w["vars"]
