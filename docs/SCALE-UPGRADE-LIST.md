@@ -210,6 +210,15 @@ already pipelines.
 7. Standing gaps (unchanged): optimality headline day statuses,
    adaptive shard sizing, super-block supervisor, tree-merge,
    coverage ratchet, generator-stats publication.
+8. IPM items from Wright 1997 (skill: docs/skills/
+   wright-primal-dual-ipm.md, 2026-11-26): (a) least-squares cold-start
+   heuristic for the teaching IPMs (all-ones start today); (b) HSD
+   embedding for CERTIFIED infeasibility in the IPM (today: blowup
+   diagnostic only, simplex owns certificates); (c) crossover /
+   optimal-basis recovery (ch.7 BUN partition) if an exact vertex from
+   an IPM solution is ever needed. CG master LP solver: dual simplex
+   KEPT - ch.11 sequence-of-similar-LPs analysis + measured one-shot
+   A/B vs HiGHS IPM (<=8000 cols: within noise, same objective).
 
 ### Benchmark sources pinned (2026-11-25, for the sweep)
 License verification (done 2026-11-25, live pages):

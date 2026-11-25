@@ -109,3 +109,81 @@ def test_mixed_senses():
     )
     assert res["status"] == LPStatus.OPTIMAL
     assert abs(res["objective"] - 2.0) < 1e-5
+
+
+def test_mpc_wyndor():
+    # Same locked Wyndor instance, Mehrotra predictor-corrector
+    # (Wright 1997 ch.10). Known optimum Z = 36 at (2, 6).
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    res = solve_lp_ipm_mpc(
+        [-3.0, -5.0],
+        [[1.0, 0.0], [0.0, 2.0], [3.0, 2.0]],
+        [4.0, 12.0, 18.0],
+        ["<=", "<=", "<="],
+    )
+    assert res["status"] == LPStatus.OPTIMAL
+    assert abs(res["objective"] - (-36.0)) < 1e-6
+    assert abs(res["x"][0] - 2.0) < 1e-5
+    assert abs(res["x"][1] - 6.0) < 1e-5
+
+
+def test_mpc_random_lps_agree_with_exact_simplex():
+    # Same construction and seed as the path-following test: 60 random
+    # feasible+bounded LPs, objective agreement with the exact simplex.
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    rng = random.Random(20261125)
+    checked = 0
+    for _ in range(60):
+        c, A, b, senses = random_bounded_feasible_lp(rng)
+        exact = solve_lp(c, A, b, senses)
+        assert exact.status == LPStatus.OPTIMAL  # by construction
+        res = solve_lp_ipm_mpc(c, A, b, senses)
+        assert res["status"] == LPStatus.OPTIMAL
+        assert abs(res["objective"] - float(exact.objective)) < 1e-4
+        x = res["x"]
+        n = len(c)
+        assert all(v >= -1e-6 for v in x)
+        for i, sense in enumerate(senses):
+            lhs = sum(A[i][j] * x[j] for j in range(n))
+            if sense == "<=":
+                assert lhs <= b[i] + 1e-5
+            elif sense == ">=":
+                assert lhs >= b[i] - 1e-5
+            else:
+                assert abs(lhs - b[i]) < 1e-4
+        checked += 1
+    assert checked == 60
+
+
+def test_mpc_fewer_iterations_than_fixed_centering():
+    # Measured claim behind the adoption: on the seeded 60-LP set the MPC
+    # variant needs strictly fewer iterations than the fixed-sigma
+    # path-following method on every instance (measured 2026-11-26:
+    # mean 8.75 vs 19.22, max 13 vs 24 - see docs/skills/
+    # wright-primal-dual-ipm.md). Assert the per-instance dominance, not
+    # the averages, so the claim tracks the code.
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    rng = random.Random(20261125)
+    for _ in range(60):
+        c, A, b, senses = random_bounded_feasible_lp(rng)
+        mpc = solve_lp_ipm_mpc(c, A, b, senses, return_iters=True)
+        # path-following iteration count via max_iter bisection
+        lo, hi = 1, 500
+        for _ in range(9):
+            mid = (lo + hi) // 2
+            try:
+                solve_lp_ipm(c, A, b, senses, max_iter=mid)
+                hi = mid
+            except ArithmeticError:
+                lo = mid + 1
+        assert mpc["iters"] < hi
+
+
+def test_mpc_infeasible_raises_no_fake_answer():
+    # Ch.9 honest failure: an infeasible LP must never produce an
+    # OPTIMAL answer - the solver raises ArithmeticError (blowup
+    # diagnostic or singular system; the exact simplex owns certificates).
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    import pytest
+    with pytest.raises(ArithmeticError):
+        solve_lp_ipm_mpc([1.0], [[1.0], [-1.0]], [-1.0, 0.0], ["<=", "<="])

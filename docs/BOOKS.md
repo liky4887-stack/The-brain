@@ -159,6 +159,22 @@ text, no OCR gate needed; each read twice):
   tests/test_qp_ipm.py locks two known-solution QPs, cross-checks 40
   random PSD QPs against an independent active-set enumeration oracle,
   and 20 Q=0 cases against the exact simplex.
+- Wright, Primal-Dual Interior-Point Methods (SIAM 1997). Received
+  2026-11-26 (re-sent by the user after being dropped earlier on
+  2026-11-25); read targeted: ch.1 framework, ch.9 infeasibility
+  detection, ch.10 Mehrotra predictor-corrector, ch.11 implementation.
+  Distilled into docs/skills/wright-primal-dual-ipm.md. Implemented
+  from ch.10: packages/brain-core/brain_core/lp/interior_point.py,
+  solve_lp_ipm_mpc - Mehrotra predictor-corrector with adaptive
+  centering sigma=(mu_aff/mu)^3, second-order correction, separate
+  primal/dual step lengths, ch.11 relative termination, ch.9 blowup
+  infeasibility diagnostic (never a certificate). Measured against the
+  existing fixed-centering solver on the shared seeded 60-LP set:
+  strictly fewer iterations on every instance (mean 8.75 vs 19.22),
+  same optima as the exact simplex; tests/test_interior_point.py
+  asserts per-instance dominance. CG master LP solver decision:
+  dual simplex kept (ch.11 hot-start analysis + measured one-shot A/B,
+  see the skill file).
 - Wright, "Interior-Point Methods" (Simons Institute slides, 2017).
   Theory orientation: N2 neighborhoods, short/long-step path-following,
   Mizuno-Todd-Ye predictor-corrector, potential reduction. Distilled
