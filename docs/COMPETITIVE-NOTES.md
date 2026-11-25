@@ -94,3 +94,35 @@ evidence of solving anything beyond commercial CP/MIP solver defaults.
 5. EXECUTION-FEEDBACK LOOP: our sim twin + rolling freeze already
    matches their "execution-aware replanning" pattern; publish the
    disruption-recovery measurements we already record.
+
+## DIOS-adjacent competitors (user's list, 2026-11-25 5:00 PM; public pages only, no sign-ups)
+
+The user's read: scope varies, not all one-for-one with DIOS. Sweep of
+public pages for what each claims on OPTIMIZATION, whether any BOUNDS
+or reproducible evidence are published, and where we can honestly
+differ. "No public bounds" means none found in this sweep, not proof
+none exist.
+
+| Vendor | Public optimization claim | Bounds / verifiability published | Our honest difference |
+|---|---|---|---|
+| o9 Solutions (o9solutions.com) | "AI-powered" supply planning on a unified data model across horizons | No public bounds/gaps found | Marketing-level "AI"; we ship measured solve sizes + independent validation |
+| Kinaxis (kinaxis.com, Maestro) | "Concurrent planning": one in-memory model, fast replans; "AI-powered orchestration" | No public bounds/gaps found | Speed-of-replan is their headline; ours is a proven LB<=UB gap on one linked model |
+| RELEX (relexsolutions.com) | "AI-native" end-to-end retail/manufacturing planning, optimize inventory/production | No public bounds/gaps found | Forecast/inventory-centric; we publish solver status and validation counts |
+| Blue Yonder (blueyonder.com) | "Unified platform - data, AI, network, execution" | No public bounds/gaps found | Suite breadth; we compete on verifiable plan quality, not suite |
+| SAP IBP (SAP) | Documented order-based and time-series Supply Optimizer; finite-capacity optimization | No public bounds on the product pages; BUT the research lineage is public: SAP industry-partner MIP paper (J. Comput. Math., DOI 10.4208/jcm.1905-m2019-0055) describes heuristic MIP innovations needed because general solvers hit time limits at industrial scale | Closest to our world: real MIP under the hood, documented to need heuristics at scale. We state proven gaps explicitly instead of "optimizer" as a black box |
+| Oracle SCP (oracle.com) | Fusion Cloud SCP with "built-in AI and agentic applications" | No public bounds/gaps found | AI-assistant framing; no measurable plan-quality claims to compare against |
+| Anaplan (anaplan.com) | Connected planning; PlanIQ = ML forecasting (with Amazon Forecast) | No public bounds/gaps found | Planning-aggregation tool with ML forecasting; optimization depth is not the claim |
+| ToolsGroup (toolsgroup.com) | SO99+ "calculates optimal plans" via "advanced algorithms and self-learning AI" | "Optimal" used as marketing language; no bound or proof offered | They say "optimal"; we show LB, UB, and gap per solve. Direct honesty contrast |
+| Slimstock (slimstock.com, Slim4) | Inventory optimization "to balance stock and service" | No public bounds/gaps found | Inventory-parameter focus (safety stock), narrower than coupled production |
+| DELMIA Quintiq (3ds.com) | "Leading supply chain planning and optimization solution" for complex end-to-end operations | No public bounds found in this sweep; heritage is the strongest OR culture of the list (puzzle/benchmark marketing historically) | The most credible optimization competitor here; our published measured ladder (26.5M vars validated) is the kind of evidence their public pages do not show |
+
+Cross-cutting: every vendor page leads with "AI"/"optimize" language;
+NONE of the ten publishes a lower bound, an optimality gap, a solver
+status, or an independently validated plan size for their flagship
+planning runs (this sweep). The only public evidence of real solver
+craft is SAP's research lineage, which itself documents that
+industrial-scale MIPs need heuristics under time limits - exactly the
+gap our master-worker decomposition with a proven LB<=UB sandwich is
+built to close. That is the claim we can make and they do not: a
+stated, reproducible, independently checked bound on every published
+plan.
