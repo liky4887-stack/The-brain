@@ -86,3 +86,16 @@ flagged at the point of use instead of being silently borrowed.
   tests/test_edge_finding.py - the brute force caught a min/max extremum
   bug before merge. Not-first/not-last, timetable and energy reasoning
   are documented in the skill but deliberately not yet implemented.
+
+- Pinedo, Planning and Scheduling in Manufacturing and Services
+  (Springer). Received 2026-11-25 as a 499-page digital PDF (text layer
+  intact). Read in two passes: full structure (3 parts, 12 chapters),
+  then deep read of ch.4.2 (CPM) and 5.3 (job shop disjunctive graph and
+  formulation). Distilled into docs/skills/pinedo-planning-and-scheduling.md.
+  Implemented in packages/brain-core/brain_core/jobshop/ (cpm.py,
+  disjunctive.py), validated in tests/test_jobshop.py: Example 4.2.3
+  reproduces the book's printed earliest and latest completion rows
+  (precedences reconstructed and verified), CPM matches brute-force
+  longest paths on 150 random DAGs, and the disjunctive-graph makespan
+  matches direct simulation on all machine sequencings of Example 5.3.1.
+  Shifting bottleneck (5.4) documented, not implemented.
