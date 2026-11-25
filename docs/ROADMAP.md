@@ -149,11 +149,29 @@ Corresponds to plan-beating-dios Phase 2.
   (LINE-01 down day 2, known at horizon start): local re-solve 0.4s
   (gate 60s), 0.968% of units moved (gate 5%), proxy cost +0.015% vs
   the full overnight re-solve honoring the event (gate 2%), 0 late.
-- Remaining Stage 3: objective weight sliders + side-by-side
-  scenarios; forecasts with ranges feeding safety stock; audit log
-  and decision-latency timestamps; binding-constraint and
-  infeasibility explanations in plain words. Gates: forecasts beat
-  seasonal-naive; four-week shadow pilot with both plans scored.
+- Objective weight sliders + side-by-side scenarios MERGED
+  (2026-11-25): ObjectiveWeights (setup/late/early/energy sliders)
+  threaded through BOTH the bucket MILP and the day model;
+  solve_scenarios runs variants and compares them on a common
+  default-proxy scale so numbers stay comparable; the validator
+  reports production_minutes and energy_proxy KPIs.
+- Forecasts with ranges feeding safety stock MERGED (2026-11-25,
+  packages/brain-core/brain_core/forecast/holt_winters.py): a model
+  ZOO - Holt-Winters (additive + multiplicative, smoothing grid,
+  classical-decomposition init), seasonal-naive, and
+  seasonal-naive-with-drift - selected per SKU at each decision time
+  by measured rolling-origin MAE over the history's own recent folds.
+  The naive baselines stay in the zoo so the selector falls back to
+  them when HW genuinely loses; the model family is never assumed to
+  win. Gate PASSED on 6 synthetic SKUs x 156 weeks (trend + growing
+  seasonal amplitude, 10% noise): zoo never meaningfully worse than
+  seasonal-naive per SKU (worst +1.7%), 17.3% better overall;
+  forecast ranges' coverage measured and reported per SKU. Safety
+  stock = Z_95 * one-step residual sigma feeds buffer.minimum,
+  never lowering an existing minimum.
+- Remaining Stage 3: audit log and decision-latency timestamps;
+  binding-constraint and infeasibility explanations in plain words.
+  Gate: four-week shadow pilot with both plans scored.
 
 ## Stage 4 - Beat DIOS at scale
 
