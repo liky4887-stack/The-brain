@@ -255,9 +255,17 @@ Corresponds to plan-beating-dios Phase 3.
   convention), gaps measured. Gate PASSED: X-n101-k25 solved to the
   optimal BKS 27,591 (gap 0.000%, 60s wall; evidence
   /tmp/gate4-routing.json; instance + BKS from the CVRPLIB site).
-- Remaining Stage 4: time decomposition at scale; staffing
-  (Timefold); multi-tenant deployment with an on-prem installer;
-  optional commercial solver pass-through.
+- Staffing MERGED (2026-11-25, packages/brain-core/brain_core/
+  staffing/roster.py): exact CP-SAT rostering - coverage, one shift
+  per day, skills, max days, night->morning rest, fairness objective
+  recomputed from the returned assignment; independent validator
+  checks every constraint (it caught a real model bug: eligibility
+  enforced only in the coverage sum, not on the assignment).
+  Timefold deviation recorded in DECISIONS.md (JDK 17+ requirement,
+  beta binding; ortools CP-SAT instead).
+- Remaining Stage 4: time decomposition at scale; multi-tenant
+  deployment with an on-prem installer; optional commercial solver
+  pass-through.
 
 ## Working rules across all stages
 
