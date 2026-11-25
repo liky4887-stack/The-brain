@@ -77,10 +77,18 @@ def main() -> None:
            "backlog_units_end": 0.0}
     solve_times = []
     n = 0
+    seen: dict[int, int] = {}   # plant -> shard (disjointness check)
     for shard in shard_iter:
         shard_walls.append(shard["wall_s"])
         for r in shard["records"]:
             n += 1
+            if r["plant"] in seen:
+                problems.append(
+                    f"plant {r['plant']}: SOLVED TWICE (shards "
+                    f"{seen[r['plant']]} and {shard['shard']}) - "
+                    f"assignment de-duplication violated")
+            else:
+                seen[r["plant"]] = shard["shard"]
             _accumulate(r, problems, tot, solve_times)
         del shard["records"]   # free before the next shard loads
 

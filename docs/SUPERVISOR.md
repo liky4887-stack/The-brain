@@ -64,6 +64,38 @@ For a run of B blocks (e.g. 10 x ~100M toward ~1B), the orchestrator
    capacity prices. Until then the supervisor reports "no coupling to
    verify" - never a vacuous "consistent".
 
+## Watchdog spec (user voice 2:53 PM) - what each ask maps to
+
+(a) Disjoint assignment, verified not assumed: plants are partitioned
+by construction (shard_indices is a pure function; seeds derive from
+the plant index), and the block supervisor now VERIFIES it: duplicate
+plant ids across shards and silently skipped plants are verdict-level
+problems. One block never touches another block's plants; blocks are
+disjoint ranges of the same generator.
+
+(b) Fail-stop broadcast / circuit breaker: honest GitHub reality -
+runners cannot talk to each other directly. What exists natively is
+matrix fail-fast (one shard failure cancels the others) and a
+coordinator via the results branch. Choice, with the trade-off
+recorded: shards stay failure-ISOLATED (fail-fast: false) because a
+cancelled shard uploads no artifact and destroys the evidence needed
+to fix the error; the CIRCUIT BREAKER sits at the block boundary -
+the ladder halts on any FAIL verdict and no further rung launches
+until the failure is fixed and re-verified. Everything halts until
+the error is fixed, at the granularity that keeps the evidence.
+
+(c) Watchdog, continuous: the wake-driven orchestrator plus the
+results branch are the watchdog - no rung starts before the previous
+rung's verdict is VERIFIED. No silent errors: failure-isolated
+records + always-publish (done). No hidden errors: every guard
+intervention is recorded in the artifact ("not attempted: <guard>").
+No dead code paths: a coverage ratchet is added to CI (coverage must
+not decrease; new code ships covered or not at all). Nothing blocks
+the system: every solve has a time limit, every shard has wall/memory
+guards, every job has a timeout, every outcome publishes. No wrongly
+written code: independent re-validation and brute-force oracles gate
+every claim (the verification harness).
+
 ## Free-fabric reality
 
 - Block ceiling: 256 jobs/workflow (matrix cap) x 8 plants x ~69.2K
