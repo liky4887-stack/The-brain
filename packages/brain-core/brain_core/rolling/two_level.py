@@ -142,12 +142,26 @@ def _sku_data(factory: Factory) -> dict:
     return out
 
 
+def _recipe_data(factory: Factory) -> dict:
+    """sku -> {raw material: units consumed per unit produced}. Records
+    only; the per-day shared supplier pools price these."""
+    out = {}
+    for op in factory.operations:
+        produced = [m.item for m in op.materials if m.quantity > 0]
+        consumed = {m.item: -m.quantity for m in op.materials
+                    if m.quantity < 0}
+        if produced and consumed:
+            out[produced[0]] = consumed
+    return out
+
+
 def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                      cap_min: float, chg_allowance: float,
                      inv0: dict | None = None,
                      extra_due_day0: dict | None = None,
                      cap_override: dict | None = None,
-                     weights: ObjectiveWeights = DEFAULT_WEIGHTS
+                     weights: ObjectiveWeights = DEFAULT_WEIGHTS,
+                     unit_cost_extra: dict | None = None
                      ) -> tuple[MIP, dict]:
     """Assemble the level-1 MIP over [horizon_start, +days).
 
@@ -197,6 +211,11 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
     if weights.energy:
         for (s, t, l), j in xidx.items():
             c[j] = weights.energy * (2.0 - eff.get(l, 1.0)) / sku[s][0]
+    # Lagrangian link prices (Phase D): per-unit penalty on sku-day
+    # production, from shared-pool multipliers. Linear, exact.
+    if unit_cost_extra:
+        for (s, t, l), j in xidx.items():
+            c[j] += unit_cost_extra.get((s, t), 0.0)
 
     rows, cols, vals, sense, rhs = [], [], [], [], []
 
@@ -255,12 +274,20 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                   time_limit_s: float = 60.0, inv0: dict | None = None,
                   extra_due_day0: dict | None = None,
                   cap_override: dict | None = None,
-                  weights: ObjectiveWeights = DEFAULT_WEIGHTS
+                  weights: ObjectiveWeights = DEFAULT_WEIGHTS,
+                  unit_cost_extra: dict | None = None
                   ) -> BucketResult:
-    """Level 1 solve; objective recomputed from the assignment."""
+    """Level 1 solve; objective recomputed from the assignment.
+
+    unit_cost_extra: optional {(sku, day): per-unit penalty} - the
+    Lagrangian link prices of Phase D. When given, the RETURNED
+    objective INCLUDES the penalties: that penalized value is exactly
+    the per-plant Lagrangian dual value, which is what the coupled
+    coordinator needs. True-cost recomputation from the assignment is
+    the coupled module's job, never assumed here."""
     mip, maps = build_bucket_mip(factory, horizon_start, days, cap_min,
                                  chg_allowance, inv0, extra_due_day0,
-                                 cap_override, weights)
+                                 cap_override, weights, unit_cost_extra)
     if not maps["active"]:
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
