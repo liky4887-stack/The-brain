@@ -449,6 +449,25 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         if not eligible:
             return [], [f"day {day}: {name} has no eligible line"]
         m.add_exactly_one(eligible)
+    if hint is None:
+        # Automatic greedy warm start (CP-SAT Primer, Coding Patterns):
+        # biggest chunks first onto the least-loaded eligible line. A
+        # hint seeds the search but never constrains it. Measured need:
+        # dense days (130+ chunks) with a single CP-SAT worker and no
+        # incumbent seed can burn the whole budget without finding ANY
+        # feasible point (plant 43 day 5: UNKNOWN after 100 s); the
+        # greedy hint makes the same model decide (fabric signature
+        # 3b7e07ee1b2f).
+        load: dict[str, float] = {}
+        hint = {}
+        for name, q in sorted(chunks, key=lambda cq: -cq[1]):
+            elig = [l for l in sku[name.split("#")[0]][1]
+                    if (name, l) in x]
+            if not elig:
+                continue
+            line = min(elig, key=lambda l: load.get(l, 0.0))
+            hint[name] = line
+            load[line] = load.get(line, 0.0) + q
     if hint:
         for (name, l), var in x.items():
             m.add_hint(var, 1 if hint.get(name) == l else 0)
