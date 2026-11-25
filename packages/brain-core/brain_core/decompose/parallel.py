@@ -30,6 +30,7 @@ class DecomposedResult:
     cells: int
     wall_s: float                  # measured end-to-end
     max_cell_wall_s: float         # the bound parallelism exploits
+    sum_cell_wall_s: float = 0.0   # sequential-solve lower bound
     problems: list[str] = field(default_factory=list)
     kpis: dict = field(default_factory=dict)
     decomposed: bool = True
@@ -69,6 +70,7 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
     assignments = [a for plan, _ in solved for a in plan.assignments]
     cell_problems = [p for plan, _ in solved for p in plan.problems]
     max_cell = max((w for _, w in solved), default=0.0)
+    sum_cell = sum(w for _, w in solved)
     merged = WindowPlan(horizon_start, days, assignments, None,
                         "merged:" + ",".join(p.seq_status
                                              for p, _ in solved),
@@ -78,5 +80,6 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
     return DecomposedResult(
         plan=merged, cells=len(part.cells),
         wall_s=time.monotonic() - t0, max_cell_wall_s=max_cell,
+        sum_cell_wall_s=sum_cell,
         problems=merged.problems, kpis=kpis,
         decomposed=len(part.cells) > 1)

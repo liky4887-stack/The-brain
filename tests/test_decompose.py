@@ -152,3 +152,49 @@ def test_solve_decomposed_refuses_unproducible_demand():
     assert res.problems
     assert any("GHOST" in p for p in res.problems)
     assert res.plan.assignments == []
+
+
+@pytest.mark.benchmark
+def test_decomposed_gate_two_plant_scale():
+    """Stage 4 slice-1 gate: a 2-plant instance (2 x 6 lines x 400
+    SKUs x 7 days) solved decomposed. Evidence: the merged plan is
+    valid on the full factory and beats the naive plan, and the
+    measured end-to-end wall is bounded by the slowest CELL, not the
+    sum of cells (the sequential lower bound is recorded alongside).
+    """
+    import json
+    from brain_core.backtest import naive_plan
+    from brain_core.decompose import solve_decomposed
+    from brain_core.rolling import validate_window_plan
+    from brain_core.synthetic import FnbParams, generate_fnb_factory
+    from brain_core.decompose.plants import partition_plants
+    from tests.helpers_two_plant import two_plant_factory
+
+    params = FnbParams(n_lines=6, n_skus=400, days=7,
+                       active_fraction=0.25, utilization=0.65,
+                       n_raw_materials=30, seed=1000)
+    p = generate_fnb_factory(params)
+    f2 = two_plant_factory(p.factory)
+    part = partition_plants(f2)
+    assert len(part.cells) == 2 and not part.problems
+    res = solve_decomposed(f2, p.params.horizon_start, 7, 96 * 15,
+                           bucket_time_s=60, seq_time_s=20)
+    assert res.problems == [], res.problems[:3]
+    naive = naive_plan(f2, p.params.horizon_start, 7, 96 * 15)
+    n_probs, n_kpis = validate_window_plan(f2, naive, 96 * 15)
+    assert n_probs == []
+    ev = {"gate": "stage4_slice1_two_plant",
+          "cells": res.cells,
+          "wall_s": round(res.wall_s, 1),
+          "max_cell_wall_s": round(res.max_cell_wall_s, 1),
+          "sum_cell_wall_s": round(res.sum_cell_wall_s, 1),
+          "optimizer_chg": res.kpis["changeover_minutes"],
+          "naive_chg": n_kpis["changeover_minutes"],
+          "optimizer_late": res.kpis["backlog_units_end"],
+          "naive_late": n_kpis["backlog_units_end"]}
+    json.dump(ev, open("/tmp/gate4-decompose.json", "w"), indent=1)
+    print(ev)
+    assert res.kpis["changeover_minutes"] <= \
+        n_kpis["changeover_minutes"] + 1e-6
+    assert res.kpis["backlog_units_end"] <= \
+        n_kpis["backlog_units_end"] + 1e-6
