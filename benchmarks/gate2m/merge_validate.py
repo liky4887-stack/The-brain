@@ -31,13 +31,23 @@ def main() -> None:
 
     t0 = time.monotonic()
     shards = []
+    missing: list[int] = []
     for k in range(a.shards):
         path = os.path.join(a.artifacts, f"shard-{k}.json")
-        shards.append(json.load(open(path)))
+        if os.path.exists(path):
+            shards.append(json.load(open(path)))
+        else:
+            # The shard JOB died at runner level (timeout, OOM-kill,
+            # cancel): no artifact at all. That is a measured fabric
+            # limit, not a harness crash: record it as a problem so the
+            # verdict stays honest and the merge still publishes.
+            missing.append(k)
     records = [r for s in shards for r in s["records"]]
     records.sort(key=lambda r: r["plant"])
 
-    problems: list[str] = []
+    problems: list[str] = [
+        f"shard {k}: artifact missing (runner-level failure: "
+        f"timeout/OOM/cancel)" for k in missing]
     tot = {"vars": 0, "rows": 0, "binaries": 0, "windows": 0,
            "assignments": 0, "changeover_minutes": 0.0,
            "backlog_units_end": 0.0}
@@ -77,6 +87,8 @@ def main() -> None:
         "gate": "2M-constraint / 1.4M-variable rolling plan",
         "verdict": "PASS" if (not problems and tot["rows"] >= 2_000_000
                               and tot["vars"] >= 1_400_000) else "OPEN",
+        "shards_expected": a.shards,
+        "shards_missing": missing,
         "measured": {
             "plants": n, "shards": len(shards),
             "aggregate_vars": tot["vars"], "aggregate_rows": tot["rows"],
@@ -123,12 +135,18 @@ def main_guarded() -> None:
     except SystemExit:
         raise
     except Exception:
-        os.makedirs(os.path.dirname(__file__), exist_ok=True)
+        # Honor --out (defaults to this file's dir): the error RESULT
+        # must land where the publish step looks for it.
+        import sys
+        out = os.path.dirname(os.path.abspath(__file__))
+        argv = sys.argv
+        if "--out" in argv and argv.index("--out") + 1 < len(argv):
+            out = argv[argv.index("--out") + 1]
+        os.makedirs(out, exist_ok=True)
         json.dump({"gate": "2M-constraint / 1.4M-variable rolling plan",
                    "verdict": "HARNESS-ERROR",
                    "error": traceback.format_exc()[-2000:]},
-                  open(os.path.join(os.path.dirname(__file__),
-                                    "RESULT.json"), "w"), indent=1)
+                  open(os.path.join(out, "RESULT.json"), "w"), indent=1)
         raise
 
 

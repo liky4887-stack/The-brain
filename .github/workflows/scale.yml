@@ -1,0 +1,117 @@
+name: scale-ceiling
+# Ceiling discovery (Stage 5): how far past the measured 6.6M-variable
+# aggregate can the free Actions fabric take the repo's own solver?
+# Parameterized by config/scale.json (plants, shards, step). Each run
+# is one ladder step, driven by benchmarks/scale_ceiling.py. Every
+# number in RESULT.json is MEASURED on the fabric; single-runner
+# projections stay labelled EXTRAPOLATED. Free plan only: ubuntu-latest
+# (4 vCPU / 16 GB), no spend, single account.
+on:
+  push:
+    branches: [gate-scale/run]
+
+permissions:
+  contents: write   # merge job commits RESULT.json to gate-scale-results
+
+concurrency:
+  group: scale-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      shards_json: ${{ steps.cfg.outputs.shards_json }}
+      shards: ${{ steps.cfg.outputs.shards }}
+      plants: ${{ steps.cfg.outputs.plants }}
+      step: ${{ steps.cfg.outputs.step }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: cfg
+        run: |
+          python - << 'PY'
+          import json, os
+          c = json.load(open("config/scale.json"))
+          out = os.environ["GITHUB_OUTPUT"]
+          with open(out, "a") as fh:
+              fh.write(f"shards_json={json.dumps(list(range(c['shards'])))}\n")
+              fh.write(f"shards={c['shards']}\nplants={c['plants']}\n")
+              fh.write(f"step={c.get('step', 0)}\n")
+          PY
+
+  solve:
+    needs: setup
+    runs-on: ubuntu-latest   # free tier on public repos: 4 vCPU / 16 GB
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.setup.outputs.shards_json) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet numpy scipy pydantic "ortools>=9.10"
+      - name: solve shard
+        run: |
+          cd benchmarks/gate2m
+          python solve_shard.py --shard ${{ matrix.shard }} \
+            --shards ${{ needs.setup.outputs.shards }} \
+            --plants ${{ needs.setup.outputs.plants }} \
+            --workers 4 --seq-workers 1 \
+            --out "$GITHUB_WORKSPACE/benchmarks/scale/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: benchmarks/scale/out/shard-${{ matrix.shard }}.json
+          retention-days: 7
+
+  merge:
+    needs: [setup, solve]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet numpy scipy pydantic "ortools>=9.10"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: benchmarks/scale/artifacts
+          merge-multiple: true
+      - name: merge + independent validation
+        run: |
+          cd benchmarks/gate2m
+          python merge_validate.py \
+            --shards ${{ needs.setup.outputs.shards }} \
+            --artifacts "$GITHUB_WORKSPACE/benchmarks/scale/artifacts" \
+            --out "$GITHUB_WORKSPACE/benchmarks/scale"
+      - name: stamp ladder metadata
+        if: always()
+        run: |
+          python - << 'PY'
+          import json, os
+          p = "benchmarks/scale/RESULT.json"
+          if os.path.exists(p):
+              r = json.load(open(p))
+              r["ladder"] = {"step": int("${{ needs.setup.outputs.step }}"),
+                             "plants": int("${{ needs.setup.outputs.plants }}"),
+                             "shards": int("${{ needs.setup.outputs.shards }}"),
+                             "run_id": "${{ github.run_id }}",
+                             "sha": "${{ github.sha }}"}
+              json.dump(r, open(p, "w"), indent=1)
+          PY
+      - name: publish result
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B gate-scale-results
+          mkdir -p benchmarks/scale
+          git add benchmarks/scale/RESULT.json || exit 0
+          git commit -m "scale result: run ${{ github.run_id }} (${{ github.sha }})" || exit 0
+          git push origin gate-scale-results
