@@ -31,7 +31,10 @@ import json
 import os
 
 # (plants, shards); 8 plants per shard; last step is the matrix cap.
-LADDER = [(192, 24), (384, 48), (768, 96), (1536, 192), (2048, 256)]
+# Step 3 (448 plants) is the user's ~30M-variable target rung
+# (448 x 69.2K measured-mean vars/plant ~= 31.0M, EXTRAPOLATED).
+LADDER = [(192, 24), (384, 48), (448, 56), (768, 96),
+          (1536, 192), (2048, 256)]
 CONFIG_PATH = os.path.join("config", "scale.json")
 RESULT_PATH = os.path.join("benchmarks", "scale", "RESULT.json")
 

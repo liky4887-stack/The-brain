@@ -128,6 +128,12 @@ highest cost. Deferred behind 1-5.
   instructions, not installed; pattern vocabulary only (see
   docs/COMPLETION-VERIFICATION.md).
 
+Target note (user voice 2:46 PM): ~30M variables is ladder
+step 3 (448 plants / 56 shards, ~31.0M EXTRAPOLATED from the
+measured 69.2K mean vars/plant). The ladder reaches it after
+S1/S2 confirm the fabric behaves; the upgrades above are what
+make that scale faster and more accurate.
+
 ## Execution order
 
 4 first (done: day-model symmetry breaking), then
