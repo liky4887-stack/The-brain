@@ -21,3 +21,16 @@ the repo owner.
    as such. No fabricated plans, no unexplained numbers.
 7. Claims track tests. Nothing is said to "work" beyond what the test
    suite proves, and optimality claims cite the exhaustive baseline.
+
+## Stage 2 deviation log
+
+- 2026-11-25, ingestion (slice 3): the roadmap draft said "dlt +
+  Pandera". Implemented with stdlib csv + pydantic instead
+  (packages/brain-core/brain_core/ingest/csv_io.py). Reasons: pydantic
+  is already a dependency and owns row-level validation; dlt is an
+  EL(T) pipeline framework aimed at loading warehouses, not at
+  tolerant row-by-row ERP export parsing with findings; Pandera would
+  duplicate pydantic's row validation at this scale. No new
+  dependencies added (decision 4 holds: license check trivially
+  passes). Revisit if a real ERP connector (API pulls, schema
+  drift tracking, incremental loads) becomes the requirement.
