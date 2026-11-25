@@ -70,5 +70,6 @@ def cpm(processing: Dict[str, int], predecessors: Dict[str, Set[str]]) -> CPMRes
         earliest_start=es, earliest_finish=ef,
         latest_start=ls, latest_finish=lf,
         makespan=cmax, slack=slack,
-        critical=sorted([j for j in processing if slack[j] == 0]),
+        critical=sorted((j for j in processing if slack[j] == 0),
+                        key=lambda j: es[j]),
     )
