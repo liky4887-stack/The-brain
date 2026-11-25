@@ -207,8 +207,23 @@ Corresponds to plan-beating-dios Phase 3.
   under 30 minutes on one 32-core server, gap logged; routing within
   1% of CVRPLIB X best-known; copilot answers 50 real planner
   questions against solver output.
-- Concrete next step: nothing until Stages 1-3 gates pass; the scale
-  design is only worth its numbers.
+- Plant decomposition MERGED (2026-11-25,
+  packages/brain-core/brain_core/decompose/): union-find partition
+  into SKU-closed line cells (independence PROVEN from the records;
+  unassignable demands are reported, never dropped), parallel cell
+  solves via stdlib ProcessPoolExecutor (no Ray/mpi-sppy dependency
+  yet), merged plan validated on the FULL factory by the same
+  independent validator. Gate PASSED (evidence
+  /tmp/gate4-decompose.json): 2 plants x (6 lines x 400 SKUs) x 7
+  days - decomposed wall 60.5s bounded by the slowest cell (60.4s)
+  vs the 120.8s sequential lower bound; 0 late; 6,240 vs 8,240 naive
+  changeover minutes (-24.6% ... naive 8,280); both plans valid.
+- Remaining Stage 4: time decomposition at scale + MILP
+  neighbourhood search; simulation twin with per-plan robustness
+  score; LLM copilot over the API (drafts/answers, never decides);
+  routing (PyVRP/OSRM) and staffing (Timefold); multi-tenant
+  deployment with an on-prem installer; optional commercial solver
+  pass-through.
 
 ## Working rules across all stages
 
