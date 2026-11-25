@@ -43,11 +43,14 @@ def solve_ordering(problem: SchedulingProblem, time_limit_s: float = 10.0) -> So
     for i in range(n):
         for j in range(i + 1, n):
             model.add(before[i, j] + before[j, i] == 1)
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                if i != j and j != k and i != k:
-                    model.add(before[i, j] + before[j, k] + before[k, i] <= 2)
+    # Transitivity, written as cycle prevention. Each unordered triple
+    # {a, b, c} needs exactly two constraints, one per cycle direction;
+    # iterating ordered triples would emit each form three times.
+    for a in range(n):
+        for b in range(a + 1, n):
+            for c in range(b + 1, n):
+                model.add(before[a, b] + before[b, c] + before[c, a] <= 2)
+                model.add(before[a, c] + before[c, b] + before[b, a] <= 2)
 
     tardiness_terms = []
     for j, order in enumerate(orders):
