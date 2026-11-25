@@ -144,3 +144,49 @@ flagged at the point of use instead of being silently borrowed.
   within 1e-4. A sign error in the eliminated KKT block (-Y^-1 W, not
   +Y^-1 W) was caught by numerically comparing the reduced system
   against the full 4-block Newton system before merge.
+
+Five interior-point papers received together 2026-11-25 (all digital
+text, no OCR gate needed; each read twice):
+
+- Potra & Wright, "Interior-Point Methods" (J. Comput. Appl. Math.
+  124, 2000). LP path-following survey; Mehrotra's predictor-corrector
+  and the LCP/QP extensions. Distilled into
+  docs/skills/potra-wright-interior-point-methods.md. Implemented from
+  sec. 3 (problem 3.18): packages/brain-core/brain_core/qp/
+  interior_point.py, solve_qp_ipm - infeasible-start primal-dual
+  path-following for min (1/2)x'Qx + c'x s.t. Ax=b, x>=0, Q psd, with
+  the QP rule of one step length for all variables.
+  tests/test_qp_ipm.py locks two known-solution QPs, cross-checks 40
+  random PSD QPs against an independent active-set enumeration oracle,
+  and 20 Q=0 cases against the exact simplex.
+- Wright, "Interior-Point Methods" (Simons Institute slides, 2017).
+  Theory orientation: N2 neighborhoods, short/long-step path-following,
+  Mizuno-Todd-Ye predictor-corrector, potential reduction. Distilled
+  into docs/skills/wright-ipm-simons-slides.md. Nothing new implemented
+  (MTY needs a strictly feasible start; our solvers are
+  infeasible-start).
+- Wright, "Recent Developments in Interior-Point Methods" (chapter,
+  ~2001). Second-source corroboration of the same framework plus
+  structure-exploiting linear algebra and the IPM-vs-simplex
+  warm-start tradeoff (matters for future MIP work). Distilled into
+  docs/skills/wright-recent-developments-ipm.md. Nothing implemented.
+- Nesterov & Todd, "Primal-Dual Interior-Point Methods for Self-Scaled
+  Cones" (SIAM J. Optim. 8, 1998). Theory of symmetric/self-scaled
+  cones: the unique scaling point, the NT direction, symmetric
+  primal-dual path-following for LP/QCQP/SDP. Distilled into
+  docs/skills/nesterov-todd-self-scaled-cones.md. Documented, not
+  implemented (conic linear algebra is out of current scope).
+- Gould, Orban, Sartenaer & Toint, "Superlinear convergence of
+  primal-dual interior point algorithms for nonlinear programming"
+  (RAL-TR-2000-014). Algorithm 4.1: outer barrier-parameter decrease
+  with an inner primal-dual Newton minimization under forcing
+  conditions; componentwise Q-superlinear, arbitrarily close to
+  quadratic. Distilled into docs/skills/gould-superlinear-ipm-nlp.md.
+  Implemented as packages/brain-core/brain_core/nlp/interior_point.py,
+  solve_nlp_ipm: min f(x) s.t. Ax=b, c(x)>=0 with user-supplied
+  gradients/Hessians, eps = 0.1 mu forcing, mu <- mu^1.5. Honest
+  scope: local method, needs a strictly feasible start (violations
+  raise loudly), no global machinery or infeasibility detection.
+  tests/test_nlp_ipm.py locks three convex problems with known optima,
+  cross-checks 15 quadratic objectives against solve_qp_ipm, verifies
+  full KKT residuals, and checks the loud infeasible-start rejection.
