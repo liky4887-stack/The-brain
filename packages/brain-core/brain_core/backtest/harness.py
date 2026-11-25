@@ -173,11 +173,18 @@ def run_backtest(weeks: int, cap_min: float,
     Each week is a fresh plant (its own seed): the back-test asks "on
     a typical week, does the optimizer beat the hand plan", not a
     rolling simulation (solve_rolling already covers that).
+
+    Seeds stride by 7919: the generator retries failed campaign
+    constructions on seed+attempt, so consecutive seeds can collapse
+    onto the same surviving plant (observed: seeds 1005-1007 produced
+    one identical instance). A prime stride larger than the retry
+    budget (20) keeps the 12 instances distinct.
     """
     results: list[WeekResult] = []
     for w in range(weeks):
+        seed = week0_seed + w * 7919
         p = generate_fnb_factory(FnbParams(
-            **{**params.__dict__, "seed": week0_seed + w}))
+            **{**params.__dict__, "seed": seed}))
         hs = p.params.horizon_start
         opt = solve_window(p.factory, hs, p.params.days,
                            p.day_capacity_minutes,
@@ -190,7 +197,7 @@ def run_backtest(weeks: int, cap_min: float,
         naive_probs, naive_kpis = validate_window_plan(
             p.factory, naive, p.day_capacity_minutes)
         results.append(WeekResult(
-            week=w, seed=week0_seed + w,
+            week=w, seed=seed,
             optimizer_changeover_min=opt_kpis["changeover_minutes"],
             naive_changeover_min=naive_kpis["changeover_minutes"],
             optimizer_late_units=opt_kpis["backlog_units_end"],

@@ -105,7 +105,7 @@ def test_backtest_twelve_weeks():
                        n_raw_materials=30)
     res = run_backtest(weeks=12, cap_min=96 * 15, params=params,
                        bucket_time_s=60, seq_time_s=20,
-                       week0_seed=1000)
+                       week0_seed=1000)  # seeds stride by 7919 internally
     assert res.all_optimizer_plans_valid, [
         (r.week, r.optimizer_problems[:2])
         for r in res.weeks if r.optimizer_problems][:3]
