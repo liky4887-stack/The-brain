@@ -301,3 +301,21 @@ Skill: `docs/skills/cpsat-primer.md`. Code: `brain_core/solvers/cpsat_tools.py`
 filtering). 5 tests in `tests/test_cpsat_tools.py`, incl. the primer's own
 unsat-core example locked. Two real API traps documented (cross-model
 expression binding; missing get_variable_from_index in ortools 9.15).
+
+## 17. Principles of Constraint Programming — Apt (2003)
+
+The CP framework: domain reduction rules (LINEAR INEQUALITY 1, LINEAR
+EQUALITY), bounds consistency, consistency ladder, MAC search,
+heuristics, branch and bound with propagation.
+Skill: `docs/skills/apt-principles-of-cp.md`. Code: `brain_core/csp/bounds.py`
+(exact-Fraction propagation to fixpoint + MAC). Tests: book examples locked
+(Fig. 6.3-6.4, SEND+MORE=MONEY), 20 random systems vs brute force.
+
+## 18. Pyomo — Optimization Modeling in Python, 3rd ed. — Hart et al. (2020)
+
+Open-access edition (SAND2020-13991B). Modeling components, blocks,
+persistent solvers, sparse index sets, lot-sizing with backlogging.
+Skill: `docs/skills/pyomo-book.md`. Code: `brain_core/lotsizing/uls_backlog.py`
+(exact uncapacitated DP + honest capacitated CP-SAT path). Tests: book
+Table 8.1 cross-validated vs independent HiGHS MIP, 12-case fuzz DP vs
+CP-SAT, agreement with Wagner-Whitin when backlogging priced out.
