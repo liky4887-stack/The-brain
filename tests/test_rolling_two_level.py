@@ -286,3 +286,30 @@ def test_day_exact_infeasible_is_not_retried():
     assert asg == []
     assert problems and "INFEASIBLE" in problems[0]
     assert "cannot be realized" in problems[0]
+
+
+def test_bucket_unit_cost_extra_shifts_production():
+    """Lagrangian link-price hook: a per-unit penalty on (sku, day) must
+    enter the bucket objective linearly, push production off the priced
+    day, and the returned objective must INCLUDE the penalty (it is the
+    per-plant dual value the coupled coordinator sums)."""
+    from brain_core.rolling.two_level import solve_buckets
+    from brain_core.synthetic import FnbParams, generate_fnb_factory
+    p = generate_fnb_factory(FnbParams(seed=3, n_lines=3, n_skus=10,
+                                       days=2, active_fraction=0.9,
+                                       utilization=0.5, n_raw_materials=5,
+                                       families=("DAIRY", "BAKERY")))
+    hs = p.params.horizon_start
+    base = solve_buckets(p.factory, hs, 7, p.day_capacity_minutes,
+                         time_limit_s=30.0)
+    extra = {}
+    for op in p.factory.operations:
+        prod = [m.item for m in op.materials if m.quantity > 0]
+        if prod:
+            extra[(prod[0], 0)] = 1e6
+    pen = solve_buckets(p.factory, hs, 7, p.day_capacity_minutes,
+                        time_limit_s=30.0, unit_cost_extra=extra)
+    day0_base = sum(q for (s, t, l), q in base.qty.items() if t == 0)
+    day0_pen = sum(q for (s, t, l), q in pen.qty.items() if t == 0)
+    assert day0_pen < day0_base
+    assert (pen.objective or 0) > (base.objective or 0)
