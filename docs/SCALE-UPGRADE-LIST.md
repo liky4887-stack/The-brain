@@ -180,3 +180,28 @@ already pipelines.
   deterministic, one line in the matrix generator, (c) adaptive shard
   sizing (already on this list). Staggered run starts implement none
   of these and are NOT adopted.
+
+## What else the system can be pushed to do (user ask 2026-11-25 4:57 PM; grounded in today's measured findings)
+
+1. CLOSE THE COUPLED GAP BELOW 1%: the CG master LP bound is measured
+   within 0.0004% of optimum; the integer restricted master is the
+   weak side (2.79% at 16 plants). Branch-and-price-lite (re-price
+   after branching on the fractional master) or fractional-master
+   repair closes it. Highest-value MILP improvement available.
+2. COUPLED CLAIMS AT FABRIC SCALE: workers-per-round -> one master
+   job per cluster (state via artifacts); 12 clusters x 16 plants =
+   192 coupled plants each with a per-cluster proven gap. The honest
+   "coupled at scale" headline.
+3. UTILIZATION 63.8% -> 85%+: LPT matrix ordering + shard count near
+   a multiple of 20 (measured basis in the staggering verdict above).
+4. EXTERNAL VERIFIABILITY: MIPLIB 2017 + CLSP/Trigeiro published
+   optima as free targets; no competitor publishes bounds - the sweep
+   makes the "show me yours" claim concrete.
+5. REAL-COMPANY-STYLE PLANS: Zenodo 10.5281/zenodo.17493292 /
+   Mendeley 10.17632/gdm7nkn6b3 / EMRPS refinery benchmark after
+   license verification.
+6. frePPLe (now MIT) feature mapping: demand pegging, buffer model,
+   fences/policies - adopt missing pieces with citations.
+7. Standing gaps (unchanged): optimality headline day statuses,
+   adaptive shard sizing, super-block supervisor, tree-merge,
+   coverage ratchet, generator-stats publication.
