@@ -247,3 +247,25 @@ digital text, no OCR gate needed; each read twice):
   all 15 Einstein rules, river safety per crossing, distinct Golomb
   distances, magic sums, sudoku row/col/block) and exhaustive
   baselines for 4x4 knight total domination and order-4 Golomb.
+- Gusfield, "Integer Linear Programming in Computational and Systems
+  Biology" (BCB tutorial deck, September 2019, 101 slides, adapted
+  from the Cambridge UP 2019 book; digital text, no OCR needed; slide
+  table typos resolved against the book's own equations, which
+  reproduce its stated solutions exactly). Distilled into
+  docs/skills/gusfield-ilp-computational-biology.md. Implemented:
+  packages/brain-core/brain_core/ilp/idioms.py - the Part IV idioms
+  (If-Then (17), Only-If (18), NOT-EQUAL (25)/(27), NAND/OR/XOR and
+  implied-satisfaction composites) as CP-SAT builders with explicit
+  bounds; packages/brain-core/brain_core/bio/ - species.py (the
+  Species-Protection LP on the exact rational simplex: optimum
+  45072/415 = 108.607, book rounds up to 108.7; both what-if variants
+  locked: max X_B = 0.00296 under cost <= 108.7, cost 111.7 under
+  X_B >= 0.1), networks.py (max clique, near-clique with global or
+  per-node added-edge budgets, high-density subgraph with the P/E
+  formulation and scaled exact density), rna.py (maximum nested
+  complementary pairing with min-distance, AU/CG weights, and the
+  stacked-quartet extension (30)-(31)). tests/test_gusfield_bio.py:
+  locked book instances, brute-force maximum-clique baseline on 155
+  sampled 6-node graphs, Nussinov DP as an independent oracle for RNA
+  folding, and universal truth-table checks for every idiom (all
+  assignments enumerated, logic checked on each).
