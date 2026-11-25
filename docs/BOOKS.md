@@ -290,3 +290,14 @@ digital text, no OCR gate needed; each read twice):
   tests/test_fischetti_bc.py: random small ILPs against box-exact
   brute force, Gomory-vs-B&B agreement, random 6/7-city TSP against
   permutation brute force. 8 tests.
+
+## 16. The CP-SAT Primer — Krupke et al. (CC-BY 4.0)
+
+Using and understanding Google's CP-SAT solver: constraint vocabulary
+(circuit, no_overlap, reservoir, automaton), parameters, hints/warm
+starts, assumptions and unsat cores, coding patterns.
+Skill: `docs/skills/cpsat-primer.md`. Code: `brain_core/solvers/cpsat_tools.py`
+(hints, hint-feasibility checks, minimal infeasibility cores by deletion
+filtering). 5 tests in `tests/test_cpsat_tools.py`, incl. the primer's own
+unsat-core example locked. Two real API traps documented (cross-model
+expression binding; missing get_variable_from_index in ortools 9.15).
