@@ -145,3 +145,110 @@ def coupled_dual(factories: list, horizon_start, days: int,
     res.multipliers = {"supplier": uS, "labor": uL}
     res.rounds_run = len(res.lb_series)
     return res
+
+
+def build_coupled_mip(factories: list, horizon_start, days: int,
+                      cap_min: float,
+                      supplier_cap: dict[tuple[str, int], float],
+                      labor_cap: dict[int, float] | None = None,
+                      weights=None) -> tuple:
+    """ONE coupled bucket MIP for the whole cluster: per-plant blocks
+    plus the linking rows (shared supplier capacity per material-day,
+    shared labor pool per day). This is the primal model: its
+    incumbent is a FEASIBLE coupled plan (UB) and its solver bound a
+    valid LB - independent of, and checkable against, the Lagrangian
+    dual. Sparse assembly only (block-diagonal + linking rows).
+    """
+    from scipy.sparse import block_diag, coo_matrix, vstack
+    import numpy as np
+    from .two_level import (build_bucket_mip, DEFAULT_WEIGHTS,
+                            DEFAULT_CHG_ALLOWANCE)
+    weights = weights or DEFAULT_WEIGHTS
+    labor_cap = labor_cap or {}
+    mips, maps, offs = [], [], []
+    v_off = 0
+    for f in factories:
+        mip, mp = build_bucket_mip(f, horizon_start, days, cap_min,
+                                   DEFAULT_CHG_ALLOWANCE, None, None,
+                                   None, weights)
+        mips.append(mip)
+        maps.append(mp)
+        offs.append(v_off)
+        v_off += len(mip.c)
+    recipes = [_recipe_data(f) for f in factories]
+    skus = [_sku_data(f) for f in factories]
+    link_rows, link_cols, link_vals, link_sense, link_rhs = [], [], [], [], []
+
+    def _link_row(entries, cap):
+        r = len(link_rhs)  # local 0-based index within the link block
+        for j, v in entries:
+            link_rows.append(r)
+            link_cols.append(j)
+            link_vals.append(v)
+        link_sense.append("L")
+        link_rhs.append(cap)
+
+    for (r, t), capv in supplier_cap.items():
+        ent = []
+        for p_i, mp in enumerate(maps):
+            for (s, tt, l), j in mp["x"].items():
+                if tt == t and r in recipes[p_i].get(s, {}):
+                    ent.append((offs[p_i] + j, recipes[p_i][s][r]))
+        if ent:
+            _link_row(ent, capv)
+    for t, capv in labor_cap.items():
+        ent = []
+        for p_i, mp in enumerate(maps):
+            for (s, tt, l), j in mp["x"].items():
+                if tt == t:
+                    rate = skus[p_i].get(s, (0.0, [], None))[0]
+                    if rate:
+                        ent.append((offs[p_i] + j, 1.0 / rate))
+        if ent:
+            _link_row(ent, capv)
+    A_blocks = block_diag([mip.A for mip in mips]).tocsr()
+    n_vars = sum(len(mip.c) for mip in mips)
+    if link_rhs:
+        A_link = coo_matrix((link_vals, (link_rows, link_cols)),
+                            shape=(len(link_rhs), n_vars)).tocsr()
+        A = vstack([A_blocks, A_link]).tocsr()
+    else:
+        A = A_blocks
+        link_sense, link_rhs = (), np.zeros(0)
+    sense = tuple(s for mip in mips for s in mip.sense) + tuple(link_sense)
+    rhs = np.concatenate([mip.rhs for mip in mips] +
+                         [np.array(link_rhs, dtype=float)])
+    c = np.concatenate([mip.c for mip in mips])
+    lb = np.concatenate([mip.lb for mip in mips])
+    ub = np.concatenate([mip.ub for mip in mips])
+    integ = np.concatenate([mip.integrality for mip in mips])
+    from ..solvers.highs_mip import MIP
+    return MIP("coupled-cluster", c, A, sense, rhs, lb, ub, integ), \
+        {"maps": maps, "offsets": offs}
+
+
+def solve_coupled_cluster(factories: list, horizon_start, days: int,
+                          cap_min: float,
+                          supplier_cap: dict[tuple[str, int], float],
+                          labor_cap: dict[int, float] | None = None,
+                          time_limit_s: float = 300.0) -> dict:
+    """Primal solve of ONE coupled cluster MIP. Returns the incumbent
+    (a FEASIBLE coupled plan = valid UB), the solver's reported MIP
+    gap, and per-plant quantity maps. The objective is recomputed from
+    the assignment (solve_mip does this), never trusted blind."""
+    from ..solvers.highs_mip import solve_mip
+    mip, aux = build_coupled_mip(factories, horizon_start, days,
+                                 cap_min, supplier_cap, labor_cap)
+    res = solve_mip(mip, time_limit_s=time_limit_s)
+    out = {"status": res["status"], "objective": res["objective"],
+           "gap": res.get("gap"), "n_vars": len(mip.c),
+           "n_rows": mip.A.shape[0]}
+    if res["x"] is not None:
+        qtys = []
+        for p_i, mp in enumerate(aux["maps"]):
+            off = aux["offsets"][p_i]
+            qtys.append({k: float(res["x"][off + j])
+                         for k, j in mp["x"].items()
+                         if res["x"][off + j] > 1e-6})
+        out["qty_per_plant"] = qtys
+    return out
