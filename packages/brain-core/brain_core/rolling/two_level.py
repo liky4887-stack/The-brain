@@ -385,6 +385,24 @@ def chunk_lots(sku: dict, qty: dict, cap_min: float
     return day_lots
 
 
+
+def _identical_line_groups(lines: list[str],
+                           chunks: list[tuple[str, float]],
+                           sku: dict, res_mtx: dict
+                           ) -> list[list[str]]:
+    """Groups of lines that are interchangeable for this day's model:
+    same eligible-SKU set over the day's SKUs and same setup matrix.
+    Only groups of size >= 2 are returned (nothing to order in a
+    singleton). Williams ch.6 symmetry."""
+    day_skus = sorted({name.split("#")[0] for name, _ in chunks})
+    groups: dict[tuple, list[str]] = {}
+    for l in lines:
+        elig = frozenset(snm for snm in day_skus if l in sku[snm][1])
+        mtx = res_mtx.get(l)
+        groups.setdefault((elig, getattr(mtx, "name", None)),
+                          []).append(l)
+    return [sorted(g) for g in groups.values() if len(g) >= 2]
+
 def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     day: int, cap_min: float, window_start_day: int = 0,
                     time_limit_s: float = 60.0,
@@ -443,6 +461,23 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                             f"run on {l}"]
     lines = sorted({l for name, _ in chunks
                     for l in sku[name.split("#")[0]][1]})
+    # Symmetry breaking (Williams ch.6; patterns.symmetry_break_order):
+    # lines that are interchangeable FOR THIS DAY (same eligible SKU
+    # set, same setup matrix; efficiency is a bucket-level concept,
+    # rates are SKU-level here) produce permuted duplicate optima, so
+    # order their production loads. Sound: any solution has a line-
+    # permuted twin with non-increasing loads and identical cost.
+    # Lines pinned by `fixed` are excluded - a pinned chunk ties a
+    # chunk to a NAMED line, so no permutation of it is valid.
+    pinned = set(fixed.values()) if fixed else set()
+    for group in _identical_line_groups(lines, chunks, sku, res_mtx):
+        free = [l for l in group if l not in pinned]
+        for l1, l2 in zip(free, free[1:]):
+            load1 = sum(prod[c] * x[(c, l1)] for c, _ in chunks
+                        if (c, l1) in x)
+            load2 = sum(prod[c] * x[(c, l2)] for c, _ in chunks
+                        if (c, l2) in x)
+            m.add(load1 >= load2)
     state_chunks: dict[tuple[str, str], list[str]] = {}
     for l in lines:
         for name, _ in chunks:
