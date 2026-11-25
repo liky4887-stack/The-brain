@@ -528,6 +528,11 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
     problems: list[str] = []
     repair_moves: list[str] = []
     min_in = _min_incoming_changeover(factory)
+    due_by_sku: dict[str, int] = {}
+    for d in factory.demands:
+        dd = due_day(d.due, horizon_start)
+        if d.item in sku:
+            due_by_sku[d.item] = max(due_by_sku.get(d.item, -1), dd)
     pending: dict[int, list[tuple[str, float]]] = {t: list(lots)
                                                    for t, lots in
                                                    day_lots.items()}
@@ -547,13 +552,17 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                 break  # UNKNOWN/error: not repairable by eviction
             if attempt == MAX_DAY_REPAIRS:
                 break
-            # evict the highest-pressure chunk: allergen-class states
-            # (largest unavoidable incoming changeover) first, then the
-            # biggest production block; it rolls into the next day.
+            # evict the highest-pressure chunk among those that still
+            # have due-date slack (moving them is free); only when none
+            # can move without lateness, evict the highest-pressure
+            # chunk outright. Pressure = unavoidable incoming changeover
+            # of its state, then its production minutes.
             def _pressure(i):
                 name, q = lots[i]
                 s = name.split("#")[0]
-                return (min_in.get(sku[s][2], 0.0), q / sku[s][0])
+                slack = due_by_sku.get(s, t) > t
+                return (slack, min_in.get(sku[s][2], 0.0),
+                        q / sku[s][0])
             evict_i = max(range(len(lots)), key=_pressure)
             name, q = lots.pop(evict_i)
             repair_moves.append(
@@ -571,11 +580,11 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
     plan = WindowPlan(horizon_start, days, assignments, bucket,
                       "ok" if not problems else "sequencing problems",
                       problems=list(problems))
-    plan.kpis["repair_moves"] = repair_moves
     v_problems, kpis = validate_window_plan(factory, plan, cap_min,
                                             inv0=inv0,
                                             day0=window_start_day)
     plan.problems.extend(v_problems)
+    kpis["repair_moves"] = repair_moves
     plan.kpis = kpis
     bound = bucket.objective
     if bound and bound > 0 and kpis.get("proxy_cost") is not None:
