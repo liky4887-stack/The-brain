@@ -78,10 +78,18 @@ of a strong valid inequality: it tightens bounds without branching.
 
 ## Code
 
-packages/brain-core/brain_core/propagation/edge_finding.py implements
-disjunctive propagation and cubic edge-finding with fixpoint iteration.
-tests/test_edge_finding.py validates soundness against brute-force
-permutation search on 200 random instances, fixpoint idempotence, a
-forced-ordering case, a forced contradiction, and a classic edge-finding
-deduction. Not-first/not-last, timetable, and energy reasoning are
-documented above but NOT yet implemented - do not claim them in code.
+packages/brain-core/brain_core/propagation/ implements the sec. 22.3
+propagation algorithms:
+- edge_finding.py: disjunctive propagation, cubic edge-finding, and
+  not-first/not-last, iterated to a fixpoint;
+- timetable.py: compulsory-part propagation for unary resources and the
+  compulsory-profile overload check for cumulative resources;
+- energy.py: left-shift/right-shift required energy (WSh) and the
+  overload check (the book's Figure 22.6 example, WSh(A,2,7) = 8, is a
+  locked unit test).
+tests/test_edge_finding.py and tests/test_timetable_energy.py validate
+soundness against brute-force search (permutations for unary, start-time
+grids for cumulative): every deduced bound holds in every feasible
+schedule, and contradictions fire only on truly infeasible instances.
+STILL not implemented (do not claim them): the energy-based time-bound
+ADJUSTMENT rules, and the cumulative timetable profile adjustments.
