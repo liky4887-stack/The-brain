@@ -22,6 +22,10 @@ the repo owner.
    HiGHS MIT), pytest (MIT, dev only), PyVRP 0.11.3 (MIT - checked
    via package metadata 2026-11-25, added for Stage 4 routing;
    tqdm 4.70.1 (MIT/MPL-2.0 dual) rides along as its dependency).
+   frePPLe LICENSE UPDATE 2026-11-25 (verified from the live COPYING
+   file on master): v8+ is dual MIT / commercial, no longer AGPL -
+   frePPLe moves from "reference only" to "patterns and code reading
+   allowed"; vendoring any of it still needs its own entry here.
 5. The validator is independent of the solver and checks every returned
    plan. A solver status is never taken on faith.
 6. Honest statuses: infeasible, time-limited and errored runs are reported

@@ -126,3 +126,59 @@ gap our master-worker decomposition with a proven LB<=UB sandwich is
 built to close. That is the claim we can make and they do not: a
 stated, reproducible, independently checked bound on every published
 plan.
+
+## Open resources to use (user request 5:01 PM; PUBLIC / OPENLY LICENSED ONLY - the user's "leaked data" phrasing is explicitly NOT adopted: no leaked, confidential, or proprietary material, nothing behind logins, no untrusted code run)
+
+Verified sources and licenses (checked live 2026-11-25):
+
+1. **MIPLIB 2017** - https://miplib.zib.de/ (Zuse Institute Berlin).
+   The standard MIP benchmark library, 240-instance benchmark set
+   incl. industrial supply-chain/production instances. Free to
+   download; cite the MIPLIB 2017 paper (Comput. Optim. Appl., DOI
+   10.1007/s12532-020-00194-3). USE: the benchmark sweep - measure
+   our solve quality vs published best-known on production-planning
+   instances.
+2. **frePPLe** - github.com/frePPLe/frepple. LICENSE CHANGE VERIFIED
+   from the live COPYING file: v8+ is dual-licensed MIT / commercial
+   (was AGPL). Our "reference only" rule is relaxed: patterns AND
+   code reading are fine; still no vendoring without a DECISIONS.md
+   entry, and their solver architecture remains the closest public
+   APS reference (demand pegging, solver buffers, constraint types).
+3. **SAP IBP public help portal** (help.sap.com): the order-based /
+   time-series Supply Optimizer documentation is public - model
+   features (fair-share, late-demand, deployment) are documented
+   behavior we can map onto our constraint set. USE: feature gap
+   list.
+4. **Zenodo process-industries planning benchmark** - DOI
+   10.5281/zenodo.17493292 "Benchmark dataset for production planning
+   and detailed scheduling in process industries". License NOT yet
+   verified (Zenodo API 403 from the workspace box) - VERIFY BEFORE
+   USE. USE: real-company-style plan runs.
+5. **EMRPS/refinery-planning-benchmark** (GitHub) - refinery planning
+   benchmark; license on the repo page to verify before use. USE:
+   process-industry validation instance.
+6. **Mendeley FJSP-DMPBP** (DOI 10.17632/gdm7nkn6b3) - flexible job
+   shop with batch processing instances; Mendeley data is usually
+   CC-BY 4.0 - VERIFY BEFORE USE. USE: day-level sequencing tests.
+7. **PMC5996297** - sustainable aggregate production planning,
+   chemical process industry benchmark problem + dataset (open access
+   paper). USE: formulation patterns for aggregate planning.
+8. Small open APS repos (patterns only, NEVER run untrusted code):
+   hhatefi/sc_planner, lijianhua1205/OpenAPO, ZisIsNotZis/aps - review
+   for constraint/modeling ideas only.
+9. o9 / Kinaxis / RELEX / Blue Yonder / Anaplan / ToolsGroup /
+   Slimstock / Oracle: no open solver resources found in this sweep -
+   engines are closed; only marketing pages and (SAP excepted) no
+   public technical detail. Nothing usable; do not sign up.
+
+Gap-list additions from this sweep:
+- Benchmark sweep vs MIPLIB 2017 planning instances (published
+  best-known objectives = free verifiable targets).
+- CLSP/Trigeiro classic lot-sizing instances vs published optima
+  (already queued).
+- frePPLe feature-mapping pass (now MIT): demand pegging, buffer
+  model, fence/policy constraints - adopt what's missing, cite.
+- Real-company-style runs on the Zenodo process-industries dataset
+  (after license verification).
+- SAP IBP optimizer feature parity list (fair-share distribution,
+  late demand, deployment) as roadmap candidates.
