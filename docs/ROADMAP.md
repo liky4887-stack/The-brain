@@ -96,7 +96,9 @@ sequencing + independent validator; gate passed at Makkook scale:
 feasible plan, 0 late, 238.5s solve wall vs the 900s gate). Slice 3
 merged: CSV ingestion of the canonical records with a data-quality
 score (stdlib csv + pydantic; dlt/Pandera deviation recorded in
-DECISIONS.md). Remaining slices: cockpit data API, back-test.
+DECISIONS.md). Slice 4 merged: the
+cockpit data API (read-only JSON + SVG Gantt; Next.js deferral
+recorded in DECISIONS.md). Remaining slice: back-test.
 
 - Contains: ingestion (dlt + Pandera) from an Odoo/CSV export with a
   data-quality score; rolling-horizon solve - daily buckets by MILP

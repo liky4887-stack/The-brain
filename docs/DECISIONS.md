@@ -34,3 +34,14 @@ the repo owner.
   dependencies added (decision 4 holds: license check trivially
   passes). Revisit if a real ERP connector (API pulls, schema
   drift tracking, incremental loads) becomes the requirement.
+
+- 2026-11-25, cockpit (slice 4): the roadmap draft said "Next.js,
+  Gantt on vis-timeline". Deferred the Next.js UI; shipped the data
+  layer it would consume instead: a read-only stdlib http.server JSON
+  API (/api/plan, /api/kpis, /api/late-orders) plus a zero-dependency
+  SVG Gantt page (packages/brain-core/brain_core/cockpit/api.py).
+  Reasons: no JavaScript toolchain or JS dependencies enter the tree
+  without a license audit (decision 4); the API is the contract any
+  future UI consumes, so no work is thrown away; every number served
+  is recomputed by the independent validator. Revisit Next.js when a
+  planner needs interactive editing, not just reading.
