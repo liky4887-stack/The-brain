@@ -152,3 +152,31 @@ make that scale faster and more accurate.
 landing, then 2 behind a flag, then 5/6. Each landing: full suite,
 golden optima unchanged, LP bound not weaker, fabric benchmark
 measured, verification-harness claim filed.
+
+## Staggered/pipelined dispatch - VERDICT (measured + documented, 2026-11-25)
+
+User proposal (4:54 PM): stagger cluster starts 5-10 s so all 20 slots
+stay busy. Verdict: staggering does NOT add capacity, and the queue
+already pipelines.
+
+- DOCUMENTED (docs.github.com/en/actions/reference/limits, "Job
+  concurrency limits for GitHub-hosted runners"): standard runner,
+  Free plan = 20 TOTAL concurrent jobs per account (Pro 40, Team 60,
+  Enterprise 500). Support can raise it; not free. One pool per
+  account: N staggered runs share the same 20 slots.
+- MEASURED (scale step-2 run 45630465498, per-job start/end stamps
+  from the public API): peak occupancy = 20 (the cap binds), mean =
+  12.75 (63.8% of the 20-slot cap over the 1435 s solve window), job
+  durations 319-604 s (mean 381). The occupancy curve shows the loss
+  is NOT inter-wave idling: slots fill progressively (~2 job-starts
+  per minute for the first ~8 min: 8 slots for 5 min, then a linear
+  ramp to 20) and drain smoothly at the tail (20 -> 1 over the last
+  ~7 min). The queue starts a queued job as soon as a slot frees -
+  pipelining is already automatic.
+- What would actually recover the lost ~36%: (a) fewer, longer jobs
+  (less exposure to the ~2/min start metering; e.g. 40 shards instead
+  of 48 for the same plant count = 2 exact waves), (b) longest-first
+  matrix ordering (LPT) so the tail is short jobs - free,
+  deterministic, one line in the matrix generator, (c) adaptive shard
+  sizing (already on this list). Staggered run starts implement none
+  of these and are NOT adopted.
