@@ -114,5 +114,23 @@ def main() -> None:
         raise SystemExit(1)
 
 
+def main_guarded() -> None:
+    """Whatever happens, a RESULT.json exists for the publish step: the
+    verdict on success, the exception on harness failure."""
+    import traceback
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        os.makedirs(os.path.dirname(__file__), exist_ok=True)
+        json.dump({"gate": "2M-constraint / 1.4M-variable rolling plan",
+                   "verdict": "HARNESS-ERROR",
+                   "error": traceback.format_exc()[-2000:]},
+                  open(os.path.join(os.path.dirname(__file__),
+                                    "RESULT.json"), "w"), indent=1)
+        raise
+
+
 if __name__ == "__main__":
-    main()
+    main_guarded()
