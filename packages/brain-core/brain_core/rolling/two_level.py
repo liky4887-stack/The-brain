@@ -776,12 +776,17 @@ def solve_rolling(factory: Factory, horizon_start: datetime,
                   cap_min: float,
                   chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                   bucket_time_s: float = 60.0,
-                  seq_time_s: float = 10.0) -> RollingResult:
+                  seq_time_s: float = 10.0,
+                  window_solver=None) -> RollingResult:
     """Rolling-horizon driver: solve, freeze freeze_days, roll, repeat.
 
     Inventory/backlog netting per SKU over the frozen days carries the
     state forward; overproduction rides as inv0, shortfalls as
     backordered demand due on day 0 of the next window.
+
+    window_solver defaults to solve_window; a decomposed solver (Stage
+    4) with the same call contract slots in without changing the
+    freeze/netting logic.
     """
     if not (1 <= freeze_days <= window_days):
         raise ValueError("freeze_days must be in [1, window_days]")
@@ -793,10 +798,11 @@ def solve_rolling(factory: Factory, horizon_start: datetime,
     for w in range(n_windows):
         start_day = w * freeze_days
         ws = horizon_start + timedelta(days=start_day)
-        plan = solve_window(factory, ws, window_days, cap_min,
-                            chg_allowance, bucket_time_s, seq_time_s,
-                            inv0=inv, extra_due_day0=back,
-                            window_start_day=start_day)
+        solve = window_solver or solve_window
+        plan = solve(factory, ws, window_days, cap_min,
+                     chg_allowance, bucket_time_s, seq_time_s,
+                     inv0=inv, extra_due_day0=back,
+                     window_start_day=start_day)
         windows.append(plan)
         problems.extend(f"window {w}: {p}" for p in plan.problems)
         if plan.bucket is None or plan.bucket.objective is None:

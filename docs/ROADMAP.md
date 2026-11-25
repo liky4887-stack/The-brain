@@ -270,10 +270,23 @@ Corresponds to plan-beating-dios Phase 3.
   in tests), per-tenant audit logs, POSIX-sh installer (venv +
   license-checked deps + tenant root + smoke test; air-gap via
   PIP_FIND_LINKS).
-- Remaining Stage 4: the capstone gate - time decomposition at scale
-  combined with plant decomposition: synthetic 2M-constraint /
-  1.4M-variable plan feasible in under 30 minutes on one 32-core
-  server, gap logged; optional commercial solver pass-through.
+- Commercial solver pass-through MERGED (2026-11-25,
+  packages/brain-core/brain_core/solvers/commercial.py): adapter
+  protocol over the same MIP object; UNAVAILABLE honestly when no
+  binding is registered; any returned objective is recomputed from x
+  (an adapter's claimed objective is ignored); malformed x rejected.
+- Capstone scale gate: OPEN (honest status, 2026-11-25). The target
+  (2M constraints / 1.4M variables in 30 min on one 32-core server)
+  is beyond this 2-core environment: the Makkook-scale bucket MILP
+  measures 60,725 vars / 21,140 rows, so the gate instance is
+  ~30-100x larger than what exists here. What IS proven: the
+  combined time x plant decomposition path - solve_rolling now takes
+  any window solver with the same contract, and solve_decomposed
+  merges per-cell bucket results honestly (SKU-disjoint qty dicts,
+  summed recomputed objectives, cell failures stay visible).
+  Evidence /tmp/gate4-capstone.json: 2 plants x (6 lines x 400
+  SKUs), 2 rolling windows of 7 days, validated end to end, 0
+  problems, 0 late, 18.7s wall on 2 cores.
 
 ## Working rules across all stages
 
