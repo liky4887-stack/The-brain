@@ -227,11 +227,21 @@ Corresponds to plan-beating-dios Phase 3.
   5528.43 in ~14.3s total, BEATING the 20s single-solve incumbent
   (5533.02); on an already-good 20s incumbent the 30-40%-free
   neighbourhoods are measured incumbent-optimal.
-- Remaining Stage 4: time decomposition at scale; simulation twin with per-plan robustness
-  score; LLM copilot over the API (drafts/answers, never decides);
-  routing (PyVRP/OSRM) and staffing (Timefold); multi-tenant
-  deployment with an on-prem installer; optional commercial solver
-  pass-through.
+- Simulation twin + robustness score MERGED (2026-11-25,
+  packages/brain-core/brain_core/simtwin/twin.py): a plan is EXECUTED
+  as-is (no re-optimization) through the validator's own daily stock
+  walk against seeded scenarios - line-day outages, demand jitter,
+  line slowdowns; scores are measured, seeded, reproducible, with
+  parameters recorded. Scale evidence (/tmp/gate4-simtwin.json,
+  2-plant instance, 20 scenarios, 3% outages + 15% demand jitter):
+  the tighter optimizer plan absorbs disruptions WORSE than the
+  slacker naive plan (mean late 135,355 vs 135,151 units, unit-days
+  404,952 vs 365,451) - exactly the trade-off this slice exists to
+  make visible; no winner was asserted.
+- Remaining Stage 4: time decomposition at scale; LLM copilot over
+  the API (drafts/answers, never decides); routing (PyVRP/OSRM) and
+  staffing (Timefold); multi-tenant deployment with an on-prem
+  installer; optional commercial solver pass-through.
 
 ## Working rules across all stages
 
