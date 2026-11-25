@@ -1,6 +1,6 @@
 {
- "step": 2,
- "plants": 384,
- "shards": 48,
- "note": "ladder step 2: 8 plants/shard (measured-safe memory)"
+ "step": 3,
+ "plants": 448,
+ "shards": 56,
+ "note": "ladder step 3: 8 plants/shard (measured-safe memory)"
 }

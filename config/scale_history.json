@@ -1,0 +1,178 @@
+[
+ {
+  "gate": "2M-constraint / 1.4M-variable rolling plan",
+  "verdict": "PASS",
+  "shards_expected": 24,
+  "shards_missing": [],
+  "environment": {
+   "highspy": "absent",
+   "numpy": "2.2.6",
+   "ortools": "9.12.4544",
+   "python": "3.11.18",
+   "scipy": "1.15.3",
+   "seq_workers": 1,
+   "workers": 4
+  },
+  "measured": {
+   "plants": 192,
+   "shards": 24,
+   "aggregate_vars": 13301659,
+   "aggregate_rows": 4650891,
+   "aggregate_binaries": 1535065,
+   "windows": 384,
+   "assignments_validated": 62747,
+   "validation_problems": [],
+   "n_validation_problems": 0,
+   "per_plant_solve_s": {
+    "min": 127.9,
+    "mean": 156.1,
+    "max": 316.4
+   },
+   "shard_wall_s": [
+    524.4,
+    486.4,
+    459.2,
+    419.4,
+    409.2,
+    391.0,
+    361.2,
+    357.5,
+    354.8,
+    352.9,
+    350.8,
+    340.3,
+    339.2,
+    331.7,
+    328.3,
+    327.1,
+    327.0,
+    321.3,
+    319.4,
+    312.1,
+    311.5,
+    306.3,
+    294.5,
+    285.9
+   ],
+   "distributed_wall_s": 580.3,
+   "merge_validate_s": 55.9,
+   "kpis": {
+    "changeover_minutes": 565200.0,
+    "backlog_units_end": 1.9031176634598523e-10
+   }
+  },
+  "extrapolated_single_32core_box": {
+   "method": "ceil(plants/32) waves x slowest measured plant + measured merge/validation; per-core speed assumed similar; memory-bandwidth contention NOT measured",
+   "est_wall_s": 1954.3,
+   "gate_budget_s": 1800,
+   "fits": false
+  },
+  "ladder": {
+   "step": 1,
+   "plants": 192,
+   "shards": 24,
+   "run_id": "45627176287",
+   "sha": "a1bb36ba3448c81499537bbf2a679799f2037372"
+  }
+ },
+ {
+  "gate": "2M-constraint / 1.4M-variable rolling plan",
+  "verdict": "PASS",
+  "shards_expected": 48,
+  "shards_missing": [],
+  "environment": {
+   "highspy": "absent",
+   "numpy": "2.2.6",
+   "ortools": "9.12.4544",
+   "python": "3.11.18",
+   "scipy": "1.15.3",
+   "seq_workers": 1,
+   "workers": 4
+  },
+  "measured": {
+   "plants": 384,
+   "shards": 48,
+   "aggregate_vars": 26544847,
+   "aggregate_rows": 9279858,
+   "aggregate_binaries": 3062822,
+   "windows": 768,
+   "assignments_validated": 125096,
+   "validation_problems": [],
+   "n_validation_problems": 0,
+   "per_plant_solve_s": {
+    "min": 129.4,
+    "mean": 157.2,
+    "max": 384.8
+   },
+   "shard_wall_s": [
+    583.6,
+    568.6,
+    510.7,
+    483.0,
+    461.2,
+    418.7,
+    405.7,
+    396.0,
+    389.9,
+    380.5,
+    378.4,
+    368.1,
+    366.9,
+    363.1,
+    360.9,
+    359.8,
+    355.2,
+    353.4,
+    352.4,
+    351.8,
+    349.5,
+    344.8,
+    338.4,
+    338.3,
+    337.5,
+    337.2,
+    335.1,
+    332.8,
+    332.0,
+    328.2,
+    326.8,
+    325.7,
+    323.2,
+    322.1,
+    318.5,
+    318.5,
+    317.6,
+    316.2,
+    316.0,
+    314.5,
+    311.1,
+    309.9,
+    305.7,
+    303.4,
+    302.6,
+    300.2,
+    300.0,
+    296.8
+   ],
+   "distributed_wall_s": 650.5,
+   "merge_validate_s": 66.9,
+   "kpis": {
+    "changeover_minutes": 1151790.0,
+    "backlog_units_end": 1.3262422271509422e-09
+   }
+  },
+  "extrapolated_single_32core_box": {
+   "method": "ceil(plants/32) waves x slowest measured plant + measured merge/validation; per-core speed assumed similar; memory-bandwidth contention NOT measured",
+   "est_wall_s": 4684.5,
+   "gate_budget_s": 1800,
+   "fits": false
+  },
+  "ladder": {
+   "step": 2,
+   "plants": 384,
+   "shards": 48,
+   "run_id": "45630465498",
+   "sha": "f01ef8d78045931e3e65e3baaaf174eab1e24503"
+  }
+ }
+]

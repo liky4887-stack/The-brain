@@ -131,9 +131,20 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "plan":
         history = []
+        # The results branch holds only the LATEST RESULT; the full
+        # ladder history lives in config/scale_history.json (appended
+        # when each verdict is processed). Read both, newest last.
+        hp = os.path.join(a.repo, "config", "scale_history.json")
+        if os.path.exists(hp):
+            history.extend(json.load(open(hp)))
         p = os.path.join(a.repo, RESULT_PATH)
         if os.path.exists(p):
-            history.append(json.load(open(p)))
+            r = json.load(open(p))
+            if not any(h.get("ladder", {}).get("step") ==
+                       r.get("ladder", {}).get("step")
+                       and h.get("verdict") == r.get("verdict")
+                       for h in history):
+                history.append(r)
         print(json.dumps(next_action(history), indent=1))
     else:
         print(write_config(a.repo, a.step, a.plants, a.shards))

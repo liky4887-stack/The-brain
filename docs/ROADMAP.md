@@ -207,6 +207,15 @@ Corresponds to plan-beating-dios Phase 3.
   under 30 minutes on one 32-core server, gap logged; routing within
   1% of CVRPLIB X best-known; copilot answers 50 real planner
   questions against solver output.
+  **Gate 2M: PASS, measured 2026-11-25** (gate2m run 45630417534,
+  RESULT on origin/gate2m-results @ ef8467a, code 17ab64f):
+  6,639,962 vars / 2,321,508 rows / 766,220 binaries across 96
+  plants x 2 rolling windows, 31,215 assignments independently
+  re-validated, ZERO validation problems. MEASURED on the free
+  distributed fabric: wall 606.2 s + merge 23.3 s. The literal
+  one-32-core-box form is EXTRAPOLATED, not measured: est. 1177 s
+  < 1800 s budget (method and its unmeasured contention caveat are
+  recorded in the RESULT).
 - Plant decomposition MERGED (2026-11-25,
   packages/brain-core/brain_core/decompose/): union-find partition
   into SKU-closed line cells (independence PROVEN from the records;
