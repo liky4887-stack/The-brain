@@ -44,6 +44,27 @@ from ..solvers.highs_mip import MIP, solve_mip
 SETUP_W = 50.0      # one SKU-day setup ~ a campaign break
 LATE_W = 1000.0     # one unit late one day: avoid whenever possible
 EARLY_W = 0.001     # one unit held one day: tie-breaks front-loading
+
+
+@dataclass(frozen=True)
+class ObjectiveWeights:
+    """The objective sliders (Stage 3): what the planner cares about.
+
+    setup: per SKU-day campaign-break cost (the changeovers slider).
+    late: per unit-day lateness (the on-time slider).
+    early: per unit-day earliness (inventory aversion).
+    energy: per production-minute weight, scaled per line by
+        (2 - efficiency) - a documented PROXY: the records carry
+        line efficiency, not power draw, so "energy" here means
+        "prefer the efficient lines".
+    """
+    setup: float = SETUP_W
+    late: float = LATE_W
+    early: float = EARLY_W
+    energy: float = 0.0
+
+
+DEFAULT_WEIGHTS = ObjectiveWeights()
 DEFAULT_CHG_ALLOWANCE = 0.15  # share of line-day reserved for changeovers
 
 MAX_DAY_REPAIRS = 4   # evictions per infeasible day before reporting
@@ -124,7 +145,8 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                      cap_min: float, chg_allowance: float,
                      inv0: dict | None = None,
                      extra_due_day0: dict | None = None,
-                     cap_override: dict | None = None
+                     cap_override: dict | None = None,
+                     weights: ObjectiveWeights = DEFAULT_WEIGHTS
                      ) -> tuple[MIP, dict]:
     """Assemble the level-1 MIP over [horizon_start, +days).
 
@@ -163,13 +185,17 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             eidx[(s, t)] = n; n += 1
     n_vars = n
 
+    eff = {r.name: r.efficiency for r in factory.resources}
     c = np.zeros(n_vars)
     for j in yidx.values():
-        c[j] = SETUP_W
+        c[j] = weights.setup
     for j in loidx.values():
-        c[j] = LATE_W
+        c[j] = weights.late
     for j in eidx.values():
-        c[j] = EARLY_W
+        c[j] = weights.early
+    if weights.energy:
+        for (s, t, l), j in xidx.items():
+            c[j] = weights.energy * (2.0 - eff.get(l, 1.0)) / sku[s][0]
 
     rows, cols, vals, sense, rhs = [], [], [], [], []
 
@@ -227,11 +253,13 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                   cap_min: float, chg_allowance: float = DEFAULT_CHG_ALLOWANCE,
                   time_limit_s: float = 60.0, inv0: dict | None = None,
                   extra_due_day0: dict | None = None,
-                  cap_override: dict | None = None) -> BucketResult:
+                  cap_override: dict | None = None,
+                  weights: ObjectiveWeights = DEFAULT_WEIGHTS
+                  ) -> BucketResult:
     """Level 1 solve; objective recomputed from the assignment."""
     mip, maps = build_bucket_mip(factory, horizon_start, days, cap_min,
                                  chg_allowance, inv0, extra_due_day0,
-                                 cap_override)
+                                 cap_override, weights)
     if not maps["active"]:
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
@@ -360,7 +388,8 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     time_limit_s: float = 60.0,
                     hint: dict | None = None,
                     fixed: dict | None = None,
-                    line_blacklist: frozenset | None = None
+                    line_blacklist: frozenset | None = None,
+                    weights: "ObjectiveWeights" = None
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -467,6 +496,13 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         m.add(load <= int(cap_min))
         line_data[l] = (states, D, arcs)
         total_cost_terms.extend(arc_costs)
+    if weights is not None and weights.energy:
+        # energy slider: per-chunk-line production cost, x1000 for int
+        eff = {r.name: r.efficiency for r in factory.resources}
+        for (name, l), var in x.items():
+            per_min = weights.energy * (2.0 - eff.get(l, 1.0))
+            total_cost_terms.append(
+                (var, int(round(per_min * prod[name] * 1000))))
     m.minimize(sum(lit * cst for lit, cst in total_cost_terms))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_s
@@ -515,11 +551,13 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                  inv0: dict | None = None,
                  extra_due_day0: dict | None = None,
                  window_start_day: int = 0,
-                 cap_override: dict | None = None) -> WindowPlan:
+                 cap_override: dict | None = None,
+                 weights: ObjectiveWeights = DEFAULT_WEIGHTS
+                 ) -> WindowPlan:
     """One window: buckets -> sequencing -> independent validation."""
     bucket = solve_buckets(factory, horizon_start, days, cap_min,
                            chg_allowance, bucket_time_s, inv0,
-                           extra_due_day0, cap_override)
+                           extra_due_day0, cap_override, weights)
     if bucket.objective is None:
         return WindowPlan(horizon_start, days, [], bucket,
                           f"bucket-level failed: {bucket.status}",
@@ -565,7 +603,7 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
         for attempt in range(MAX_DAY_REPAIRS + 1):
             day_asg, day_problems = solve_day_exact(
                 factory, lots, t, cap_min, window_start_day, seq_time_s,
-                hint=day_hint.get(t))
+                hint=day_hint.get(t), weights=weights)
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):
@@ -705,10 +743,20 @@ def validate_window_plan(factory: Factory, plan: WindowPlan,
     setups = len({(a.sku, a.day) for a in plan.assignments})
     proxy_cost = (SETUP_W * setups + LATE_W * walk["backlog_unit_days"]
                   + EARLY_W * walk["early_unit_days"])
+    eff = {r.name: r.efficiency for r in factory.resources}
+    prod_min = 0.0
+    energy_proxy = 0.0
+    for a in plan.assignments:
+        if a.sku in sku:
+            minutes = a.qty / sku[a.sku][0]
+            prod_min += minutes
+            energy_proxy += minutes * (2.0 - eff.get(a.line, 1.0))
     kpis = {"changeover_minutes": chg_total,
             "setups": setups,
             "assignments": len(plan.assignments),
             "proxy_cost": proxy_cost,
+            "production_minutes": prod_min,
+            "energy_proxy": energy_proxy,
             **walk}
     return problems, kpis
 
