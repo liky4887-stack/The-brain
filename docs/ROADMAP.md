@@ -98,7 +98,16 @@ merged: CSV ingestion of the canonical records with a data-quality
 score (stdlib csv + pydantic; dlt/Pandera deviation recorded in
 DECISIONS.md). Slice 4 merged: the
 cockpit data API (read-only JSON + SVG Gantt; Next.js deferral
-recorded in DECISIONS.md). Remaining slice: back-test.
+recorded in DECISIONS.md). Slice 5 merged: the back-test harness
+(optimizer vs the documented EDD first-fit naive baseline, both
+scored by the same independent validator). Stage 2 gates: (1)
+Makkook-scale synthetic instance (17 lines, 96 x 15-min slots, 4,001
+SKUs, 7 days) - feasible plan, 0 late units, 0 validation problems,
+238.5s solve wall vs the 900s gate; (2) 12-week back-test (6 lines,
+400 SKUs, 7 days, seeds strided 1000+7919w) - optimizer beats the
+naive baseline on changeover minutes in all 12 weeks, 27.7% fewer
+changeover minutes in total (37,950 vs 52,470), 0 late units vs
+10,202 naive, all plans valid. STAGE 2 COMPLETE.
 
 - Contains: ingestion (dlt + Pandera) from an Odoo/CSV export with a
   data-quality score; rolling-horizon solve - daily buckets by MILP
