@@ -216,8 +216,8 @@ Corresponds to plan-beating-dios Phase 3.
   independent validator. Gate PASSED (evidence
   /tmp/gate4-decompose.json): 2 plants x (6 lines x 400 SKUs) x 7
   days - decomposed wall 60.5s bounded by the slowest cell (60.4s)
-  vs the 120.8s sequential lower bound; 0 late; 6,240 vs 8,240 naive
-  changeover minutes (-24.6% ... naive 8,280); both plans valid.
+  vs the 120.8s sequential lower bound; 0 late; 6,240 vs naive 8,280
+  changeover minutes (-24.6%); both plans valid.
 - Remaining Stage 4: time decomposition at scale + MILP
   neighbourhood search; simulation twin with per-plan robustness
   score; LLM copilot over the API (drafts/answers, never decides);
