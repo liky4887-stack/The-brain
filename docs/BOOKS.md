@@ -61,3 +61,15 @@ flagged at the point of use instead of being silently borrowed.
   packages/brain-core/brain_core/scheduling/single_machine.py and
   brute-force-validated in tests/test_single_machine.py (WSPT vs all
   permutations; separation vs all subsets).
+
+- Wolsey, Integer Programming, 2nd ed. (Wiley 2021). Received 2026-11-25
+  as a 360-page digital PDF (text layer intact, no OCR needed). Read in
+  two passes: full structure, then deep read of ch.1, 5.2, 14.3-14.4 with
+  ch.7-9 read for the reformulation method. Distilled into
+  docs/skills/wolsey-integer-programming.md. The Wagner-Whitin
+  uncapacitated lot-sizing DP (sec. 5.2) is implemented in
+  packages/brain-core/brain_core/lotsizing/uls.py and validated in
+  tests/test_uls.py against brute-force enumeration of all setup sets
+  (which caught and fixed a zero-demand-period edge case the plain
+  recursion mishandles). Chapters not deep-read are marked as such in the
+  skill; their details are not cited anywhere in code.
