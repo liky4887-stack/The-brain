@@ -111,3 +111,19 @@ flagged at the point of use instead of being silently borrowed.
   enumeration on 120 random LPs plus the locked Wyndor example - the
   brute force caught a missing negative-right-hand-side normalization
   (sec. 4.6) before merge. This gives The-brain in-house LP relaxations.
+
+- Ahuja, Magnanti & Orlin, Network Flows: Theory, Algorithms, and
+  Applications (Prentice Hall 1993). Received 2026-11-25 as an 863-page
+  scan with a CVISION OCR text layer. Per the OCR gate, the algorithm
+  pages relied on (Figure 6.17 labeling, Figure 9.9 successive shortest
+  path, Theorems 6.3-6.5, Lemmas 9.11-9.12) were verified against the
+  rendered page images. Read in two passes: structure, then deep read of
+  ch.6.5 and 9.7. Distilled into docs/skills/ahuja-network-flows.md.
+  Implemented in packages/brain-core/brain_core/network/flows.py:
+  max_flow (labeling/Edmonds-Karp) and min_cost_flow (successive shortest
+  paths with potentials). tests/test_flows.py uses the max-flow min-cut
+  theorem itself as oracle (brute-force cuts over all subsets) and the
+  repo's own simplex solver as an independent oracle for min-cost flow;
+  the cross-check caught that SSP silently mis-optimizes negative-cost
+  instances (outside the book's ch.9 nonnegativity assumption), so they
+  are now rejected loudly. Cycle-canceling documented, not implemented.
