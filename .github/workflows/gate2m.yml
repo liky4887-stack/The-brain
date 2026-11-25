@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --quiet numpy scipy pydantic "ortools>=9.10"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"  # pinned: solver version drift between runs breaks determinism claims
       - name: solve shard
         run: |
           cd benchmarks/gate2m
@@ -38,7 +38,7 @@ jobs:
         with:
           name: shard-${{ matrix.shard }}
           path: benchmarks/gate2m/out/shard-${{ matrix.shard }}.json
-          retention-days: 7
+          retention-days: 90  # super-block spot re-validation must not outlive evidence
 
   merge:
     needs: solve
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --quiet numpy scipy pydantic "ortools>=9.10"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"  # pinned: solver version drift between runs breaks determinism claims
       - uses: actions/download-artifact@v4
         with:
           pattern: shard-*
