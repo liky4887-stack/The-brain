@@ -82,12 +82,58 @@ per-plant average.
 - ADMM/consensus: no proven bound on the coupled MIP - rejected for
   the "proven gap" requirement (fine heuristic, wrong guarantee).
 - Dantzig-Wolfe / column generation (Lasdon & Terjung pattern, cited
-  in [MDPI]): also gives a proven bound, but needs a restricted master
-  simplex + per-plant pricing MIPs + integrality restoration
-  (branch-and-price) - much more machinery for the same guarantee.
-  Recorded as the upgrade path if the Lagrangian gap stalls wide.
+  in [MDPI]): CHOSEN 2026-11-25 (user voice, 4:49 PM): his stated
+  architecture - parallel per-plant worker problems feeding ONE
+  master problem - IS the DW form, and he asked to prefer it when it
+  gives the stronger proven bound. Theory: the DW master LP bound
+  EQUALS the Lagrangian dual bound (both equal the convexification
+  bound; standard DW/LR equivalence). Not stronger in theory, but
+  STRONGER IN PRACTICE on our instances, measured: on the 2-plant
+  0.75x-binding test instance the CG master LP attains 44,978,346.73
+  converged in 22 iterations, while the 8-round subgradient walk
+  reaches only 791.40 - the subgradient step is scale-blind without
+  a good UB (Polyak) and stalls orders of magnitude short. CG also
+  CERTIFIES its bound (all reduced costs >= -tol) instead of
+  approaching it. Implemented in brain_core/rolling/coupled_dw.py:
+  restricted master LP (scipy/HiGHS) + per-plant pricing via the
+  same unit_cost_extra hook + Farley per-iteration valid bounds +
+  integer restricted master (one MIP over generated columns) for a
+  feasible UB. Subgradient (coupled.py) remains as the fallback and
+  for the repair heuristic.
 - Benders: fits when linking VARIABLES are few and continuous; ours are
   per-day capacities (many) - worse fit than dualizing them.
+
+## The master-worker architecture (user's picture, 2026-11-25 4:49 PM)
+
+The user's stated design, mapped onto the build:
+
+- "Run the linear problems IN PARALLEL, one per worker (about 20
+  machines)" = the PRICING step: plant p solves its own bucket MIP
+  with the current link prices (unit_cost_extra). Plants are
+  independent given prices, so one worker per plant, ~20 concurrent
+  on the free fabric.
+- "All feed into ONE linear problem at the end" = the MASTER:
+  exactly one LP per round (the restricted master over generated
+  columns) and, at the end, exactly one integer master MIP whose
+  incumbent is the feasible coupled plan. The subgradient variant is
+  the degenerate case of the same picture (master = multiplier
+  update, no LP) and is recorded as strictly weaker in practice.
+- Demand allocation (v2) stays as recorded above: the same master
+  absorbs it later as set-partitioning rows; not claimed built.
+
+HONEST WALL ANALYSIS. Rounds are SEQUENTIAL (round k+1 needs round
+k's prices); plants within a round are PARALLEL. So:
+- wall_sequential = rounds x (sum of plant solves)   <- measured now
+- wall_parallel   = rounds x (slowest plant solve + dispatch
+  overhead)                                          <- EXTRAPOLATED
+  until the workers-per-round fabric workflow runs it
+Consequence for the largest coupled size truly solved: the binding
+constraint is ROUNDS x per-round wall inside the 6h job limit. CG
+converges in ~10-30 iterations on our instances (22 on the test
+instance), so a single job can price ~16 plants x 22 rounds at
+measured bucket-MIP cost; the parallel-worker fabric mode extends
+plants per round, not rounds. Both numbers are always reported with
+their MEASURED / EXTRAPOLATED label.
 
 ## Fabric mapping (free tier, runners cannot talk)
 
