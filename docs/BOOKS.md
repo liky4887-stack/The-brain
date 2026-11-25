@@ -46,3 +46,18 @@ Used instead, all public and lawful:
 Every formulation decision in code cites the source it came from in a
 header comment. Where a book is still titles-only, public docs are used and
 flagged at the point of use instead of being silently borrowed.
+
+- Bertsimas & Tsitsiklis, Introduction to Linear Optimization (Athena
+  Scientific). Received 2026-11-25 as a 301-page scan without a text
+  layer. Chapters 10-12 (IP formulations, IP methods, the art in linear
+  optimization) read via OCR in two passes; per the user's instruction the
+  OCR was verified against rendered page images before anything was relied
+  on (Theorem 10.1, Theorem 12.1 WSPT, Theorem 12.2 separation, the 12.5
+  job shop LP (12.4), the TSP dynamic program (11.3) - all confirmed;
+  inline formula OCR is imperfect, so only image-verified content is
+  cited). Chapters 1-9 identified from the TOC but not OCR'd. Distilled
+  into docs/skills/bertsimas-linear-optimization.md. The single-machine
+  results are implemented in
+  packages/brain-core/brain_core/scheduling/single_machine.py and
+  brute-force-validated in tests/test_single_machine.py (WSPT vs all
+  permutations; separation vs all subsets).
