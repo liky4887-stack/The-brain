@@ -411,7 +411,8 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     line_blacklist: frozenset | None = None,
                     weights: "ObjectiveWeights" = None,
                     num_workers: int | None = None,
-                    unknown_attempts: int = 3
+                    unknown_attempts: int = 3,
+                    notes: list | None = None
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -458,16 +459,38 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         # feasible point (plant 43 day 5: UNKNOWN after 100 s); the
         # greedy hint makes the same model decide (fabric signature
         # 3b7e07ee1b2f).
-        load: dict[str, float] = {}
+        # capacity-aware, in minutes: production + a conservative
+        # changeover charge (cheapest incoming arc per extra state
+        # group), preferring lines that stay under 90% of the day
+        # capacity. Measured: quantity-only seeds overload lines on
+        # dense days and give CP-SAT nothing repairable (plant 155
+        # day 4, 138 chunks, UNKNOWN at 110 s).
+        min_in_h = _min_incoming_changeover(factory)
+        load: dict[str, float] = {}  # line -> minutes used
+        tail_h: dict[str, str] = {}
         hint = {}
         for name, q in sorted(chunks, key=lambda cq: -cq[1]):
             elig = [l for l in sku[name.split("#")[0]][1]
                     if (name, l) in x]
             if not elig:
                 continue
-            line = min(elig, key=lambda l: load.get(l, 0.0))
+            st = state[name]
+            def _hcost(l, name=name, st=st):
+                chg = 0.0
+                prev = tail_h.get(l)
+                if prev is not None and prev != st:
+                    chg = min_in_h.get(st, 0.0)
+                e = prod[name] + chg
+                over = max(0.0, load.get(l, 0.0) + e - 0.9 * cap_min)
+                return (over, load.get(l, 0.0))
+            line = min(elig, key=_hcost)
+            chg = 0.0
+            prev = tail_h.get(line)
+            if prev is not None and prev != st:
+                chg = min_in_h.get(st, 0.0)
             hint[name] = line
-            load[line] = load.get(line, 0.0) + q
+            load[line] = load.get(line, 0.0) + prod[name] + chg
+            tail_h[line] = st
     if hint:
         for (name, l), var in x.items():
             m.add_hint(var, 1 if hint.get(name) == l else 0)
@@ -576,6 +599,66 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         if status != cp_model.UNKNOWN or attempt == max(1, unknown_attempts) - 1:
             break
         limit = min(limit * 4.0, 120.0)
+    if status == cp_model.UNKNOWN and fixed is None and hint:
+        # Fix-and-optimize fallback (measured need: plant 155 day 4,
+        # 138 chunks, single worker, still UNKNOWN at 110 s even with a
+        # greedy seed - fabric signature 3b7e07ee1b2f; seeding quality
+        # saturates at ~133 chunks). Pin the largest half of the chunks
+        # to lines chosen by a CAPACITY-AWARE greedy (production minutes
+        # + changeover estimate <= cap_min per line) and re-solve the
+        # rest exactly. Two honesty guards, both measured: capacity-
+        # blind pins can overload a line (first version proved
+        # INFEASIBLE-under-pins), and an INFEASIBLE proof under pins
+        # says NOTHING about the day itself - so a failed fallback
+        # falls through to the original undecided report, never to an
+        # INFEASIBLE claim. A successful fallback is not silent: the
+        # restriction is reported through `notes`.
+        load: dict[str, float] = {}
+        tail_st: dict[str, str] = {}
+        min_in = _min_incoming_changeover(factory)
+        pinned = {}
+        for name, q in sorted(chunks, key=lambda cq: -cq[1]):
+            if len(pinned) >= max(1, len(chunks) // 4):
+                break
+            st = state[name]
+            best = None
+            best_chg = 0.0
+            for l in sku[name.split("#")[0]][1]:
+                if (name, l) not in x:
+                    continue
+                chg = 0.0
+                prev = tail_st.get(l)
+                if prev is not None and prev != st:
+                    # conservative: cheapest incoming arc to this state,
+                    # not the optimistic tail->state entry (the exact
+                    # tour pays at least this per extra state group)
+                    chg = min_in.get(st, 0.0)
+                if load.get(l, 0.0) + prod[name] + chg <= 0.9 * cap_min:
+                    if best is None or load.get(l, 0.0) < load.get(best, 0.0):
+                        best, best_chg = l, chg
+            if best is None:
+                break  # first chunk that fits nowhere: stop pinning
+            pinned[name] = best
+            load[best] = load.get(best, 0.0) + prod[name] + best_chg
+            tail_st[best] = st
+        if pinned:
+            asg, probs = solve_day_exact(
+                factory, chunks, day, cap_min, window_start_day,
+                min(max(60.0, time_limit_s), 120.0), hint=hint,
+                fixed=pinned,
+                line_blacklist=line_blacklist, weights=weights,
+                num_workers=num_workers, unknown_attempts=1,
+                notes=notes)
+            if asg:
+                if notes is not None:
+                    notes.append(
+                        f"day {day}: decided with fixed-prefix "
+                        f"restriction (largest {len(pinned)} of "
+                        f"{len(chunks)} chunks pinned to capacity-aware "
+                        "greedy lines)")
+                return asg, probs
+            # fallback failed: pins were our choice, so the day stays
+            # undecided - fall through to the honest UNKNOWN report
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         name = solver.status_name(status)
         if name == "INFEASIBLE":
@@ -669,6 +752,7 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
     pending: dict[int, list[tuple[str, float]]] = {t: list(lots)
                                                    for t, lots in
                                                    day_lots.items()}
+    day_notes: list[str] = []
     for t in range(days):
         lots = pending.pop(t, [])
         if not lots:
@@ -679,7 +763,7 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
             day_asg, day_problems = solve_day_exact(
                 factory, lots, t, cap_min, window_start_day, seq_time_s,
                 hint=day_hint.get(t), weights=weights,
-                num_workers=seq_num_workers)
+                num_workers=seq_num_workers, notes=day_notes)
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):
@@ -719,6 +803,10 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                                             day0=window_start_day)
     plan.problems.extend(v_problems)
     kpis["repair_moves"] = repair_moves
+    if day_notes:
+        # restricted days are valid assignments, not problems; they
+        # belong in the measured record, not the verdict
+        kpis["restricted_days"] = list(day_notes)
     plan.kpis = kpis
     bound = bucket.objective
     if bound and bound > 0 and kpis.get("proxy_cost") is not None:
