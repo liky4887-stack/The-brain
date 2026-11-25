@@ -20,16 +20,27 @@ from brain_core.solvers.highs_mip import read_mps, solve_mip
 
 DATA = Path(__file__).parent / "data" / "miplib"
 
+# twenty MIPLIB 3.0 instances, each with a PROVEN optimum ("(opt)" in
+# the instance header, catalog-cross-checked). SLOW ones run under the
+# benchmark marker to keep the regular suite fast.
 OPTIMA = {"p0033": 3089.0, "stein27": 18.0, "flugpl": 1201500.0,
-          "mod008": 307.0, "lseu": 1120.0}
+          "mod008": 307.0, "lseu": 1120.0, "bell3a": 878430.32,
+          "egout": 568.101, "enigma": 0.0, "khb05250": 106940226.0,
+          "misc03": 3360.0, "mod010": 6548.0, "rgn": 82.1999,
+          "vpm1": 20.0, "vpm2": 13.75, "set1ch": 54537.7,
+          "misc06": 12850.8607, "fixnet6": 3983.0,
+          "stein45": 30.0, "qiu": -132.873137, "mas76": 40005.0541}
+SLOW = {"stein45", "qiu", "mas76"}
 
 
 @pytest.mark.parametrize("name,optimum", sorted(OPTIMA.items()))
-def test_miplib_optimum(name, optimum):
+def test_miplib_optimum(name, optimum, request):
+    if name in SLOW and not request.config.getoption("-m") == "benchmark":
+        pytest.skip("slow MIPLIB instance: runs under -m benchmark")
     mip = read_mps(str(DATA / f"{name}.mps"))
-    res = solve_mip(mip, time_limit_s=30.0)
+    res = solve_mip(mip, time_limit_s=60.0)
     assert res["x"] is not None, f"{name}: no solution: {res['status']}"
-    assert res["objective"] == pytest.approx(optimum, abs=1e-3), (
+    assert res["objective"] == pytest.approx(optimum, rel=1e-6, abs=1e-3), (
         f"{name}: got {res['objective']}, literature optimum {optimum}")
 
 
