@@ -78,8 +78,16 @@ def main() -> None:
     solve_times = []
     n = 0
     seen: dict[int, int] = {}   # plant -> shard (disjointness check)
+    envs: dict[str, int] = {}   # env stamp -> shard (drift check)
     for shard in shard_iter:
         shard_walls.append(shard["wall_s"])
+        env = json.dumps(shard.get("env", {}), sort_keys=True)
+        if envs and env not in envs:
+            problems.append(
+                f"shard {shard['shard']}: ENVIRONMENT DRIFT - solver/"
+                f"runtime stamps differ across shards "
+                f"(deterministic reproducibility violated)")
+        envs.setdefault(env, shard["shard"])
         for r in shard["records"]:
             n += 1
             if r["plant"] in seen:
@@ -110,6 +118,8 @@ def main() -> None:
                               and tot["vars"] >= 1_400_000) else "OPEN",
         "shards_expected": a.shards,
         "shards_missing": missing,
+        "environment": (json.loads(list(envs)[0]) if len(envs) == 1
+                        else {"drift": len(envs)}),
         "measured": {
             "plants": n, "shards": len(shard_iter),
             "aggregate_vars": tot["vars"], "aggregate_rows": tot["rows"],

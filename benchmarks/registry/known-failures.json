@@ -1,0 +1,23 @@
+{
+ "version": 1,
+ "entries": {
+  "3b7e07ee1b2f": {
+   "attempts": 0,
+   "first_seen": {
+    "run_id": "45616135861",
+    "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
+    "step": 1
+   },
+   "signature": "3b7e07ee1b2f",
+   "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)",
+   "status": "open",
+   "fix_commit": null,
+   "avoidance": "symmetry breaking merged at eae41d8 AFTER S1 launched - candidate fix, unproven at scale; fallback: raise seq ceiling above 120s",
+   "last_seen": {
+    "run_id": "45616135861",
+    "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
+    "step": 1
+   }
+  }
+ }
+}
