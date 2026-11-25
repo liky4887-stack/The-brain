@@ -78,17 +78,17 @@ def propagate(activities: List[Activity]) -> List[Activity]:
     acts = list(activities)
     changed = True
     while changed:
-        changed = False
-        acts = _disjunctive_pass(acts)
+        acts, d_changed = _disjunctive_pass(acts)
         acts, ef_changed = _edge_finding_pass(acts)
         acts, nfl_changed = _not_first_last_pass(acts)
-        changed = ef_changed or nfl_changed
+        changed = d_changed or ef_changed or nfl_changed
     return acts
 
 
-def _disjunctive_pass(acts: List[Activity]) -> List[Activity]:
+def _disjunctive_pass(acts: List[Activity]) -> Tuple[List[Activity], bool]:
     n = len(acts)
     out = list(acts)
+    changed = False
     for i in range(n):
         for j in range(i + 1, n):
             a, b = out[i], out[j]
@@ -107,7 +107,11 @@ def _disjunctive_pass(acts: List[Activity]) -> List[Activity]:
                 nb = replace(b, r=max(b.r, eet_a))
                 na = replace(a, d=min(a.d, lst_b))
                 out[i], out[j] = na, nb
-    return out
+            else:
+                continue
+            if (na.r, na.d) != (a.r, a.d) or (nb.r, nb.d) != (b.r, b.d):
+                changed = True
+    return out, changed
 
 
 def _edge_finding_pass(acts: List[Activity]) -> Tuple[List[Activity], bool]:

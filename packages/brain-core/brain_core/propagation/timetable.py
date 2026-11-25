@@ -28,12 +28,12 @@ def compulsory_part(a: Activity) -> Tuple[int, int]:
 def timetable_unary(activities: List[Activity]) -> List[Activity]:
     """One pass of timetable propagation on a unary resource."""
     out = list(activities)
-    for a in activities:
+    for src, a in enumerate(activities):
         lo, hi = compulsory_part(a)
         if lo >= hi:
             continue  # no compulsory part
         for i, b in enumerate(out):
-            if b is a or b.name == a.name:
+            if i == src:
                 continue
             if b.r >= hi or b.d <= lo:
                 continue  # no overlap possible

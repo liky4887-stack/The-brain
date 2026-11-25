@@ -39,12 +39,12 @@ def makespan(instance: JobShopInstance,
     CycleError if the selection creates a cycle (infeasible).
     """
     ops = []           # index -> (machine, job, p)
-    key = {}
+    by_job_pos = {}    # (job, position in route) -> index
     for j, route in enumerate(instance.routes):
         for pos, (m, p) in enumerate(route):
-            key[(m, j)] = len(ops)
-            key[(j, pos)] = key[(m, j)]
+            by_job_pos[(j, pos)] = len(ops)
             ops.append((m, j, p))
+    key = by_job_pos
     n = len(ops)
     arcs: Dict[int, List[int]] = {i: [] for i in range(n)}
     # conjunctive arcs: consecutive operations of each job

@@ -21,6 +21,7 @@ from brain_core.propagation import (
     compulsory_overload,
     energy_overload_check,
     propagate,
+    propagate_all,
     required_energy,
     timetable_unary,
 )
@@ -86,6 +87,25 @@ def test_propagate_with_not_first_last_sound():
         for i, a in enumerate(tightened):
             assert a.r <= min(s[i] for s in feasible), (trial, i, a)
             assert max(s[i] + acts[i].p for s in feasible) <= a.d, (trial, i, a)
+
+
+def test_propagate_all_sound_and_idempotent():
+    rng = random.Random(505)
+    for trial in range(200):
+        acts = random_instance(rng, rng.randint(2, 6))
+        feasible = feasible_schedules(acts)
+        try:
+            tightened = propagate_all(acts)
+        except Infeasible:
+            assert feasible == [], f"trial {trial}: false contradiction"
+            continue
+        if not feasible:
+            continue
+        for i, a in enumerate(tightened):
+            assert a.r <= min(s[i] for s in feasible), (trial, i, a)
+            assert max(s[i] + acts[i].p for s in feasible) <= a.d, (trial, i, a)
+        again = propagate_all(tightened)
+        assert [(a.r, a.d) for a in again] == [(a.r, a.d) for a in tightened]
 
 
 def test_not_first_classic_deduction():
