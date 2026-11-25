@@ -73,3 +73,16 @@ flagged at the point of use instead of being silently borrowed.
   (which caught and fixed a zero-demand-period edge case the plain
   recursion mishandles). Chapters not deep-read are marked as such in the
   skill; their details are not cited anywhere in code.
+
+- Handbook of Constraint Programming (Rossi, van Beek, Walsh eds.,
+  Elsevier 2006). Received 2026-11-25 as a 969-page digital PDF (text
+  layer intact). Read in two passes: full structure, then deep read of
+  ch.22 (Constraint-Based Scheduling and Planning, Baptiste/Laborie/
+  Le Pape/Nuijten). Distilled into
+  docs/skills/handbook-constraint-programming.md. Disjunctive propagation
+  and cubic edge-finding (sec. 22.3.1) are implemented in
+  packages/brain-core/brain_core/propagation/edge_finding.py and
+  soundness-tested against brute-force permutation search in
+  tests/test_edge_finding.py - the brute force caught a min/max extremum
+  bug before merge. Not-first/not-last, timetable and energy reasoning
+  are documented in the skill but deliberately not yet implemented.
