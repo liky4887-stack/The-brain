@@ -101,6 +101,23 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
     return [records[i] for i in idx], stopped_by
 
 
+def env_stamp(workers: int, seq_workers) -> dict:
+    """Reproducibility provenance: the exact environment the solves ran
+    in. The merge REQUIRES all shards to agree - a version mismatch
+    across shards is silent environment drift and fails the verdict."""
+    import importlib.metadata as md
+    import sys
+    def v(pkg):
+        try:
+            return md.version(pkg)
+        except md.PackageNotFoundError:
+            return "absent"
+    return {"python": sys.version.split()[0],
+            "ortools": v("ortools"), "scipy": v("scipy"),
+            "numpy": v("numpy"), "highspy": v("highspy"),
+            "workers": workers, "seq_workers": seq_workers}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shard", type=int, required=True)
@@ -132,6 +149,7 @@ def main() -> None:
     payload = {"shard": a.shard, "shards": a.shards, "indices": idx,
                "started_utc": started, "wall_s": round(wall, 1),
                "rss_mb_peak_main": round(rss_mb(), 1),
+               "env": env_stamp(a.workers, a.seq_workers),
                "guards": {"wall_guard_s": a.wall_guard_s,
                           "mem_guard_mb": a.mem_guard_mb,
                           "stopped_by": stopped_by},
