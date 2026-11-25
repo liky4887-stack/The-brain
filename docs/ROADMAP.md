@@ -263,9 +263,17 @@ Corresponds to plan-beating-dios Phase 3.
   enforced only in the coverage sum, not on the assignment).
   Timefold deviation recorded in DECISIONS.md (JDK 17+ requirement,
   beta binding; ortools CP-SAT instead).
-- Remaining Stage 4: time decomposition at scale; multi-tenant
-  deployment with an on-prem installer; optional commercial solver
-  pass-through.
+- Multi-tenant + on-prem MERGED (2026-11-25,
+  packages/brain-core/brain_core/tenancy/store.py +
+  deploy/install.sh): tenant-keyed store with STRUCTURAL isolation
+  (slug validation + path containment; 11 crafted-id attacks rejected
+  in tests), per-tenant audit logs, POSIX-sh installer (venv +
+  license-checked deps + tenant root + smoke test; air-gap via
+  PIP_FIND_LINKS).
+- Remaining Stage 4: the capstone gate - time decomposition at scale
+  combined with plant decomposition: synthetic 2M-constraint /
+  1.4M-variable plan feasible in under 30 minutes on one 32-core
+  server, gap logged; optional commercial solver pass-through.
 
 ## Working rules across all stages
 
