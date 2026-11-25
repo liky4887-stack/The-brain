@@ -238,10 +238,19 @@ Corresponds to plan-beating-dios Phase 3.
   slacker naive plan (mean late 135,355 vs 135,151 units, unit-days
   404,952 vs 365,451) - exactly the trade-off this slice exists to
   make visible; no winner was asserted.
-- Remaining Stage 4: time decomposition at scale; LLM copilot over
-  the API (drafts/answers, never decides); routing (PyVRP/OSRM) and
-  staffing (Timefold); multi-tenant deployment with an on-prem
-  installer; optional commercial solver pass-through.
+- Copilot Q&A layer MERGED (2026-11-25,
+  packages/brain-core/brain_core/copilot/qa.py): deterministic
+  answers over solver output - why-late, full line-days, changeovers,
+  when-produced, how-late, proxy cost, what-if-line-down (via the
+  simulation twin), lots-on-day. Every number comes from the
+  validator / explain / twin; each answer carries its evidence;
+  unknown questions are honestly refused. An LLM front-end may phrase
+  these answers, never compute them (DECISIONS). Gate: 50-question
+  catalog, every number checked against an independent computation in
+  the test.
+- Remaining Stage 4: time decomposition at scale; routing
+  (PyVRP/OSRM) and staffing (Timefold); multi-tenant deployment with
+  an on-prem installer; optional commercial solver pass-through.
 
 ## Working rules across all stages
 
