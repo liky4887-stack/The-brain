@@ -287,6 +287,26 @@ Corresponds to plan-beating-dios Phase 3.
   Evidence /tmp/gate4-capstone.json: 2 plants x (6 lines x 400
   SKUs), 2 rolling windows of 7 days, validated end to end, 0
   problems, 0 late, 18.7s wall on 2 cores.
+- Capstone gate ATTEMPT (2026-11-25, owner go-ahead by voice note):
+  96 independent Makkook-scale plants (17 lines x 4001 SKUs, seeds
+  1000+i), 2 rolling 7-day windows each (freeze 3) - aggregate
+  ~2.3M constraints / ~6.6M variables across 192 window MILPs.
+  Harness benchmarks/gate2m/ (shard solver + streaming merge with
+  independent re-validation from artifacts alone, tamper test in
+  tests/test_gate2m.py), distributed over a free-tier GitHub
+  Actions matrix (12 x 4-vCPU runners, .github/workflows/gate2m.yml;
+  benchmarks the repo's own code, on-topic free-tier use, single
+  account). Plant cells are proven independent by
+  decompose.partition_plants, so the shared-nothing split is exact:
+  the merged plan is the concatenation of cell plans. Local
+  calibration on 2 cores (/tmp/gate2m-log.jsonl): per-plant wall
+  104.8-118.3 s, both windows HiGHS-optimal (gap 0.0), 0 validation
+  problems, peak RSS ~650 MB/plant. MEASURED on Actions: per-plant
+  solves, aggregate model size, merge+validation wall.
+  EXTRAPOLATED (labelled in RESULT.json): single-32-core-box wall
+  = ceil(96/32) waves x slowest measured plant + merge; memory
+  bandwidth contention not measured. Result commits to branch
+  gate2m-results (benchmarks/gate2m/RESULT.json).
 
 ## Working rules across all stages
 
