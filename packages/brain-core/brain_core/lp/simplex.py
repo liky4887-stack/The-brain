@@ -42,6 +42,14 @@ class LPResult:
     status: LPStatus
     objective: Optional[Fraction]  # None unless OPTIMAL
     x: Optional[List[Fraction]]    # original variables only
+    # Optimal-tableau snapshot for cut generation (Gomory): the final
+    # tableau rows (row 0 = reduced costs, RHS in the last column),
+    # the basic column per row, and the column layout. Populated on
+    # OPTIMAL; None otherwise.
+    tableau: Optional[List[List[Fraction]]] = None
+    basis: Optional[List[int]] = None
+    n_original: int = 0
+    n_slack: int = 0
 
 
 def solve_lp(c, A, b, senses) -> LPResult:
@@ -230,4 +238,7 @@ def solve_lp(c, A, b, senses) -> LPResult:
     for i in range(m):
         if basis[i] < n:
             x[basis[i]] = T[i + 1][total_vars]
-    return LPResult(LPStatus.OPTIMAL, -T[0][total_vars], x)
+    snapshot_T = [list(row) for row in T]
+    return LPResult(LPStatus.OPTIMAL, -T[0][total_vars], x,
+                    tableau=snapshot_T, basis=list(basis),
+                    n_original=n, n_slack=n_slack)

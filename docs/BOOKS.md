@@ -269,3 +269,24 @@ digital text, no OCR gate needed; each read twice):
   sampled 6-node graphs, Nussinov DP as an independent oracle for RNA
   folding, and universal truth-table checks for every idiom (all
   assignments enumerated, logic checked on each).
+- Fischetti, "Introduction to Mathematical Optimization" (5th English
+  ed., September 2019, Kindle Direct Publishing, 232 pp; digital
+  pdfTeX text, no OCR needed). Distilled into
+  docs/skills/fischetti-mathematical-optimization.md. The book's
+  signature topic is branch-and-cut; implemented in
+  packages/brain-core/brain_core/ilp/: cutting_planes.py (Gomory's
+  fractional cuts (6.4) from the optimal tableau - lp/simplex.py
+  extended to return the exact tableau and basis; cuts appended with
+  their own surplus variables, re-solved exactly), branch_and_bound.py
+  (branching on the most-fractional variable, the book's three
+  fathoming criteria, integer-cost ceil strengthening, best-bound and
+  DFS node selection, all in exact Fraction arithmetic), tsp.py (DFJ
+  model (8.2) with lazy subtour elimination: the assignment
+  relaxation solved integrally by CP-SAT, violated sets read off the
+  integer solution directly). Locked on the book's sec. 6.3 Example 1
+  (relaxation z = -3/2, two Gomory cuts to (1,1), z = -1; B&B needs
+  5 nodes because the x2<=1 child's LP optimum is the fractional
+  vertex (2/3,1)) and a hand-checked 5-city TSP (optimum 67).
+  tests/test_fischetti_bc.py: random small ILPs against box-exact
+  brute force, Gomory-vs-B&B agreement, random 6/7-city TSP against
+  permutation brute force. 8 tests.
