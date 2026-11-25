@@ -210,3 +210,10 @@ already pipelines.
 7. Standing gaps (unchanged): optimality headline day statuses,
    adaptive shard sizing, super-block supervisor, tree-merge,
    coverage ratchet, generator-stats publication.
+
+### Benchmark sources pinned (2026-11-25, for the sweep)
+- Trigeiro/Thomas/McClain 1989 CLSP instances:
+  github.com/gsamaro/trigeiro_fdata (check license before use) and
+  suerie.de/testsets.html (TU Darmstadt CLSP test sets + instance
+  description PDF). Published optima travel with the literature.
+- MIPLIB 2017: miplib.zib.de (free; cite DOI 10.1007/s12532-020-00194-3).
