@@ -10,7 +10,12 @@ the repo owner.
    (compiler, solver routing, validation, explanation) is written here.
 3. LLMs never decide plans. A future copilot drafts and answers; the solver
    decides; every drafted constraint passes tests before use.
-4. License-check every dependency before it enters the tree. No AGPL in a
+4. License-check every dependency before it enters the tree.
+   Recorded deviations from named roadmap tools: dlt/Pandera (Stage 1
+   ingestion: stdlib csv + pydantic instead); Timefold (Stage 4
+   staffing: it needs a JDK 17+ runtime - this environment has 11 -
+   and its Python binding is a beta, so rosters are exact ortools
+   CP-SAT, already in-tree). No AGPL in a
    paid product (Ultralytics, pm4py, OCA Odoo connector are out unless a
    commercial license is bought). Current dependencies: ortools
    (Apache-2.0), pydantic (MIT), numpy (BSD-3), scipy (BSD-3, bundles
