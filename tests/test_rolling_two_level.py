@@ -232,11 +232,41 @@ def test_day_exact_unknown_escalates_then_reports_undecided():
     asg, problems = solve_day_exact(p.factory, chunks, 0,
                                     p.day_capacity_minutes,
                                     time_limit_s=0.0001,
-                                    unknown_attempts=2)
+                                    unknown_attempts=2,
+                                    fixed={})  # fixed != None: skips the
+                                    # fix-and-optimize fallback so this
+                                    # test keeps covering the honest
+                                    # UNKNOWN report itself
     # 0.1ms cannot decide any model: both attempts UNKNOWN
     assert asg == []
     assert problems and "undecided, not disproven" in problems[0]
     assert "INFEASIBLE" not in problems[0]
+
+
+def test_day_exact_unknown_fix_and_optimize_fallback():
+    '''When escalation ends UNKNOWN, the fallback pins the hint line
+    choice for the largest half of the chunks and re-solves the rest
+    exactly. The assignment stays valid and the restriction is
+    reported through notes (never silently).'''
+    from datetime import datetime
+    from brain_core.rolling.two_level import solve_day_exact
+    from brain_core.synthetic import FnbParams, generate_fnb_factory
+    p = generate_fnb_factory(FnbParams(seed=3, n_lines=3, n_skus=40,
+                                       days=2, active_fraction=0.9,
+                                       utilization=0.5, n_raw_materials=5,
+                                       families=("DAIRY", "BAKERY",
+                                                 "SAUCE")))
+    sku0 = next(op.item for op in p.factory.operations if op.item)
+    chunks = [(sku0, 100.0)]
+    notes = []
+    asg, problems = solve_day_exact(p.factory, chunks, 0,
+                                    p.day_capacity_minutes,
+                                    time_limit_s=0.0001,
+                                    unknown_attempts=2,
+                                    notes=notes)
+    assert not problems, problems
+    assert sum(a.qty for a in asg) == 100.0
+    assert any("fixed-prefix restriction" in n for n in notes)
 
 
 def test_day_exact_infeasible_is_not_retried():
