@@ -81,7 +81,8 @@ def propagate(activities: List[Activity]) -> List[Activity]:
         changed = False
         acts = _disjunctive_pass(acts)
         acts, ef_changed = _edge_finding_pass(acts)
-        changed = ef_changed
+        acts, nfl_changed = _not_first_last_pass(acts)
+        changed = ef_changed or nfl_changed
     return acts
 
 
@@ -153,4 +154,43 @@ def _edge_finding_pass(acts: List[Activity]) -> Tuple[List[Activity], bool]:
                         changed = True
                         if out[i].r + out[i].p > out[i].d:
                             raise Infeasible(f"{a.name}: edge-finding emptied its window")
+    return out, changed
+
+
+def _not_first_last_pass(acts: List[Activity]) -> Tuple[List[Activity], bool]:
+    """Not-first / not-last rules (sec. 22.3.1).
+
+    Ai cannot be first in Omega u {Ai} when d_Ai - r_Omega < p_Omega + p_i:
+    then end(Ai) <= max over B in Omega of lst(B). Mirror for not-last:
+    d_Omega - r_Ai < p_Omega + p_i => start(Ai) >= min over B in Omega of
+    eet(B). Sets Omega restricted to task intervals, as for edge-finding.
+    """
+    n = len(acts)
+    out = list(acts)
+    changed = False
+    for t1, t2 in _task_intervals(acts):
+        omega = _omega(acts, t1, t2)
+        if not omega:
+            continue
+        r_om = min(acts[j].r for j in omega)
+        d_om = max(acts[j].d for j in omega)
+        p_om = sum(acts[j].p for j in omega)
+        max_lst = max(acts[j].d - acts[j].p for j in omega)
+        min_eet = min(acts[j].r + acts[j].p for j in omega)
+        for i in range(n):
+            if i in omega:
+                continue
+            a = acts[i]
+            if a.d - r_om < p_om + a.p:  # Ai not first
+                if max_lst < out[i].d:
+                    out[i] = replace(out[i], d=max_lst)
+                    changed = True
+                    if out[i].r + out[i].p > out[i].d:
+                        raise Infeasible(f"{a.name}: not-first emptied its window")
+            if d_om - a.r < p_om + a.p:  # Ai not last
+                if min_eet > out[i].r:
+                    out[i] = replace(out[i], r=min_eet)
+                    changed = True
+                    if out[i].r + out[i].p > out[i].d:
+                        raise Infeasible(f"{a.name}: not-last emptied its window")
     return out, changed
