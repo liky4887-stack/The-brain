@@ -60,10 +60,11 @@ jobs:
           cd benchmarks/gate2m
           python merge_validate.py --shards 12
       - name: publish result
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B gate2m-results
-          git add benchmarks/gate2m/RESULT.json
-          git commit -m "gate2m result: run ${{ github.run_id }} (${{ github.sha }})"
+          git add benchmarks/gate2m/RESULT.json || exit 0
+          git commit -m "gate2m result: run ${{ github.run_id }} (${{ github.sha }})" || exit 0
           git push origin gate2m-results
