@@ -14,7 +14,9 @@ the repo owner.
    paid product (Ultralytics, pm4py, OCA Odoo connector are out unless a
    commercial license is bought). Current dependencies: ortools
    (Apache-2.0), pydantic (MIT), numpy (BSD-3), scipy (BSD-3, bundles
-   HiGHS MIT), pytest (MIT, dev only).
+   HiGHS MIT), pytest (MIT, dev only), PyVRP 0.11.3 (MIT - checked
+   via package metadata 2026-11-25, added for Stage 4 routing;
+   tqdm 4.70.1 (MIT/MPL-2.0 dual) rides along as its dependency).
 5. The validator is independent of the solver and checks every returned
    plan. A solver status is never taken on faith.
 6. Honest statuses: infeasible, time-limited and errored runs are reported
