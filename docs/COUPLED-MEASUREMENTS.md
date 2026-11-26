@@ -178,3 +178,34 @@ Primal side (review 4): periodic restricted integer master added
 harness knob CMP_IM_EVERY. Allocate-then-solve-exactly and diving are
 designed but not yet implemented - next work item, measured before
 any claim.
+
+## Review-5 primal side: allocate-then-solve-exactly (2026-11-26)
+
+allocate_solve: per-plant shares of every shared pool from the master
+LP convex combination become HARD limits (new mat_cap/lab_cap rows in
+build_bucket_mip), each plant re-solves alone exactly, union is a
+feasible coupled plan and a valid UB (shares sum <= caps in the
+master). Runs on exact rounds when the master uses no artificial
+columns, on an alloc_every cadence. integer_master no longer
+displaces a better UB (measured bug: it overwrote 399.9M with
+2.59e9). Time to first plan is recorded (first_ub_s).
+
+Measured (heuristic/uncoupled seed ONLY, stabilization a=0.3,
+alloc_every=5, im_every=25, wall guard ~90s local; bound and plan
+numbers reported separately per the protocol - allocate rounds steal
+iterations from the bound, so a single run trades one for the other):
+
+| n | monolith optimum (wall) | best plan (UB) | plan x optimum | first plan at | certified LB (iters) |
+|---|---|---|---|---|---|
+| 2 | 321,859,494.66 (3.1s) | 345,895,669.61 | 1.075x | 13.0s | 212,024,538.28 (56 it, 34.1% gap) |
+| 4 | 739,426,055.28 (7.1s) | 885,851,042.33 | 1.198x | 17.3s | 62,122,488.93 (36 it, 91.6% gap) |
+
+- n=2 plan goal (<1.1x) MET: 1.075x, improving steadily with
+  iterations (ub_series monotone 399.9M -> 345.9M).
+- n=4 at 1.198x with only 36 iterations: not yet at goal; needs the
+  larger time limit (review 5: 600s) which local 120s bash calls
+  cannot host - runs go to Actions runners.
+- LB in these runs is iteration-starved (allocate competes for wall);
+  bound-focused configs (alloc off) measured 309.68M at n=2 (3.8%).
+  Crossover reports both configs per size, same limit, both methods.
+- Diving (fix near-1 LP columns, re-solve): not yet implemented.

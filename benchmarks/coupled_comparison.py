@@ -182,7 +182,9 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
                                wall_s=float(os.environ.get(
                                    "CMP_CG_WALL_S", "0")) or None,
                                im_every=int(os.environ.get(
-                                   "CMP_IM_EVERY", "0")))
+                                   "CMP_IM_EVERY", "0")),
+                               alloc_every=int(os.environ.get(
+                                   "CMP_ALLOC_EVERY", "0")))
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
         dw = integer_master(dw, factories, hs, DAYS,
@@ -190,7 +192,10 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
         t_im = time.perf_counter() - t0
     finally:
         coupled_dw.solve_buckets = real_solve_buckets
-    dist = {"seed": ("none" if os.environ.get("CMP_NO_SEED") == "1"
+    dist = {"ub_series": dw.ub_series,
+            "first_ub_s": dw.first_ub_s,
+            "iter_times_tail": dw.iter_times[-3:],
+            "seed": ("none" if os.environ.get("CMP_NO_SEED") == "1"
             else ("monolith-plan" if res["x"] is not None
                   else "uncoupled")),
             "stab_alpha": float(os.environ.get("CMP_STAB_ALPHA", "0.0")),

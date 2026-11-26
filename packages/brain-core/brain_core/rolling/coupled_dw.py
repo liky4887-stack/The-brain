@@ -41,6 +41,8 @@ class DWResult:
     upper_bound: float | None = None   # integer restricted master
     lb_series: list[float] = field(default_factory=list)   # Farley
     iter_times: list[float] = field(default_factory=list)
+    ub_series: list[float] = field(default_factory=list)
+    first_ub_s: float | None = None   # wall time of first valid plan
     master_series: list[float] = field(default_factory=list)
     iterations: int = 0
     columns_per_plant: list[int] = field(default_factory=list)
@@ -120,12 +122,14 @@ def _solve_master(colsets, pools, caps):
                   A_eq=A_eq.tocsr(), b_eq=np.ones(n_plants),
                   bounds=(0.0, None), method="highs")
     if res.status != 0:
-        return None, None, None, None, f"master LP status " \
-            f"{res.status}: {res.message}"
+        return (None, None, None, None,
+                f"master LP status {res.status}: {res.message}",
+                None)
     u = np.asarray(res.ineqlin.marginals)      # <= 0 for min / <= rows
     sigma = np.asarray(res.eqlin.marginals)    # free
     art = float(res.x[art0:].sum())
-    return float(res.fun), u, sigma, art, "optimal"
+    lam = np.asarray(res.x[:art0])             # column weights
+    return float(res.fun), u, sigma, art, "optimal", lam
 
 
 def column_generation(factories: list, horizon_start, days: int,
@@ -139,7 +143,8 @@ def column_generation(factories: list, horizon_start, days: int,
                       stab_alpha: float = 0.0,
                       exact_every: int = 5,
                       wall_s: float | None = None,
-                      im_every: int = 0) -> DWResult:
+                      im_every: int = 0,
+                      alloc_every: int = 0) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
     plant: warm start with an already-feasible coupled solution);
@@ -192,9 +197,12 @@ def column_generation(factories: list, horizon_start, days: int,
     u_center = None
     best_master = None
     force_exact_next = False
+    next_alloc_it = 0
     for it in range(max_iter):
         _it_t0 = _time.monotonic()
-        obj, u, sigma, art, st = _solve_master(colsets, pools, caps)
+        obj, u, sigma, art, st, lam = _solve_master(colsets,
+                                                      pools,
+                                                      caps)
         if obj is None:
             res.problems.append(f"iter {it}: {st}")
             res.status = "master failed"
@@ -217,6 +225,25 @@ def column_generation(factories: list, horizon_start, days: int,
         force_exact_next = False
         u_price = u if at_master else stab_alpha * u + \
             (1.0 - stab_alpha) * u_center
+        if (alloc_every and at_master and art <= 1e-6
+                and it >= next_alloc_it):
+            # allocate-then-solve on the CURRENT master (colsets and
+            # lam aligned - pricing below has not appended yet)
+            at_cost, at_qtys, at_probs = allocate_solve(
+                colsets, lam, factories, horizon_start, days,
+                cap_min, inv0s=inv0s, weights=weights,
+                time_limit_s=time_limit_s)
+            res.problems.extend(at_probs)
+            if at_cost is not None and (
+                    res.upper_bound is None
+                    or at_cost < res.upper_bound - 1e-9):
+                res.upper_bound = at_cost
+                res.selected_qtys = at_qtys
+                res.ub_series.append(at_cost)
+                if res.first_ub_s is None:
+                    res.first_ub_s = round(
+                        _time.monotonic() - t_start, 2)
+            next_alloc_it = it + alloc_every
         # price every plant (the worker step)
         new_cols = 0
         farley = obj
@@ -302,6 +329,9 @@ def column_generation(factories: list, horizon_start, days: int,
             if (res.upper_bound is not None
                     and res.upper_bound != prev_ub):
                 res.ub_series.append(res.upper_bound)
+                if res.first_ub_s is None:
+                    res.first_ub_s = round(
+                        _time.monotonic() - t_start, 2)
         if (wall_s is not None
                 and _time.monotonic() - t_start > wall_s):
             res.problems.append(f"iter {it}: wall budget "
@@ -343,6 +373,52 @@ def column_generation(factories: list, horizon_start, days: int,
     res._colsets = colsets          # internal: for the integer master
     res._pools, res._caps = pools, caps
     return res
+
+
+def allocate_solve(colsets, lam, factories, horizon_start, days,
+                   cap_min, inv0s=None, weights=None,
+                   time_limit_s=30.0):
+    """Allocate-then-solve-exactly (primal heuristic): take each
+    plant's share of every shared pool from the master LP convex
+    combination (share_p[r] = sum_c lam_c * usage_c[r]), then solve
+    each plant ALONE with its shares as hard limits. The union is a
+    feasible coupled plan because sum_p share_p[r] <= cap[r] in the
+    master; each per-plant solve re-optimizes within its allowance,
+    so the total is a valid UB no worse than the master combination.
+    Returns (total_cost, qtys, problems)."""
+    from .two_level import solve_buckets
+    inv0s = inv0s or [None] * len(factories)
+    shares = [dict() for _ in factories]
+    idx = 0
+    for p_i, cs in enumerate(colsets):
+        for c in cs:
+            w = float(lam[idx])
+            idx += 1
+            if w <= 1e-9:
+                continue
+            for k, v in c["mat"].items():
+                shares[p_i][k] = shares[p_i].get(k, 0.0) + w * v
+            for k, v in c["lab"].items():
+                shares[p_i][k] = shares[p_i].get(k, 0.0) + w * v
+    total = 0.0
+    qtys = []
+    problems = []
+    for p_i, f in enumerate(factories):
+        mat_cap = {k: v for k, v in shares[p_i].items()
+                   if isinstance(k, tuple)}
+        lab_cap = {k: v for k, v in shares[p_i].items()
+                   if not isinstance(k, tuple)}
+        b = solve_buckets(f, horizon_start, days, cap_min,
+                          time_limit_s=time_limit_s,
+                          inv0=inv0s[p_i], mat_cap=mat_cap,
+                          lab_cap=lab_cap)
+        if b.objective is None:
+            problems.append(f"allocate_solve plant {p_i}: bucket "
+                            f"status {b.status!r}")
+            return None, None, problems
+        total += b.objective
+        qtys.append(b.qty)
+    return total, qtys, problems
 
 
 def integer_master(dw: DWResult, factories: list, horizon_start,
@@ -411,6 +487,9 @@ def integer_master(dw: DWResult, factories: list, horizon_start,
             return dw
         total += cs[pick]["cost"]
         selected.append(cs[pick]["qty"])
-    dw.upper_bound = total
-    dw.selected_qtys = selected
+    if dw.upper_bound is None or total < dw.upper_bound - 1e-9:
+        dw.upper_bound = total
+        dw.selected_qtys = selected
+    # a worse integer-master incumbent never displaces a better UB
+    # found by another primal path (e.g. allocate_solve)
     return dw

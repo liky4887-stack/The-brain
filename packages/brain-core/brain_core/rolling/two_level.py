@@ -165,7 +165,9 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                      extra_due_day0: dict | None = None,
                      cap_override: dict | None = None,
                      weights: ObjectiveWeights = DEFAULT_WEIGHTS,
-                     unit_cost_extra: dict | None = None
+                     unit_cost_extra: dict | None = None,
+                     mat_cap: dict | None = None,
+                     lab_cap: dict | None = None
                      ) -> tuple[MIP, dict]:
     """Assemble the level-1 MIP over [horizon_start, +days).
 
@@ -245,6 +247,24 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             ent = [(xidx[(s, t, l)], 1.0) for l in sku[s][1]]
             ent.append((yidx[(s, t)], -M))
             add_row(ent, "L", 0.0)
+    # hard shared-resource limits (allocate-then-solve shares):
+    # mat_cap[(material, day)] caps material consumed by that day's
+    # production; lab_cap[day] caps line-minutes used that day
+    if mat_cap or lab_cap:
+        recipes = _recipe_data(factory)
+        for (r, t), capv in (mat_cap or {}).items():
+            ent = [(xidx[(s, t, l)], recipes.get(s, {}).get(r, 0.0))
+                   for s in active for l in sku[s][1]
+                   if (s, t, l) in xidx
+                   and recipes.get(s, {}).get(r, 0.0)]
+            if ent:
+                add_row(ent, "L", capv)
+        for t, capv in (lab_cap or {}).items():
+            ent = [(xidx[(s, t, l)], 1.0 / sku[s][0])
+                   for s in active for l in sku[s][1]
+                   if (s, t, l) in xidx]
+            if ent:
+                add_row(ent, "L", capv)
     # coverage with lateness / earliness (cumulative, per SKU-day)
     for s in active:
         cum = 0.0
@@ -279,7 +299,9 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                   extra_due_day0: dict | None = None,
                   cap_override: dict | None = None,
                   weights: ObjectiveWeights = DEFAULT_WEIGHTS,
-                  unit_cost_extra: dict | None = None
+                  unit_cost_extra: dict | None = None,
+                  mat_cap: dict | None = None,
+                  lab_cap: dict | None = None
                   ) -> BucketResult:
     """Level 1 solve; objective recomputed from the assignment.
 
@@ -291,7 +313,8 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
     the coupled module's job, never assumed here."""
     mip, maps = build_bucket_mip(factory, horizon_start, days, cap_min,
                                  chg_allowance, inv0, extra_due_day0,
-                                 cap_override, weights, unit_cost_extra)
+                                 cap_override, weights, unit_cost_extra,
+                                 mat_cap=mat_cap, lab_cap=lab_cap)
     if not maps["active"]:
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
     res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
