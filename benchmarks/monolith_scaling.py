@@ -366,7 +366,7 @@ def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
     # calib classes were re-parameterised once: key their caps on the
     # class parameters so a stale cache can never be served (hard/easy
     # keep their original names, their parameters are frozen)
-    ptag = ("-p" + hashlib.sha1(repr(sorted(CLASSES[cls].items()))
+    ptag = ("-p" + hashlib.sha1(repr(sorted(c.items()))
                                 .encode()).hexdigest()[:6]
             if cls.startswith("calib") else "")
     cache = Path(f"/tmp/caps-{cls}-{n}-{cap_solve:g}{ptag}"
