@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 REPO_DIR=$PWD
 LOCK=/tmp/codespace_runner.lock
 exec 9>"$LOCK"; flock -n 9 || { echo "already running"; exit 0; }
-python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"
+python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" "highspy==1.9.0"
 RES=/tmp/res
 rm -rf "$RES"
 if git ls-remote --exit-code --heads origin monolith-results >/dev/null 2>&1; then
@@ -24,7 +24,7 @@ for spec in "easy 128" "easy 256" "hard 128" "hard 256" "easy 512" "hard 512" "e
   f="cs-$cls-$n.json"
   [ -f "$RES/$f" ] && { echo "skip $f"; continue; }
   out=/tmp/$f; rm -f "$out"
-  MS_N=$n MS_CLASS=$cls MS_LIMIT=600 MS_CAP_SOLVE_S=2 MS_OUT=$out PYTHONPATH=packages/brain-core \
+  MS_N=$n MS_CLASS=$cls MS_LIMIT=600 MS_CAP_SOLVE_S=2 MS_SOLVERS="scipy,highspy:4" MS_OUT=$out PYTHONPATH=packages/brain-core \
     timeout 10800 python benchmarks/monolith_scaling.py > /tmp/cs-$cls-$n.log 2>&1
   rc=$?
   python - "$out" "$rc" "$(tail -c 600 /tmp/cs-$cls-$n.log | tr '\n' ' ')" <<'PY'
