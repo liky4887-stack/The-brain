@@ -1,0 +1,172 @@
+{
+ "measured": true,
+ "plants": 1024,
+ "class": "hard",
+ "params": {
+  "days": 14,
+  "n_skus": 16,
+  "util": 0.85,
+  "sup": 0.55,
+  "lab": 0.65
+ },
+ "solve_limit_s": 600.0,
+ "first_plan_time_available": false,
+ "stages": {
+  "generate": {
+   "t_s": 3.1,
+   "dt_s": 3.1,
+   "peak_rss_mb": 296.7
+  },
+  "caps": {
+   "t_s": 2066.2,
+   "dt_s": 2063.2,
+   "peak_rss_mb": 362.1
+  },
+  "build": {
+   "t_s": 2081.2,
+   "dt_s": 15.0,
+   "peak_rss_mb": 1090.6
+  },
+  "solve:highspy:1": {
+   "t_s": 2705.1,
+   "peak_rss_mb": 5031.1
+  },
+  "solve": {
+   "t_s": 2705.1,
+   "dt_s": 623.9,
+   "peak_rss_mb": 5031.1
+  },
+  "validate": {
+   "t_s": 2707.5,
+   "dt_s": 2.4,
+   "peak_rss_mb": 5031.1
+  }
+ },
+ "runner": {
+  "cpu_count": 4,
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.41",
+  "mem_total_mb": 15994,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor"
+ },
+ "code_sha": "f4f3f246b7f5c4a2c516dc390e6a115e4d8d715e",
+ "versions": {
+  "scipy": "1.15.3",
+  "highspy": "1.9.0"
+ },
+ "plants_solo_unsolved": 0,
+ "caps_note": "computed with 1 workers",
+ "mip": {
+  "rows": 665210,
+  "cols": 1244208,
+  "nnz": 13068216,
+  "binaries": 207368
+ },
+ "solves": {
+  "highspy:1": {
+   "solve_wall_s": 623.9,
+   "avg_cores_used": 0.98,
+   "status": "Time limit reached",
+   "optimal_proven": false,
+   "has_incumbent": true,
+   "int_violation": 0.0,
+   "root_ipm_s": null,
+   "node_count": 0,
+   "first_incumbent_s": 618.79,
+   "time_to_gap_s": {
+    "1%": null,
+    "0.1%": null,
+    "0.01%": null,
+    "0.001%": null
+   },
+   "other_probes_at_solve_start": 1,
+   "other_probes_at_solve_end": 2,
+   "threads": 1,
+   "highs_opts": "",
+   "trajectory": [
+    [
+     12.15,
+     Infinity,
+     17928237.855676133,
+     Infinity
+    ],
+    [
+     618.8,
+     4087584098165.1245,
+     17928237.855676133,
+     0.9999956139770033
+    ],
+    [
+     618.92,
+     4087584098165.1245,
+     17928237.855676133,
+     0.9999956139770033
+    ]
+   ],
+   "mip_rel_gap_setting": 0.0001,
+   "mip_valid": true,
+   "incumbent": 4087584098165.1245,
+   "mip_gap": 0.9999956139770033,
+   "nodes": 0
+  }
+ },
+ "solve_wall_s": 623.9,
+ "avg_cores_used": 0.98,
+ "status": "Time limit reached",
+ "optimal_proven": false,
+ "has_incumbent": true,
+ "int_violation": 0.0,
+ "root_ipm_s": null,
+ "node_count": 0,
+ "first_incumbent_s": 618.79,
+ "time_to_gap_s": {
+  "1%": null,
+  "0.1%": null,
+  "0.01%": null,
+  "0.001%": null
+ },
+ "other_probes_at_solve_start": 1,
+ "other_probes_at_solve_end": 2,
+ "threads": 1,
+ "highs_opts": "",
+ "trajectory": [
+  [
+   12.15,
+   Infinity,
+   17928237.855676133,
+   Infinity
+  ],
+  [
+   618.8,
+   4087584098165.1245,
+   17928237.855676133,
+   0.9999956139770033
+  ],
+  [
+   618.92,
+   4087584098165.1245,
+   17928237.855676133,
+   0.9999956139770033
+  ]
+ ],
+ "mip_rel_gap_setting": 0.0001,
+ "mip_valid": true,
+ "incumbent": 4087584098165.1245,
+ "mip_gap": 0.9999956139770033,
+ "nodes": 0,
+ "derived_bound": 17928237.85542799,
+ "validation_problems": [],
+ "validation_problem_count": 0,
+ "kpis": {
+  "plants": 1024,
+  "backlog_units_end": 922138169.5041921,
+  "changeover_allowance_note": "bucket level: allowance netting only; sequencing validated separately",
+  "setups": 12351,
+  "late_unit_days": 925921219.296,
+  "early_unit_days": 550261121.885
+ },
+ "total_wall_s": 2707.5,
+ "peak_rss_mb": 5031.1,
+ "process_exit_code": 0,
+ "outcome": "completed",
+ "where": "GitHub Codespace (4 cores, 16 GB), outside the Actions queue"
+}
