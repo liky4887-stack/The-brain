@@ -1,0 +1,60 @@
+name: repo-hygiene
+# Token hygiene + branch-protection guard (review-#10 note, 5:46 PM):
+# (a) the repo, logs, RUNS.md and result files must never contain a
+#     GitHub token pattern - grep goes red on any hit;
+# (c) branch protection on main must stay enabled (no force pushes, no
+#     deletions) - the check goes red if protection is dropped or the
+#     API cannot confirm it (fail closed).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"   # daily, off the top of the hour
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: no token patterns anywhere in the repo
+        run: |
+          # ghp_/gho_/ghu_/ghs_/ghr_ (classic + OAuth prefixes) and
+          # github_pat_ (fine-grained). History included: a token that
+          # ever landed in a commit is compromised, not just absent.
+          if git grep -nE "gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}" $(git rev-list --all) -- . ':!*.pyc' ; then
+            echo "::error::token pattern found in repository history"
+            exit 1
+          fi
+          echo "clean: no token patterns in any revision"
+
+  branch-protection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: main branch protection still enabled
+        env:
+          GUARD_TOKEN: ${{ secrets.BRANCH_GUARD_TOKEN || github.token }}
+        run: |
+          code=$(curl -s -o /tmp/protection.json -w "%{http_code}" \
+            -H "Authorization: Bearer $GUARD_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/branches/main/protection")
+          if [ "$code" != "200" ]; then
+            echo "::error::branch protection UNVERIFIED on main (HTTP $code) - failing closed"
+            exit 1
+          fi
+          python3 - << 'PY'
+          import json
+          p = json.load(open("/tmp/protection.json"))
+          fp = p.get("allow_force_pushes", {}).get("enabled", True)
+          de = p.get("allow_deletions", {}).get("enabled", True)
+          assert not fp, "force pushes are ALLOWED on main"
+          assert not de, "branch deletion is ALLOWED on main"
+          print("main protection verified: no force pushes, no deletions")
+          PY
