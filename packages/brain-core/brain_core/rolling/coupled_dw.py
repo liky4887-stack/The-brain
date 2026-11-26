@@ -233,8 +233,12 @@ def column_generation(factories: list, horizon_start, days: int,
             at_cost, at_qtys, at_probs = allocate_solve(
                 colsets, lam, factories, horizon_start, days,
                 cap_min, inv0s=inv0s, weights=weights,
-                time_limit_s=time_limit_s)
+                time_limit_s=time_limit_s, pools=pools)
             res.problems.extend(at_probs)
+            if at_cost is not None and not _ub_plan_valid(
+                    res, at_qtys, factories, horizon_start, days,
+                    cap_min, pools, caps, "allocate_solve"):
+                at_cost = None
             if at_cost is not None and (
                     res.upper_bound is None
                     or at_cost < res.upper_bound - 1e-9):
@@ -247,6 +251,10 @@ def column_generation(factories: list, horizon_start, days: int,
             next_alloc_it = it + alloc_every
             if dive:
                 dv_cost, dv_qtys = diving_select(colsets, pools, caps)
+                if dv_cost is not None and not _ub_plan_valid(
+                        res, dv_qtys, factories, horizon_start, days,
+                        cap_min, pools, caps, "diving"):
+                    dv_cost = None
                 if dv_cost is not None and (
                         res.upper_bound is None
                         or dv_cost < res.upper_bound - 1e-9):
@@ -335,6 +343,7 @@ def column_generation(factories: list, horizon_start, days: int,
             # pool refs live on res for the integer master to read
             res._colsets = colsets
             res._pools, res._caps = pools, caps
+            res._cap_min = cap_min
             prev_ub = res.upper_bound
             integer_master(res, factories, horizon_start, days,
                            time_limit_s=time_limit_s)
@@ -384,6 +393,7 @@ def column_generation(factories: list, horizon_start, days: int,
     res.columns_per_plant = [len(cs) for cs in colsets]
     res._colsets = colsets          # internal: for the integer master
     res._pools, res._caps = pools, caps
+    res._cap_min = cap_min
     return res
 
 
@@ -425,9 +435,31 @@ def diving_select(colsets, pools, caps, max_rounds: int = 200):
     return None, None
 
 
+def _ub_plan_valid(res, qtys, factories, horizon_start, days, cap_min,
+                   pools, caps, source) -> bool:
+    """Gate EVERY upper-bound write: the plan must pass the independent
+    coupled validator (shared pools included). Failures are loud: a
+    problem line is recorded and the plan is NOT used as a UB."""
+    from .coupled import validate_coupled_plan
+    if cap_min is None:
+        cap_min = getattr(res, "_cap_min", None)
+    sup = {k: c for k, c in zip(pools, caps) if isinstance(k, tuple)}
+    lab = {k: c for k, c in zip(pools, caps) if not isinstance(k, tuple)}
+    probs, _k = validate_coupled_plan(factories, qtys, horizon_start,
+                                      days, cap_min, supplier_cap=sup,
+                                      labor_cap=lab)
+    if probs:
+        res.problems.append(
+            f"{source}: candidate UB plan REJECTED by the independent "
+            f"validator ({len(probs)} problems, first: {probs[0]}); "
+            "UB not updated")
+        return False
+    return True
+
+
 def allocate_solve(colsets, lam, factories, horizon_start, days,
                    cap_min, inv0s=None, weights=None,
-                   time_limit_s=30.0):
+                   time_limit_s=30.0, pools=None):
     """Allocate-then-solve-exactly (primal heuristic): take each
     plant's share of every shared pool from the master LP convex
     combination (share_p[r] = sum_c lam_c * usage_c[r]), then solve
@@ -450,6 +482,12 @@ def allocate_solve(colsets, lam, factories, horizon_start, days,
                 shares[p_i][k] = shares[p_i].get(k, 0.0) + w * v
             for k, v in c["lab"].items():
                 shares[p_i][k] = shares[p_i].get(k, 0.0) + w * v
+    # A pool a plant's columns never touch has share 0, NOT "no limit":
+    # omitting the key left that plant unconstrained and the union
+    # exceeded the shared cap (known failure f7ca2901b4bd)
+    for k in (pools or ()):
+        for sh in shares:
+            sh.setdefault(k, 0.0)
     total = 0.0
     qtys = []
     problems = []
@@ -537,6 +575,9 @@ def integer_master(dw: DWResult, factories: list, horizon_start,
             return dw
         total += cs[pick]["cost"]
         selected.append(cs[pick]["qty"])
+    if not _ub_plan_valid(dw, selected, factories, horizon_start, days,
+                          None, pools, caps, "integer_master"):
+        return dw
     if dw.upper_bound is None or total < dw.upper_bound - 1e-9:
         dw.upper_bound = total
         dw.selected_qtys = selected

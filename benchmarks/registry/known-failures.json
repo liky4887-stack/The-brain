@@ -100,15 +100,16 @@
     "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
     "step": "crossover"
    },
-   "fix": "Containment done: harness counts a UB only if the plan validates; invalid UBs are reported as invalid_ub_replicas, never as plan quality. Root cause fix pending.",
+   "fix": "explicit zero share per pool; every UB write gated by validate_coupled_plan (rejected loudly). Harness counts UB only if valid.",
    "fix_commit": "(this commit)",
    "last_seen": {
     "run_id": "45842450508",
     "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
     "step": "crossover"
    },
-   "root_cause": "OPEN. Measured: ub_validation_problems 3-49 per replica, all 'supplier pool ... > cap'; upper_bound < certified lower_bound in 27/30 replicas (impossible for a feasible plan). The integer master's own usage rows (column mat+lab per pool) accept the plan, so the column-side pool accounting or cap vector differs from validate_coupled_plan's. Hypothesis only: units/cap-factor or per-window vs horizon accounting mismatch.",
+   "root_cause": "allocate_solve omitted pool keys with zero share, so those plants had no cap on that pool; union exceeded the shared cap. Confirmed by post-fix n=2 replica: validator problems 0.",
    "signature": "f7ca2901b4bd",
+   "status": "healed (attempt 1); 5-replica sweep rerun pending",
    "title": "coupled integer_master reports UB plans that FAIL the independent coupled validator (shared supplier pool caps exceeded): 30/30 replicas at n=2..64 in the 5-replica crossover (heuristic seed none, no allocate)"
   },
   "fc9f56ec5ce7": {

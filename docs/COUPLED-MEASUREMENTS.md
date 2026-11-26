@@ -223,6 +223,10 @@ were CONSERVATIVE (a better UB could be displaced by a worse one,
 never the reverse); certified bounds were untouched.
 
 
+## VOID NOTICE (2026-11-26, review 14)
+
+The distributed plan results below under "Measured (heuristic/uncoupled seed ONLY ...)" (n=2 1.075x, n=4 1.198x) and the crossover sweep further down are **VOID as plan-quality evidence**. They were produced by allocate_solve, which had a bug (a pool a plant's columns never used got NO cap instead of a zero share), and none of them was ever checked by the independent coupled validator (validate_coupled_plan, added 2026-11-26 in 8128370, after those numbers). The shared supplier pool and labor pool constraints were NOT verified in any earlier result. The step-6 ladder validation (666,396 assignments) covers independent plants only and never included a shared pool cap, so shared constraints were first checked by the validator in the crossover run, and the first check failed. Root cause and fix: see "Root cause" in the sweep section.
+
 ## 2026-11-26 crossover sweep, run 45842450508 (SHA 7142397): UB PLANS INVALID
 
 Protocol: n = 2,4,8,16,32,64 plants, 5 replicas each, 7-day instances, 600 s limits for both methods, CG without monolith seed, integer master only (no allocate-then-solve), 40 CG iterations. All numbers MEASURED from the six artifacts.
@@ -242,3 +246,26 @@ What the run does support (monolith side and the certified bound):
 certified-LB flags per size: {2: [True, False, False, False, True], 4: [False, False, False, False, False], 8: [False, False, False, False, False], 16: [False, False, False, False, False], 32: [False, False, False, False, False], 64: [False, False, False, False, False]}
 
 The monolith plans all validate (0 problems in 30/30). The certified-LB gap column compares the monolith incumbent with the CG Farley bound; the bound was marked certified in only 2 of 30 replicas (n=2), so most of that column is "best certified Farley value at iteration 40, not converged". At n=64 the CG bound is 24% below the monolith incumbent after 40 iterations.
+
+
+### Root cause and fix (known failure f7ca2901b4bd, same day)
+
+Measured diagnosis (config of the crossover: stab 0.3, alloc_every 5, im_every 25, no seed): the UBs came from allocate_solve (ub_series jumps 399.9M, 374.1M, ... in the artifact), not from the integer master. allocate_solve computed each plant's share of a pool as the sum of lambda x column usage, and then capped the plant only for pool keys that appeared in that sum. A pool none of the plant's selected columns touched had share 0 but was omitted, so that plant was unconstrained on it and the union exceeded the shared cap. Fixes: (1) every pool gets an explicit share, default 0; (2) every UB write (allocate_solve, diving, integer master) now goes through the independent validator and is rejected loudly (problem line, UB not updated) on any violation. Regression tests: test_allocate_solve_zero_share_is_a_hard_zero (fails without the fix, verified), test_ub_gate_rejects_pool_violating_plan.
+
+Post-fix, n=2, seed_base 0, 60 CG iterations, same config: UB 346,993,296.36 with validator problems = 0 (pool usage equals cap at the checked cells), monolith optimum 321,859,494.66 so 1.078x. One replica, one seed: not a mean. The 5-replica sweep is being rerun.
+
+### Monolith bound vs CG bound (review 14 item 4), from the void run's monolith and bound fields
+
+These are monolith-side and bound-side numbers, valid independent of the UB defect. The monolith (HiGHS) proved optimality in 4 of 5 replicas at every size and the remaining replica carries its solver bound. The official lower bound is max(certified CG bound, monolith bound); the CG bound was certified in only 2/30 replicas and never larger than the monolith bound.
+
+| n | monolith proven optimal | monolith best bound gap (incumbent-bound)/incumbent, mean/worst | CG LB certified | CG LB (any) vs incumbent gap mean | official LB = max(certified CG, monolith bound): gap mean/worst |
+|---|---|---|---|---|---|
+| 2 | 4/5 | 1.52e-02 / 7.59e-02 | 2/5 | 0.0189 | 1.52e-02 / 7.59e-02 |
+| 4 | 4/5 | 1.33e-02 / 6.67e-02 | 0/5 | 0.0145 | 1.33e-02 / 6.67e-02 |
+| 8 | 4/5 | 1.49e-02 / 7.43e-02 | 0/5 | 0.0169 | 1.49e-02 / 7.43e-02 |
+| 16 | 4/5 | 3.17e-08 / 1.58e-07 | 0/5 | 0.0376 | 3.17e-08 / 1.58e-07 |
+| 32 | 4/5 | 3.48e-09 / 1.74e-08 | 0/5 | 0.0642 | 3.48e-09 / 1.74e-08 |
+| 64 | 4/5 | 6.39e-08 / 3.20e-07 | 0/5 | 0.2383 | 6.39e-08 / 3.20e-07 |
+
+
+Reading: on these generated instances up to 64 plants, the plain monolith is solved to (near) optimality inside 600 s, so the distributed method adds no bound and no quality here. The earlier "23.8% gap at n=64" was a CG-bound artifact (40 iterations, not converged); against the monolith bound the gap is about 6e-8. Whether the distributed method wins is only testable at sizes where the monolith fails to prove optimality or produce a plan, and that has not been reached.

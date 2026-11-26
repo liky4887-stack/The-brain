@@ -287,6 +287,20 @@ def main():
                 a["gaps"].append((ub - lb) / max(abs(ub), 1e-9))
             a["mono_proven"].append(
                 r["monolithic"].get("optimal_proven"))
+        # official lower bound per replica = the LARGER of the certified
+        # CG bound (only when bound_certified) and the monolith's own
+        # solver bound; gap is vs the monolith incumbent
+        for r in rows:
+            mo = r["monolithic"]
+            mb = mo.get("derived_bound") or mo.get("bound")
+            d = r["distributed"]
+            c = [x for x in (mb, d["lower_bound"]
+                             if d.get("bound_certified") else None)
+                 if x is not None]
+            if c and mo.get("incumbent"):
+                r["official_lower_bound"] = max(c)
+                r["official_gap_vs_monolith_incumbent"] = \
+                    (mo["incumbent"] - max(c)) / abs(mo["incumbent"])
         out["per_size"] = {
             str(n): {"replicas": len(a["ratios"]),
                      "invalid_ub_replicas": a["invalid_ub"],

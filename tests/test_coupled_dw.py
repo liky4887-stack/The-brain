@@ -139,3 +139,44 @@ def test_diving_returns_feasible_selection_with_valid_ub():
         assert mat_tot.get((m, t), 0.0) <= c + 1e-6
     for t, c in lab.items():
         assert lab_tot.get(t, 0.0) <= c + 1e-6
+
+
+def test_allocate_solve_zero_share_is_a_hard_zero():
+    """Regression (known failure f7ca2901b4bd): a pool that a plant's
+    columns never use has share 0, NOT unlimited. Omitting the key let
+    the union exceed the shared cap in every crossover replica."""
+    from brain_core.rolling.coupled import _plant_usage
+    from brain_core.rolling.coupled_dw import (_column, allocate_solve,
+                                               _ub_plan_valid, DWResult)
+    from brain_core.rolling.two_level import DEFAULT_WEIGHTS
+    ps, hs, cap, days = _two_plants()
+    solo, _ = _uncoupled(ps, hs, cap, days)
+    m0, _l = _plant_usage(ps[0].factory, solo[0].qty)
+    key = sorted(m0, key=repr)[0]
+    empty = _column(ps[0].factory, hs, days, {}, None, DEFAULT_WEIGHTS)
+    full1 = _column(ps[1].factory, hs, days, solo[1].qty, None, DEFAULT_WEIGHTS)
+    # plant 0's only column uses nothing: its share of `key` is 0
+    cost, qtys, probs = allocate_solve(
+        [[empty], [full1]], [1.0, 1.0], [p.factory for p in ps], hs,
+        days, cap, pools=[key])
+    assert cost is not None, probs
+    use0, _ = _plant_usage(ps[0].factory, qtys[0])
+    assert use0.get(key, 0.0) <= 1e-6, use0.get(key)
+
+
+def test_ub_gate_rejects_pool_violating_plan():
+    from brain_core.rolling.coupled import _plant_usage
+    from brain_core.rolling.coupled_dw import _ub_plan_valid, DWResult
+    ps, hs, cap, days = _two_plants()
+    solo, mat_tot = _uncoupled(ps, hs, cap, days)
+    key = sorted(mat_tot, key=repr)[0]
+    res = DWResult(None)
+    ok = _ub_plan_valid(res, [b.qty for b in solo],
+                        [p.factory for p in ps], hs, days, cap,
+                        [key], [mat_tot[key] * 0.5], "test")
+    assert ok is False
+    assert any("REJECTED" in p for p in res.problems)
+    ok2 = _ub_plan_valid(DWResult(None), [b.qty for b in solo],
+                         [p.factory for p in ps], hs, days, cap,
+                         [key], [mat_tot[key] * 2.0], "test")
+    assert ok2 is True
