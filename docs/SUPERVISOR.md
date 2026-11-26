@@ -1,5 +1,11 @@
 # Hierarchical supervisor for block-scale runs (design)
 
+> LABEL (2026-11-26): ladder = THROUGHPUT AND RELIABILITY on
+> independent plants (coupling is empty by construction here);
+> never cite ladder sizes as coupled-optimizer evidence. Coupled
+> evidence: docs/COUPLED-MEASUREMENTS.md only, and DW bounds count
+> as bounds only when bound_certified is true.
+
 User ask (2026-11-25, 2:51 PM): stack blocks of ~100M variables toward
 a billion+, with a supervisor layer over each block that reviews the
 results and compares them against the other blocks. Results must be

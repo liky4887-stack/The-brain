@@ -6,6 +6,13 @@ labeled ESTIMATED/QUEUED.
 
 ## Verified benchmark state
 
+LABEL (review decision 2026-11-26): the scale ladder is a THROUGHPUT
+AND RELIABILITY test on independent plants. Plants share nothing by
+construction, so ladder sizes are evidence of solve throughput,
+validation throughput and pipeline reliability - NOT evidence of a
+stronger optimizer on coupled problems. Coupled-optimization evidence
+lives only in docs/COUPLED-MEASUREMENTS.md.
+
 Scale ladder (branch gate-scale/run drives the runs via
 .github/workflows/scale.yml + benchmarks/scale_ceiling.py; every run's
 verdict is computed by the merge job and published to
