@@ -106,6 +106,66 @@ def add_min_lot(mip, meta, frac, lot_fn=None):
     return new, lots
 
 
+def add_ls_cuts(mip, meta, factories, hs, days):
+    """(l,S) inequalities, prefix-S family, with lateness (probe only).
+    For SKU s, horizon end k and split j<k (T_k = cumulative demand
+    due by k, net of nothing: no opening inventory in the probe):
+      sum_{t<=j} x_t + sum_{j<t<=k} d_{t,k} y_t + sum_{u<=k} lo_u >= T_k
+    with d_{t,k} = T_k - T_{t-1}. Valid: take t* the first t in
+    (j,k] with y=1; units due before t* are covered by x_{<=j} or are
+    late (lo_u >= lo_{t*-1}); y_{t*}=1 pays for the rest. If no such
+    t*, every x in (j,k] is 0. Valid for every feasible plan, so the
+    optimum is unchanged; only the LP bound moves. y,lo are adjacent
+    columns in the bucket model (y, lo, e)."""
+    import numpy as np
+    from scipy.sparse import coo_matrix, vstack
+    from brain_core.rolling.two_level import due_day
+    from brain_core.solvers.highs_mip import MIP
+    rows, cols, vals, rhs = [], [], [], []
+    r = 0
+    for p_i, mp in enumerate(meta["maps"]):
+        off = meta["offsets"][p_i]
+        dem = {}
+        for d in factories[p_i].demands:
+            day = due_day(d.due, hs)
+            if 0 <= day < days:
+                dem.setdefault(d.item, [0.0] * days)[day] += d.quantity
+        xs = {}
+        for (sk, t, l), j in mp["x"].items():
+            xs.setdefault((sk, t), []).append(off + j)
+        for sk in sorted({k[0] for k in mp["y"]}):
+            ds = dem.get(sk)
+            if not ds:
+                continue
+            T = np.concatenate([[0.0], np.cumsum(ds)])  # T[t+1]=due by t
+            for k in range(1, days):
+                Tk = T[k + 1]
+                if Tk <= 0:
+                    continue
+                for j in range(-1, k):
+                    # S = periods 0..j ; non-S = j+1..k
+                    for t in range(0, j + 1):
+                        for xj in xs[(sk, t)]:
+                            rows.append(r); cols.append(xj); vals.append(1.0)
+                    for t in range(j + 1, k + 1):
+                        dtk = Tk - T[t]
+                        if dtk > 0:
+                            rows.append(r)
+                            cols.append(off + mp["y"][(sk, t)])
+                            vals.append(dtk)
+                    for u in range(0, k + 1):
+                        rows.append(r)
+                        cols.append(off + mp["y"][(sk, u)] + 1)
+                        vals.append(1.0)
+                    rhs.append(Tk); r += 1
+    extra = coo_matrix((vals, (rows, cols)), shape=(r, mip.A.shape[1])).tocsr()
+    new = MIP(mip.name, mip.c, vstack([mip.A.tocsr(), extra]).tocsr(),
+              tuple(mip.sense) + ("G",) * r,
+              np.concatenate([mip.rhs, np.array(rhs)]),
+              mip.lb, mip.ub, mip.integrality)
+    return new, r
+
+
 def min_lot_violations(qtys, lots):
     bad = []
     per = {}
@@ -384,6 +444,9 @@ def main():
     if c.get("minlot_frac") or lot_fn:
         mip, lots = add_min_lot(mip, meta, c.get("minlot_frac"), lot_fn)
         out["min_lot_rows"] = len(lots)
+    if os.environ.get("MS_STRENGTH") == "ls":
+        mip, n_ls = add_ls_cuts(mip, meta, factories, hs, days)
+        out["strengthened"] = {"kind": "ls-prefix", "rows_added": n_ls}
     out["mip"] = {"rows": int(mip.A.shape[0]), "cols": int(mip.A.shape[1]),
                   "nnz": int(mip.A.nnz),
                   "binaries": int(mip.integrality.sum())}
