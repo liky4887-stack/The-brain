@@ -209,3 +209,15 @@ iterations from the bound, so a single run trades one for the other):
   bound-focused configs (alloc off) measured 309.68M at n=2 (3.8%).
   Crossover reports both configs per size, same limit, both methods.
 - Diving (fix near-1 LP columns, re-solve): not yet implemented.
+
+## Block A retro provenance (review-8 point 7, 2026-11-26)
+
+Block A = step-6 run 45737026860 at SHA 53bf65c. The integer_master
+UB-overwrite bug lived in coupled_dw.py; the ladder solve path
+(benchmarks/gate2m/common.py) imports only rolling.solve_rolling and
+two_level - never coupled code - so block A's measured numbers are
+unaffected. Its merge verified 2048/2048 plants present with 0
+problems (completeness + de-duplication at merge time). The coupled
+UB figures reported while the bug existed (n=2 UB 2,594,680,000)
+were CONSERVATIVE (a better UB could be displaced by a worse one,
+never the reverse); certified bounds were untouched.
