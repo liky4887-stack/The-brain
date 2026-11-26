@@ -32,7 +32,64 @@ from brain_core.solvers.highs_mip import solve_mip
 CLASSES = {
     "easy": dict(days=7, n_skus=12, util=0.6, sup=0.75, lab=0.8),
     "hard": dict(days=14, n_skus=16, util=0.85, sup=0.55, lab=0.65),
+    # lumpy = hard + fixed-charge economics the bucket model supports:
+    # setup weight x200 (a setup costs as much as 10,000 unit-days
+    # late/1000 = 10 units late a day) and a MINIMUM LOT of 25% of the
+    # tight big-M (x >= L*y), added by this probe (the core model has no
+    # min-lot; the core files are NOT modified). Setup TIME consumption
+    # is not modelled by the core (aggregate changeover allowance only).
+    "lumpy": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
+                  setup_scale=200.0, minlot_frac=0.25),
 }
+
+
+def add_min_lot(mip, meta, frac):
+    """Append x_sum(sku, day) - L*y >= 0 for every plant/sku/day, with
+    L = frac * M where M is the model's own tight big-M, read from its
+    linking row. Returns (new_mip, {(plant, sku, day): L})."""
+    import numpy as np
+    from scipy.sparse import coo_matrix, vstack
+    from brain_core.solvers.highs_mip import MIP
+    A = mip.A.tocsc()
+    rows, cols, vals, lots = [], [], [], {}
+    r = 0
+    for p_i, mp in enumerate(meta["maps"]):
+        off = meta["offsets"][p_i]
+        by_sd = {}
+        for (sk, t, l), j in mp["x"].items():
+            by_sd.setdefault((sk, t), []).append(off + j)
+        for (sk, t), yj in mp["y"].items():
+            col = A.getcol(off + yj)
+            negs = [v for v in col.data if v < 0]
+            if not negs:
+                continue
+            M = -min(negs)
+            L = frac * M
+            for j in by_sd[(sk, t)]:
+                rows.append(r); cols.append(j); vals.append(1.0)
+            rows.append(r); cols.append(off + yj); vals.append(-L)
+            lots[(p_i, sk, t)] = L
+            r += 1
+    extra = coo_matrix((vals, (rows, cols)), shape=(r, A.shape[1])).tocsr()
+    new = MIP(mip.name, mip.c, vstack([mip.A.tocsr(), extra]).tocsr(),
+              tuple(mip.sense) + ("G",) * r,
+              np.concatenate([mip.rhs, np.zeros(r)]),
+              mip.lb, mip.ub, mip.integrality)
+    return new, lots
+
+
+def min_lot_violations(qtys, lots):
+    bad = []
+    per = {}
+    for p_i, q in enumerate(qtys):
+        for (sk, t, l), v in q.items():
+            per[(p_i, sk, t)] = per.get((p_i, sk, t), 0.0) + v
+    for k, v in per.items():
+        L = lots.get(k)
+        if L is not None and 1e-6 < v < L - 1e-6:
+            bad.append(f"plant {k[0]} {k[1]} day {k[2]}: lot {v:.1f} < "
+                       f"min {L:.1f}")
+    return bad
 
 
 def rss_mb():
@@ -271,7 +328,17 @@ def main():
     out["plants_solo_unsolved"] = unsolved
     out["caps_note"] = caps_note
     save("caps")
-    mip, meta = build_coupled_mip(factories, hs, days, cap, sup, lab)
+    weights = None
+    if c.get("setup_scale"):
+        from brain_core.rolling.two_level import (ObjectiveWeights,
+                                                  SETUP_W)
+        weights = ObjectiveWeights(setup=SETUP_W * c["setup_scale"])
+    mip, meta = build_coupled_mip(factories, hs, days, cap, sup, lab,
+                                  weights=weights)
+    lots = {}
+    if c.get("minlot_frac"):
+        mip, lots = add_min_lot(mip, meta, c["minlot_frac"])
+        out["min_lot_rows"] = len(lots)
     out["mip"] = {"rows": int(mip.A.shape[0]), "cols": int(mip.A.shape[1]),
                   "nnz": int(mip.A.nnz),
                   "binaries": int(mip.integrality.sum())}
@@ -323,6 +390,10 @@ def main():
         problems, kpis = validate_coupled_plan(
             factories, qtys, hs, days, cap, supplier_cap=sup,
             labor_cap=lab)
+        if lots:
+            ml = min_lot_violations(qtys, lots)
+            problems = problems + ml
+            out["min_lot_violations"] = len(ml)
         out["validation_problems"] = problems[:20]
         out["validation_problem_count"] = len(problems)
         out["kpis"] = kpis
