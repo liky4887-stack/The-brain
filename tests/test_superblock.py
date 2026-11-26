@@ -141,7 +141,7 @@ def test_mixed_shas_empty_solve_diff_accepted_and_logged():
     b = block("2", 2048, 2048)
     a["ladder"]["sha"] = "aaa111"
     b["ladder"]["sha"] = "bbb222"
-    out = aggregate([a, b], differ=lambda x, y: [])
+    out = aggregate([a, b], differ=lambda x, y, files=None: [])
     assert out["verdict"] == "PASS"
     assert out["sha_compatibility"] and "empty" in out["sha_compatibility"][0]
 
@@ -151,7 +151,7 @@ def test_mixed_shas_solve_path_change_forces_rerun():
     b = block("2", 2048, 2048)
     a["ladder"]["sha"] = "aaa111"
     b["ladder"]["sha"] = "bbb222"
-    out = aggregate([a, b], differ=lambda x, y: ["packages/brain-core/brain_core/rolling/two_level.py"])
+    out = aggregate([a, b], differ=lambda x, y, files=None: ["packages/brain-core/brain_core/rolling/two_level.py"])
     assert out["verdict"] == "OPEN"
     assert any("stale" in p and "two_level.py" in p for p in out["problems"])
 
@@ -166,3 +166,40 @@ def test_same_sha_never_calls_differ():
     out = aggregate([a, b], differ=boom)
     assert out["verdict"] == "PASS"
     assert out["sha_compatibility"] == []
+
+
+def test_mixed_shas_diff_uses_run_recorded_closures():
+    a = block("1", 0, 2048)
+    b = block("2", 2048, 2048)
+    a["ladder"]["sha"] = "aaa111"
+    b["ladder"]["sha"] = "bbb222"
+    a["loaded_files"] = ["packages/brain-core/brain_core/rolling/two_level.py"]
+    b["loaded_files"] = ["packages/brain-core/brain_core/rolling/two_level.py",
+                         "packages/brain-core/brain_core/solvers/result.py"]
+    seen = {}
+
+    def differ(x, y, files=None):
+        seen["files"] = files
+        return []
+
+    out = aggregate([a, b], differ=differ)
+    assert out["verdict"] == "PASS"
+    assert seen["files"] == sorted(
+        a["loaded_files"] + ["packages/brain-core/brain_core/solvers/result.py"])
+    assert "run-recorded" in out["sha_compatibility"][0]
+
+
+def test_mixed_shas_without_recorded_closures_fall_back():
+    a = block("1", 0, 2048)
+    b = block("2", 2048, 2048)
+    a["ladder"]["sha"] = "aaa111"
+    b["ladder"]["sha"] = "bbb222"
+    seen = {}
+
+    def differ(x, y, files=None):
+        seen["files"] = files
+        return []
+
+    out = aggregate([a, b], differ=differ)
+    assert seen["files"] is None  # committed closure is the fallback
+    assert "committed measured closure" in out["sha_compatibility"][0]

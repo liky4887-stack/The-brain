@@ -104,6 +104,8 @@ def main() -> None:
     seen: dict[int, int] = {}   # plant -> shard (disjointness check)
     envs: dict[str, int] = {}   # env stamp -> shard (drift check)
     shas = set()
+    loaded: set[str] = set()    # union of per-shard measured import
+                                # closures (review-#10 point 3)
     for shard in shard_iter:
         shard_walls.append(shard["wall_s"])
         sha = shard.get("sha")
@@ -116,6 +118,7 @@ def main() -> None:
                 f"runtime stamps differ across shards "
                 f"(deterministic reproducibility violated)")
         envs.setdefault(env, shard["shard"])
+        loaded.update(shard.get("loaded_files") or [])
         for r in shard["records"]:
             n += 1
             if r["plant"] in seen:
@@ -180,6 +183,10 @@ def main() -> None:
                               and tot["vars"] >= 1_400_000) else "OPEN",
         "shards_expected": a.shards,
         "shards_missing": missing,
+        "loaded_files": sorted(loaded),  # measured import closure of the
+                                         # solve path (empty on old-format
+                                         # shards); the chain rule diffs
+                                         # these file lists between blocks
         "environment": (json.loads(list(envs)[0]) if len(envs) == 1
                         else {"drift": len(envs)}),
         "measured": {

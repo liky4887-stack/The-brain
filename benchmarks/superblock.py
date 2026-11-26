@@ -90,19 +90,29 @@ def check_sha_compatibility(blocks: list[dict], differ=None) -> tuple[list[str],
     distinct = sorted(set(shas))
     if len(distinct) <= 1:
         return problems, notes
+    # review-#10 point 3: diff only the files each block's run actually
+    # LOADED (recorded per shard, unioned by the merge); blocks without
+    # a recorded closure fall back to the committed measured closure
+    recorded = [b.get("loaded_files") for b in blocks]
+    files = None
+    if all(recorded):
+        files = sorted({f for lst in recorded for f in lst})
     base = distinct[0]
     for other in distinct[1:]:
-        changed = differ(base, other)
+        changed = differ(base, other, files)
         if changed:
             problems.append(
                 f"blocks ran at different SHAs {base} vs {other} and the "
                 f"solve path changed between them: {changed} - the older "
                 f"block is stale; re-run it at the newer SHA")
         else:
+            n_files = len(files) if files else len(_solve_path_files())
+            src = ("run-recorded import closures" if files
+                   else "committed measured closure")
             notes.append(
                 f"mixed block SHAs {base} vs {other} accepted: solve-path "
-                f"diff over {len(_solve_path_files())} measured closure "
-                f"files is empty (checked by the merge itself)")
+                f"diff over {n_files} files from {src} is empty "
+                f"(checked by the merge itself)")
     return problems, notes
 
 
