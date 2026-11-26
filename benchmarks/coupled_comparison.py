@@ -47,8 +47,10 @@ from brain_core.rolling.two_level import solve_buckets
 from brain_core.solvers.highs_mip import solve_mip
 
 DAYS = 7
-SUPPLIER_FACTOR = 0.75
-LABOR_FACTOR = 0.8
+# defaults are the published crossover class; CMP_SUPPLIER_FACTOR /
+# CMP_LABOR_FACTOR select a different pressure level (label every row)
+SUPPLIER_FACTOR = float(os.environ.get("CMP_SUPPLIER_FACTOR", "0.75"))
+LABOR_FACTOR = float(os.environ.get("CMP_LABOR_FACTOR", "0.8"))
 SEEDS = [101 * (i + 1) for i in range(64)]
 
 
