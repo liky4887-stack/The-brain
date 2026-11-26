@@ -442,3 +442,131 @@ def solve_coupled_cluster(factories: list, horizon_start, days: int,
                          if res["x"][off + j] > 1e-6})
         out["qty_per_plant"] = qtys
     return out
+
+
+def validate_coupled_plan(factories: list, qtys: list, horizon_start,
+                          days: int, cap_min: float,
+                          chg_allowance: float = None,
+                          supplier_cap: dict | None = None,
+                          labor_cap: dict | None = None,
+                          weights=None) -> tuple[list[str], dict]:
+    """INDEPENDENT validator for a coupled bucket-level plan.
+
+    Recomputes every original constraint from the factory records and
+    the returned quantities alone - never trusts solver internals and
+    never calls the pricing/master code:
+
+    per plant: unknown SKU / line eligibility / negative qty;
+    capacity per (line, day) net of the changeover allowance;
+    the setup-linking bound (daily production of a SKU cannot exceed
+    the tight M the MIP used); coverage with lateness/earliness as a
+    cumulative stock walk (shortfall surfaces as the backlog KPI,
+    matching the model's soft coverage rows).
+    across plants: shared supplier pool per (material, day) and
+    shared labor pool per day, each <= its cap.
+
+    Returns (problems, kpis); a plan with problems == [] is feasible
+    for the coupled bucket model as specified. Tolerances match the
+    window validator (0.05 minutes capacity, 1e-6 quantities).
+    """
+    from .two_level import (DEFAULT_WEIGHTS, DEFAULT_CHG_ALLOWANCE,
+                            _recipe_data, _sku_data)
+    weights = weights or DEFAULT_WEIGHTS
+    chg = DEFAULT_CHG_ALLOWANCE if chg_allowance is None \
+        else chg_allowance
+    supplier_cap = supplier_cap or {}
+    labor_cap = labor_cap or {}
+    cap_eff = cap_min * (1.0 - chg)
+    problems: list[str] = []
+    kpis = {"plants": len(qtys), "backlog_units_end": 0.0,
+            "changeover_allowance_note": "bucket level: allowance "
+            "netting only; sequencing validated separately"}
+
+    # per-plant checks
+    mat_tot: dict = {}
+    lab_tot: dict = {}
+    total_late = 0.0
+    total_early = 0.0
+    total_setups = 0
+    for p_i, (f, qty) in enumerate(zip(factories, qtys)):
+        sku = _sku_data(f)
+        recipes = _recipe_data(f)
+        dem: dict = {}
+        from .two_level import due_day
+        for d in f.demands:
+            day = due_day(d.due, horizon_start)
+            if 0 <= day < days:
+                dem.setdefault(d.item, [0.0] * days)[day] += d.quantity
+        per_ld: dict = {}
+        per_st: dict = {}
+        for (s, t, l), q in qty.items():
+            if q < -1e-9:
+                problems.append(f"plant {p_i}: negative qty {s} {t} {l}")
+                continue
+            if q <= 1e-9:
+                continue
+            if s not in sku:
+                problems.append(f"plant {p_i}: unknown sku {s}")
+                continue
+            if l not in sku[s][1]:
+                problems.append(
+                    f"plant {p_i}: {s} not eligible on {l}")
+                continue
+            rate = sku[s][0]
+            per_ld[(l, t)] = per_ld.get((l, t), 0.0) + q / rate
+            per_st[(s, t)] = per_st.get((s, t), 0.0) + q
+            for r, per in recipes.get(s, {}).items():
+                mat_tot[(r, t)] = mat_tot.get((r, t), 0.0) + per * q
+            lab_tot[t] = lab_tot.get(t, 0.0) + q / rate
+        for (l, t), mins in sorted(per_ld.items()):
+            if mins > cap_eff + 0.05:
+                problems.append(
+                    f"plant {p_i} {l} day {t}: {mins:.1f} min > "
+                    f"cap {cap_eff:.1f}")
+        for (s, t), q in sorted(per_st.items()):
+            M = min(cap_eff * sku[s][0], sum(dem.get(s, [0.0])) + 1.0)
+            if q > M + 1e-6:
+                problems.append(
+                    f"plant {p_i} {s} day {t}: produced {q:.1f} > "
+                    f"linking M {M:.1f}")
+            if q > 1e-9:
+                total_setups += 1
+        # cumulative coverage walk per SKU (soft: lateness/earliness
+        # are KPIs, matching the model's soft rows)
+        for s, ds in dem.items():
+            cum = 0.0
+            for t in range(days):
+                cum += ds[t]
+                produced = sum(qty.get((s, tau, l), 0.0)
+                               for tau in range(t + 1)
+                               for l in sku.get(s, (0, [], None))[1])
+                short = cum - produced
+                if short > 1e-6:
+                    total_late += short - max(0.0, cum - ds[t]
+                                              - sum(qty.get((s, tau, l), 0.0)
+                                                    for tau in range(t)
+                                                    for l in sku[s][1]))
+                early = produced - cum
+                if early > 1e-6:
+                    total_early += early
+            end_backlog = cum - sum(qty.get((s, tau, l), 0.0)
+                                    for tau in range(days)
+                                    for l in sku.get(s, (0, [], None))[1])
+            if end_backlog > 1e-6:
+                kpis["backlog_units_end"] += end_backlog
+
+    # shared-pool checks across plants
+    for (r, t), cap in sorted(supplier_cap.items()):
+        use = mat_tot.get((r, t), 0.0)
+        if use > cap + 1e-6:
+            problems.append(
+                f"supplier pool ({r}, day {t}): {use:.1f} > cap {cap:.1f}")
+    for t, cap in sorted(labor_cap.items()):
+        use = lab_tot.get(t, 0.0)
+        if use > cap + 0.05:
+            problems.append(
+                f"labor pool day {t}: {use:.1f} min > cap {cap:.1f}")
+    kpis.update({"setups": total_setups,
+                 "late_unit_days": round(total_late, 3),
+                 "early_unit_days": round(total_early, 3)})
+    return problems, kpis

@@ -145,7 +145,9 @@ def column_generation(factories: list, horizon_start, days: int,
     inv0s = inv0s or [None] * len(factories)
     recipes = [_recipe_data(f) for f in factories]
     skus = [_sku_data(f) for f in factories]
-    pools = sorted(set(supplier_cap) | set(labor_cap))
+    # mixed key types: (material, day) tuples and labor day
+    # ints - order only needs determinism, not comparability
+    pools = sorted(set(supplier_cap) | set(labor_cap), key=repr)
     caps = [supplier_cap.get(k, labor_cap.get(k)) for k in pools]
     res = DWResult(lower_bound=None)
     # seed: uncoupled optima (u = 0)
@@ -205,9 +207,20 @@ def column_generation(factories: list, horizon_start, days: int,
                 for s, v in acc.items():
                     if v:
                         extra[(s, t)] = v
-            b = solve_buckets(f, horizon_start, days, cap_min,
-                              time_limit_s=time_limit_s,
-                              inv0=inv0s[p_i], unit_cost_extra=extra)
+            try:
+                b = solve_buckets(f, horizon_start, days, cap_min,
+                                  time_limit_s=time_limit_s,
+                                  inv0=inv0s[p_i],
+                                  unit_cost_extra=extra)
+            except Exception as exc:
+                # worker crash: recorded, round inexact, plant repriced
+                # next round - recovery without duplicate columns
+                res.problems.append(
+                    f"iter {it} plant {p_i}: pricing worker CRASHED "
+                    f"({type(exc).__name__}: {exc}); round inexact, "
+                    "plant repriced next round")
+                round_exact = False
+                continue
             if b.objective is None:
                 res.problems.append(f"iter {it} plant {p_i}: bucket "
                                     f"status {b.status!r}; priced "
