@@ -1,0 +1,5 @@
+{
+  "name": "monolith-probe",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postStartCommand": "nohup bash benchmarks/codespace_runner.sh > /tmp/codespace_runner.log 2>&1 &"
+}
