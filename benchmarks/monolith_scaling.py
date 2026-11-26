@@ -145,6 +145,22 @@ def time_to_gap(traj):
     return out
 
 
+def other_probes():
+    """Number of OTHER monolith_scaling processes running right now
+    (parallel runs can slow each other through memory/cache)."""
+    me, n = os.getpid(), 0
+    for d in os.listdir("/proc"):
+        if d.isdigit() and int(d) != me:
+            try:
+                cmd = open(f"/proc/{d}/cmdline", "rb").read()
+            except OSError:
+                continue
+            if b"monolith_scaling.py" in cmd and b"python" in cmd.split(
+                    b"\0")[0]:
+                n += 1
+    return n
+
+
 def cpu_wall(fn):
     """Run fn, return (result, wall_s, avg_cores_used) from process
     CPU time (user+sys, children included) over wall time."""
@@ -221,6 +237,7 @@ def main():
     res = None
     for spec in os.environ.get("MS_SOLVERS", "scipy").split(","):
         name, _, th = spec.partition(":")
+        others_start = other_probes()
         if name == "scipy":
             r, w, cores = cpu_wall(lambda: solve_mip(
                 mip, time_limit_s=limit, mip_rel_gap=0.0))
@@ -234,6 +251,9 @@ def main():
                "has_incumbent": r["x"] is not None,
                "first_incumbent_s": r.get("first_incumbent_s"),
                "time_to_gap_s": r.get("time_to_gap_s"),
+               "other_probes_at_solve_start": others_start,
+               "other_probes_at_solve_end": other_probes(),
+               "threads": int(th) if th else None,
                "trajectory": r.get("trajectory"),
                "mip_rel_gap_setting": (0.0 if name == "scipy" else float(
                    os.environ.get("MS_REL_GAP", "1e-4")))}
