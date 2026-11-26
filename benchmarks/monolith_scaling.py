@@ -40,10 +40,38 @@ CLASSES = {
     # is not modelled by the core (aggregate changeover allowance only).
     "lumpy": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
                   setup_scale=200.0, minlot_frac=0.25),
+    # calib = standard lot-sizing calibration (review 16): the setup
+    # cost S is chosen so the EOQ time between orders of the MEDIAN
+    # SKU is `tbo` days: TBO = sqrt(2 S / (h d))  =>  S = TBO^2 h d / 2
+    # with h = the model's holding weight (EARLY_W) and d the median
+    # daily demand per SKU of the generated instance. Minimum lot =
+    # minlot_tbo x (TBO days of that SKU's demand), capped at 90% of
+    # the tight big-M. Parameters are synthetic; no benchmark library
+    # (Trigeiro / Tempelmeier-Derstroff) is used: those have setup
+    # TIMES and a different structure the core model does not support.
+    "calib1": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
+                   tbo=1.0, minlot_tbo=0.5),
+    "calib3": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
+                   tbo=3.0, minlot_tbo=0.5),
+    "calib5": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
+                   tbo=5.0, minlot_tbo=0.5),
 }
 
 
-def add_min_lot(mip, meta, frac):
+def sku_daily_demand(factories, hs, days):
+    """{(plant, sku): average daily demand over the horizon}, from the
+    records."""
+    from brain_core.rolling.two_level import due_day
+    tot = {}
+    for p_i, f in enumerate(factories):
+        for d in f.demands:
+            if 0 <= due_day(d.due, hs) < days:
+                tot[(p_i, d.item)] = tot.get((p_i, d.item), 0.0) \
+                    + d.quantity
+    return {k: v / days for k, v in tot.items()}
+
+
+def add_min_lot(mip, meta, frac, lot_fn=None):
     """Append x_sum(sku, day) - L*y >= 0 for every plant/sku/day, with
     L = frac * M where M is the model's own tight big-M, read from its
     linking row. Returns (new_mip, {(plant, sku, day): L})."""
@@ -64,7 +92,7 @@ def add_min_lot(mip, meta, frac):
             if not negs:
                 continue
             M = -min(negs)
-            L = frac * M
+            L = lot_fn(p_i, sk, M) if lot_fn else frac * M
             for j in by_sd[(sk, t)]:
                 rows.append(r); cols.append(j); vals.append(1.0)
             rows.append(r); cols.append(off + yj); vals.append(-L)
@@ -329,6 +357,23 @@ def main():
     out["caps_note"] = caps_note
     save("caps")
     weights = None
+    lot_fn = None
+    if c.get("tbo"):
+        import statistics
+        from brain_core.rolling.two_level import (ObjectiveWeights,
+                                                  EARLY_W)
+        dd = sku_daily_demand(factories, hs, days)
+        d_med = statistics.median(dd.values())
+        S = c["tbo"] ** 2 * EARLY_W * d_med / 2.0
+        weights = ObjectiveWeights(setup=S)
+        out["calibration"] = {"median_daily_demand": d_med,
+                              "holding_weight": EARLY_W,
+                              "setup_weight": S, "target_tbo_days":
+                              c["tbo"]}
+
+        def lot_fn(p_i, sk, M):
+            d = dd.get((p_i, sk), d_med)
+            return min(0.9 * M, c["minlot_tbo"] * c["tbo"] * d)
     if c.get("setup_scale"):
         from brain_core.rolling.two_level import (ObjectiveWeights,
                                                   SETUP_W)
@@ -336,8 +381,8 @@ def main():
     mip, meta = build_coupled_mip(factories, hs, days, cap, sup, lab,
                                   weights=weights)
     lots = {}
-    if c.get("minlot_frac"):
-        mip, lots = add_min_lot(mip, meta, c["minlot_frac"])
+    if c.get("minlot_frac") or lot_fn:
+        mip, lots = add_min_lot(mip, meta, c.get("minlot_frac"), lot_fn)
         out["min_lot_rows"] = len(lots)
     out["mip"] = {"rows": int(mip.A.shape[0]), "cols": int(mip.A.shape[1]),
                   "nnz": int(mip.A.nnz),
