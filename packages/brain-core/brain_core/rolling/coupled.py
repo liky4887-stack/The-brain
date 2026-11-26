@@ -155,10 +155,15 @@ def coupled_dual(factories: list, horizon_start, days: int,
         if ub_est < float("inf"):
             step = eta * max(0.0, ub_est - lb) / norm2
         else:
-            # no primal UB yet: bounded geometric step, still monotone
-            # in u-space by the max(0, .) projection (a multiplier
-            # walk, NOT a claimed dual optimum)
-            step = eta / (k + 1.0)
+            # no primal UB yet: self-scaled Polyak-style step. The
+            # plain eta/(k+1) walk is scale-blind: with objective
+            # magnitudes ~1e8 and usages ~1e5 it jumps multipliers to
+            # their cap in one step and never recovers (measured
+            # 2026-11-26: LB stuck at the round-0 uncoupled bound for
+            # 40 rounds). Scaling by |lb|/||g||^2 keeps the move in
+            # objective units, like Polyak with the current LB as the
+            # surrogate target.
+            step = eta * max(abs(lb), 1.0) / norm2
         cap_step = 1e6
         uS = {key: max(0.0, min(cap_step, uS[key] + step * gS[key]))
               for key in uS}

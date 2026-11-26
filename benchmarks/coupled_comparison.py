@@ -176,7 +176,9 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
                                stab_alpha=float(os.environ.get(
                                    "CMP_STAB_ALPHA", "0.0")),
                                exact_every=int(os.environ.get(
-                                   "CMP_EXACT_EVERY", "5")))
+                                   "CMP_EXACT_EVERY", "5")),
+                               wall_s=float(os.environ.get(
+                                   "CMP_CG_WALL_S", "0")) or None)
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
         dw = integer_master(dw, factories, hs, DAYS,

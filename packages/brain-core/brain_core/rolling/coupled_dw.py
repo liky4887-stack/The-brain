@@ -40,6 +40,7 @@ class DWResult:
                                        # Farley bound when capped
     upper_bound: float | None = None   # integer restricted master
     lb_series: list[float] = field(default_factory=list)   # Farley
+    iter_times: list[float] = field(default_factory=list)
     master_series: list[float] = field(default_factory=list)
     iterations: int = 0
     columns_per_plant: list[int] = field(default_factory=list)
@@ -136,7 +137,8 @@ def column_generation(factories: list, horizon_start, days: int,
                       tol: float = TOL,
                       seed_qtys: list | None = None,
                       stab_alpha: float = 0.0,
-                      exact_every: int = 5) -> DWResult:
+                      exact_every: int = 5,
+                      wall_s: float | None = None) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
     plant: warm start with an already-feasible coupled solution);
@@ -184,10 +186,13 @@ def column_generation(factories: list, horizon_start, days: int,
             continue
         colsets.append([_column(f, horizon_start, days, b.qty,
                                 inv0s[p_i], weights)])
+    import time as _time
+    t_start = _time.monotonic()
     u_center = None
     best_master = None
     force_exact_next = False
     for it in range(max_iter):
+        _it_t0 = _time.monotonic()
         obj, u, sigma, art, st = _solve_master(colsets, pools, caps)
         if obj is None:
             res.problems.append(f"iter {it}: {st}")
@@ -202,7 +207,8 @@ def column_generation(factories: list, horizon_start, days: int,
         # exact rounds; move the center when the master improves.
         if u_center is None:
             u_center = u.copy()
-        if best_master is None or obj > best_master + 1e-9:
+        if best_master is None or obj < best_master - 1e-9:
+            # minimization: the center moves when the master IMPROVES
             best_master = obj
             u_center = u.copy()
         at_master = (stab_alpha <= 0.0 or force_exact_next
@@ -282,7 +288,13 @@ def column_generation(factories: list, horizon_start, days: int,
         # smoothed round's rc is not at u_master at all.
         res.lb_series.append(
             farley if (round_exact and at_master) else None)
+        res.iter_times.append(round(_time.monotonic() - _it_t0, 3))
         res.iterations = it + 1
+        if (wall_s is not None
+                and _time.monotonic() - t_start > wall_s):
+            res.problems.append(f"iter {it}: wall budget "
+                                f"{wall_s:.0f}s reached")
+            break
         if new_cols == 0 and not at_master:
             # candidate convergence under smoothed pricing: re-price
             # at the true master duals before deciding

@@ -103,3 +103,46 @@ Findings (measured, this instance only):
   does not attain the CG bound on this instance. CG's Farley bound is
   far stronger; LR stays as the alongside reference, never mixed into
   the CG certificate.
+
+## Review-3 fixes, re-measured (2026-11-26, same n=2 instance)
+
+Two real bugs found and fixed (outside review #3 was right to push):
+
+1. Wentges center update used the MAXIMIZATION improvement test on a
+   MINIMIZATION master (obj > best instead of obj < best), so the
+   stability center never moved after iteration 0. Combined with only
+   12 exact rounds in 60, the certificate collapsed to the round-0
+   Farley value. That value exactly equals the uncoupled reference
+   sum (4,457,322.67) by arithmetic identity: with one seed column per
+   plant the linking rows are slack (u=0) and
+   obj + sum(min(0, rc_p)) telescopes to sum of uncoupled costs.
+   Fixed test: center moves when the master objective decreases.
+2. Lagrangian subgradient step was scale-blind (eta/(k+1) with
+   objective ~1e8 and usages ~1e5): multipliers jumped to their cap in
+   one step and never recovered, so the LB never moved off the round-0
+   uncoupled bound. Fixed to a self-scaled Polyak-style step
+   eta*|LB|/||g||^2 when no primal UB exists yet. Measured after fix:
+   LB 9,346,048.60 after 40 rounds (2.1x the uncoupled bound, still
+   far below CG's Farley bound - subgradient attainment is slow, as
+   theory predicts; the asymptotic bound is the same).
+
+Re-measured with fixes (heuristic/uncoupled seed ONLY - never the
+monolith - per the crossover protocol):
+
+| config | iters | wall | certified LB | best plan (UB) | gap LB-opt |
+|---|---|---|---|---|---|
+| fixed Wentges a=0.3, exact 1/5, 300-iter cap, 100s wall guard | 112 | 104.3s | 309,677,407.77 | 2,594,680,000 | 3.8% |
+
+- Stabilization now helps: 3.8% bound gap in 104s vs 6.5% at 90 iters
+  unstabilized in 106.6s. Adopted as the default for coupled runs
+  (alpha 0.3, exact 1/5) with the wall guard.
+- Heuristic-seeded plan quality: the end-of-run restricted integer
+  master still returns 2,594,680,000 (~8.06x optimum) even with the
+  112-iteration pool. Measured: thin per-plant column sets give the
+  integer master little to combine; improving the primal side (more
+  columns per iteration, integer master re-run cadence) is open work.
+- Misprice fallback (already in): a smoothed round that finds no
+  column forces an exact re-price before any convergence decision.
+- Per-iteration times are now logged (DWResult.iter_times); mean
+  iteration ~0.93s at n=2, so iteration caps of 300-500 are feasible
+  under a wall guard.
