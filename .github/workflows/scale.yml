@@ -24,6 +24,7 @@ jobs:
       shards_json: ${{ steps.cfg.outputs.shards_json }}
       shards: ${{ steps.cfg.outputs.shards }}
       plants: ${{ steps.cfg.outputs.plants }}
+      plant_offset: ${{ steps.cfg.outputs.plant_offset }}
       step: ${{ steps.cfg.outputs.step }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,7 @@ jobs:
           with open(out, "a") as fh:
               fh.write(f"shards_json={json.dumps(list(range(c['shards'])))}\n")
               fh.write(f"shards={c['shards']}\nplants={c['plants']}\n")
+              fh.write(f"plant_offset={c.get('plant_offset', 0)}\n")
               fh.write(f"step={c.get('step', 0)}\n")
           PY
 
@@ -59,6 +61,7 @@ jobs:
           python solve_shard.py --shard ${{ matrix.shard }} \
             --shards ${{ needs.setup.outputs.shards }} \
             --plants ${{ needs.setup.outputs.plants }} \
+            --plant-offset ${{ needs.setup.outputs.plant_offset }} \
             --workers 4 --seq-workers 1 \
             --out "$GITHUB_WORKSPACE/benchmarks/scale/out"
       - uses: actions/upload-artifact@v4
@@ -100,6 +103,7 @@ jobs:
               r = json.load(open(p))
               r["ladder"] = {"step": int("${{ needs.setup.outputs.step }}"),
                              "plants": int("${{ needs.setup.outputs.plants }}"),
+                             "plant_offset": int("${{ needs.setup.outputs.plant_offset }}"),
                              "shards": int("${{ needs.setup.outputs.shards }}"),
                              "run_id": "${{ github.run_id }}",
                              "sha": "${{ github.sha }}"}

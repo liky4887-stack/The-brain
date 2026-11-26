@@ -123,6 +123,12 @@ def main() -> None:
     ap.add_argument("--shard", type=int, required=True)
     ap.add_argument("--shards", type=int, required=True)
     ap.add_argument("--plants", type=int, default=96)
+    ap.add_argument("--plant-offset", type=int, default=0,
+                    help="first plant index of this block (super-block "
+                         "runs: block B starts at block A's plant "
+                         "count; seeds derive from the plant index, "
+                         "so blocks are disjoint ranges of the same "
+                         "generator - SUPERVISOR.md layer 2)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "out"))
@@ -139,14 +145,16 @@ def main() -> None:
     a = ap.parse_args()
     global SEQ_WORKERS
     SEQ_WORKERS = a.seq_workers
-    idx = shard_indices(a.shard, a.shards, a.plants)
+    idx = [a.plant_offset + i
+           for i in shard_indices(a.shard, a.shards, a.plants)]
     t0 = time.monotonic()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
                                   a.mem_guard_mb)
     wall = time.monotonic() - t0
     os.makedirs(a.out, exist_ok=True)
-    payload = {"shard": a.shard, "shards": a.shards, "indices": idx,
+    payload = {"shard": a.shard, "shards": a.shards,
+               "plant_offset": a.plant_offset, "indices": idx,
                "started_utc": started, "wall_s": round(wall, 1),
                "rss_mb_peak_main": round(rss_mb(), 1),
                "env": env_stamp(a.workers, a.seq_workers),

@@ -36,7 +36,10 @@ the supervisor verifies, from artifacts, never from solver claims:
   plants were not attempted and why;
 - verdict published on every outcome to the results branch.
 
-## Layer 2: super-block supervisor (new, orchestrator-driven)
+## Layer 2: super-block supervisor (orchestrator-driven; aggregation
+## implemented 2026-11-26 in benchmarks/superblock.py +
+## tests/test_superblock.py; --plant-offset plumbed through
+## solve_shard.py and scale.yml, config key plant_offset default 0)
 
 For a run of B blocks (e.g. 10 x ~100M toward ~1B), the orchestrator
 (this agent, wake-driven, free) plus a superblock job verify:
