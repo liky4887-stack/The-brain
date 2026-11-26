@@ -21,20 +21,28 @@ from typing import Mapping, Sequence
 from ortools.sat.python import cp_model
 
 
+def _pairs(hint) -> list:
+    """ortools 9.12 IntVar is unhashable (it overloads __eq__ to build
+    constraints), so hints pass as (var, value) pairs; a Mapping is
+    still accepted for callers on older solver versions."""
+    return list(hint.items()) if hasattr(hint, "items") else list(hint)
+
+
 def solve_with_hint(model: cp_model.CpModel,
-                    hint: Mapping[cp_model.IntVar, int],
+                    hint,
                     time_limit_s: float = 30.0) -> dict:
     """Solve with a (possibly partial) solution hint. The hint seeds
     the search but never constrains it: a wrong hint costs time, never
     correctness. Returns status, and values for the hinted variables
-    (empty when the model has no solution)."""
-    for var, value in hint.items():
+    keyed by variable name (empty when the model has no solution)."""
+    items = _pairs(hint)
+    for var, value in items:
         model.add_hint(var, value)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_s
     status = solver.solve(model)
     name = solver.status_name(status)
-    values = ({v: solver.value(v) for v in hint}
+    values = ({v.name: solver.value(v) for v, _ in items}
               if name in ("OPTIMAL", "FEASIBLE") else {})
     objective = (solver.objective_value
                  if name in ("OPTIMAL", "FEASIBLE") and model.has_objective()
@@ -43,14 +51,14 @@ def solve_with_hint(model: cp_model.CpModel,
 
 
 def assert_hint_feasible(model: cp_model.CpModel,
-                         hint: Mapping[cp_model.IntVar, int],
+                         hint,
                          time_limit_s: float = 30.0) -> bool:
     """The primer's check: temporarily FIX the hinted variables and
     test feasibility. Works on a clone so the caller's model is
     untouched. True iff the hint is a feasible partial assignment."""
     clone = model.clone()
     indicators = []
-    for var, value in hint.items():
+    for var, value in _pairs(hint):
         ind = clone.new_bool_var(f"hintfix_{var.name}")
         clone.add(var == value).only_enforce_if(ind)
         indicators.append(ind)

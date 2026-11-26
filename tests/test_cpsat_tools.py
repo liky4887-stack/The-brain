@@ -54,8 +54,8 @@ def test_explain_feasible_model_has_no_core():
 
 def test_assert_hint_feasible_both_ways():
     model, x = _knapsack()
-    assert assert_hint_feasible(model, {x[0]: 1, x[3]: 1})  # weight 7, ok
-    assert not assert_hint_feasible(model, {x[2]: 1, x[3]: 1})  # weight 9
+    assert assert_hint_feasible(model, [(x[0], 1), (x[3], 1)])  # weight 7, ok
+    assert not assert_hint_feasible(model, [(x[2], 1), (x[3], 1)])  # weight 9
     # the caller's model is untouched: it still has no fixed values
     r = solve_with_hint(model, {})
     assert r["status"] == "OPTIMAL"
@@ -65,7 +65,7 @@ def test_wrong_hint_never_changes_the_optimum():
     model, x = _knapsack()
     # the true optimum: items 1 and 3 (weight 7, value 9); hint the
     # worst feasible item instead
-    r = solve_with_hint(model, {x[0]: 1, x[1]: 0, x[2]: 0, x[3]: 0})
+    r = solve_with_hint(model, [(x[0], 1), (x[1], 0), (x[2], 0), (x[3], 0)])
     assert r["status"] == "OPTIMAL"
     assert r["objective"] == 9  # optimum despite the misleading hint
 
@@ -81,7 +81,7 @@ def test_warm_start_after_change_matches_cold_solve():
     y = [model2.new_int_var(0, 1, f"y{i}") for i in range(4)]
     model2.add(2 * y[0] + 3 * y[1] + 4 * y[2] + 5 * y[3] <= 5)
     model2.maximize(3 * y[0] + 4 * y[1] + 5 * y[2] + 6 * y[3])
-    old_solution = {y[i]: r1["values"].get(x[i], 0) for i in range(4)}
+    old_solution = [(y[i], r1["values"].get(x[i].name, 0)) for i in range(4)]
     warm = solve_with_hint(model2, old_solution)
     cold = solve_with_hint(model2.clone(), {})
     assert warm["status"] == "OPTIMAL" == cold["status"]

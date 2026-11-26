@@ -62,10 +62,21 @@ def main() -> None:
     ap.add_argument("--plant-offset", type=int, default=0)
     ap.add_argument("--artifacts", default=os.path.join(
         os.path.dirname(__file__), "artifacts"))
+    ap.add_argument("--manifest", default=os.path.join(
+        os.path.dirname(__file__), "..", "scale", "plants-manifest.json"),
+        help="frozen plant-hash manifest (committed; never derived "
+             "from the generator under test)")
     ap.add_argument("--out", default=os.path.dirname(__file__))
     a = ap.parse_args()
 
     t0 = time.monotonic()
+    # Frozen plant-hash manifest (review-#9 point 6): expectations come
+    # from a committed file generated once at a recorded SHA, never
+    # from the generator under test - a generator bug must not be able
+    # to forge its own expectation.
+    with open(a.manifest) as fh:
+        manifest = json.load(fh)["hashes"]
+
     # Stream shard files one at a time (overload protection: at the top
     # of the ladder 256 shard files would otherwise all sit in RAM).
     # Only aggregates, walls and problems survive each iteration.
@@ -116,13 +127,18 @@ def main() -> None:
                 seen[r["plant"]] = shard["shard"]
             if shard.get("sha"):
                 # provenance enforcement (new-format shards): every
-                # record must carry the generator hash of ITS index
-                from common import plant_data_hash
-                want = plant_data_hash(r["plant"])
-                if r.get("data_hash") != want:
+                # record's hash must match the FROZEN manifest entry
+                # for its index (recomputing from the generator here
+                # would be circular)
+                want = manifest.get(str(r["plant"]))
+                if want is None:
+                    problems.append(
+                        f"plant {r['plant']}: outside the frozen "
+                        f"manifest - regenerate it deliberately")
+                elif r.get("data_hash") != want:
                     problems.append(
                         f"plant {r['plant']}: data hash mismatch "
-                        f"(record {r.get('data_hash')!r} != generator "
+                        f"(record {r.get('data_hash')!r} != manifest "
                         f"{want!r}) - record not from this index")
             _accumulate(r, problems, tot, solve_times)
         del shard["records"]   # free before the next shard loads

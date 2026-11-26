@@ -134,3 +134,35 @@ def test_chain_rejects_bad_first_block():
     out = extend_chain(None, block("1", 2048, 2048))    # must start at 0
     assert out["verdict"] == "OPEN"
     assert any("chain break" in p for p in out["problems"])
+
+
+def test_mixed_shas_empty_solve_diff_accepted_and_logged():
+    a = block("1", 0, 2048)
+    b = block("2", 2048, 2048)
+    a["ladder"]["sha"] = "aaa111"
+    b["ladder"]["sha"] = "bbb222"
+    out = aggregate([a, b], differ=lambda x, y: [])
+    assert out["verdict"] == "PASS"
+    assert out["sha_compatibility"] and "empty" in out["sha_compatibility"][0]
+
+
+def test_mixed_shas_solve_path_change_forces_rerun():
+    a = block("1", 0, 2048)
+    b = block("2", 2048, 2048)
+    a["ladder"]["sha"] = "aaa111"
+    b["ladder"]["sha"] = "bbb222"
+    out = aggregate([a, b], differ=lambda x, y: ["packages/brain-core/brain_core/rolling/two_level.py"])
+    assert out["verdict"] == "OPEN"
+    assert any("stale" in p and "two_level.py" in p for p in out["problems"])
+
+
+def test_same_sha_never_calls_differ():
+    a = block("1", 0, 2048)
+    b = block("2", 2048, 2048)
+
+    def boom(x, y):
+        raise AssertionError("differ called despite identical SHAs")
+
+    out = aggregate([a, b], differ=boom)
+    assert out["verdict"] == "PASS"
+    assert out["sha_compatibility"] == []

@@ -58,19 +58,19 @@ def queen_domination(n: int = 8, time_limit_s: float = 30.0) -> dict:
     x = {(i, j): model.new_bool_var(f"x_{i}_{j}") for i in range(n) for j in range(n)}
     for i in range(n):
         for j in range(n):
-            cover = [x[(i, j)]]
+            cells = {(i, j)}  # coordinate tuples: IntVar is unhashable
             for h in range(n):
                 if h != i:
-                    cover.append(x[(h, j)])
+                    cells.add((h, j))
                 if h != j:
-                    cover.append(x[(i, h)])
+                    cells.add((i, h))
                 jj = j - i + h  # diagonal h - i = jj - j
                 if h != i and 0 <= jj < n:
-                    cover.append(x[(h, jj)])
+                    cells.add((h, jj))
                 jj2 = i + j - h  # anti-diagonal h + jj2 = i + j
                 if h != i and 0 <= jj2 < n:
-                    cover.append(x[(h, jj2)])
-            model.add(sum(set(cover)) >= 1)
+                    cells.add((h, jj2))
+            model.add(sum(x[c] for c in cells) >= 1)
     model.minimize(sum(x.values()))
     status, solver = _solve(model, time_limit_s)
     if solver is None:

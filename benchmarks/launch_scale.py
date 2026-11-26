@@ -54,6 +54,11 @@ def main() -> None:
     ap.add_argument("--block", required=True)
     ap.add_argument("--step", type=int, required=True)
     ap.add_argument("--run-id-note", default="")
+    ap.add_argument("--method", choices=["dispatch", "ref"],
+                    default="dispatch",
+                    help="dispatch: workflow_dispatch on main (needs the "
+                         "default branch to be main); ref: legacy "
+                         "delete+recreate of gate-scale/run")
     a = ap.parse_args()
     lo, hi = block_range(a.block)
 
@@ -79,6 +84,36 @@ def main() -> None:
                    "benchmarks/launch_scale.py from origin/main "
                    f"{sha[:12]} {a.run_id_note}".strip()}
     print("preflight OK:", json.dumps(cfg))
+
+    if a.method == "dispatch":
+        import glob
+        import urllib.request
+        tok_files = glob.glob(os.path.expanduser(
+            "~/.vault/github-token-*/password"))
+        if not tok_files:
+            raise SystemExit("no vault token found for dispatch")
+        token = open(tok_files[0]).read().strip()
+        req = urllib.request.Request(
+            "https://api.github.com/repos/liky4887-stack/The-brain/"
+            "actions/workflows/scale.yml/dispatches",
+            method="POST",
+            headers={"Authorization": f"Bearer {token}",
+                     "Accept": "application/vnd.github+json",
+                     "Content-Type": "application/json"},
+            data=json.dumps({"ref": "main",
+                             "inputs": {"block": a.block.upper(),
+                                        "step": str(a.step)}}).encode())
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 204, resp.status
+        line = (f"| {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())} "
+                f"| (pending) | {sha[:12]} | ladder step {a.step} "
+                f"block {a.block.upper()} | [{lo}, {hi}) | launched via "
+                f"workflow_dispatch on main {a.run_id_note} |\n")
+        with open(RUNS_MD, "a") as fh:
+            fh.write(line)
+        print("dispatched on main at", sha[:12], "- watch the run, "
+              "then record its id over (pending) in RUNS.md")
+        return
 
     # recreate the trigger ref from origin/main WITHOUT force push
     cur = sh(["git", "branch", "--show-current"]).stdout.strip()

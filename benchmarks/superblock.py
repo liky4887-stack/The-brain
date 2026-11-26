@@ -44,10 +44,66 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import statistics
 
 CONSISTENCY_TOL = 0.5  # block mean per-plant solve time vs pooled others
+
+# Review-#9 rule: blocks in one chain must run the SAME solve-path code.
+# Same launch SHA satisfies it trivially. Mixed SHAs are allowed ONLY
+# when the diff between them over the measured ladder import closure
+# (benchmarks/scale/ladder-solve-path.txt, produced by actually running
+# the ladder path - tests/test_ladder_path_no_coupled.py keeps it
+# honest) is empty. The merge checks this itself via git and logs the
+# verdict; a non-empty solve-path diff makes the older block stale:
+# re-run it at the newer SHA. Never weakened silently.
+SOLVE_PATH_LIST = os.path.join(os.path.dirname(__file__), "scale",
+                               "ladder-solve-path.txt")
+
+
+def _solve_path_files(path: str = SOLVE_PATH_LIST) -> list[str]:
+    with open(path) as fh:
+        return [ln.strip() for ln in fh if ln.strip()]
+
+
+def git_solve_path_diff(sha_a: str, sha_b: str,
+                        files: list[str] | None = None) -> list[str]:
+    """Files that changed between two SHAs on the ladder solve path."""
+    out = subprocess.run(
+        ["git", "diff", "--name-only", sha_a, sha_b, "--",
+         *(files or _solve_path_files())],
+        capture_output=True, text=True, check=True)
+    return [ln for ln in out.stdout.splitlines() if ln.strip()]
+
+
+def check_sha_compatibility(blocks: list[dict], differ=None) -> tuple[list[str], list[str]]:
+    """Return (problems, notes) for cross-block SHA compatibility.
+
+    differ(sha_a, sha_b) -> list[str] is injectable for tests; the
+    default queries git against the measured solve-path closure.
+    """
+    problems: list[str] = []
+    notes: list[str] = []
+    differ = differ or git_solve_path_diff
+    shas = [str(b.get("ladder", {}).get("sha")) for b in blocks]
+    distinct = sorted(set(shas))
+    if len(distinct) <= 1:
+        return problems, notes
+    base = distinct[0]
+    for other in distinct[1:]:
+        changed = differ(base, other)
+        if changed:
+            problems.append(
+                f"blocks ran at different SHAs {base} vs {other} and the "
+                f"solve path changed between them: {changed} - the older "
+                f"block is stale; re-run it at the newer SHA")
+        else:
+            notes.append(
+                f"mixed block SHAs {base} vs {other} accepted: solve-path "
+                f"diff over {len(_solve_path_files())} measured closure "
+                f"files is empty (checked by the merge itself)")
+    return problems, notes
 
 
 def _plant_range(block):
@@ -56,7 +112,7 @@ def _plant_range(block):
     return off, off + int(lad.get("plants", block["measured"]["plants"]))
 
 
-def aggregate(blocks: list[dict]) -> dict:
+def aggregate(blocks: list[dict], differ=None) -> dict:
     problems: list[str] = []
 
     # 1. provenance
@@ -73,6 +129,8 @@ def aggregate(blocks: list[dict]) -> dict:
         ranges.append(_plant_range(b))
     if len(run_ids) != len(set(run_ids)):
         problems.append(f"run ids not distinct: {run_ids}")
+    sha_problems, sha_notes = check_sha_compatibility(blocks, differ=differ)
+    problems.extend(sha_problems)
     for i in range(len(ranges)):
         for j in range(i + 1, len(ranges)):
             lo = max(ranges[i][0], ranges[j][0])
@@ -131,6 +189,7 @@ def aggregate(blocks: list[dict]) -> dict:
     return {
         "kind": "super-block",
         "verdict": verdict,
+        "sha_compatibility": sha_notes,
         "label": "MEASURED (sum of independently validated block results; "
                  "plants are independent, so the block sum is a true solve "
                  "of the whole instance)",

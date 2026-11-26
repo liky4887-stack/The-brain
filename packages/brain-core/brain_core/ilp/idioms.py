@@ -55,8 +55,11 @@ def add_not_equal(model: cp_model.CpModel, x: cp_model.IntVar,
     y - x >= 1 if z = 1)."""
     if z is None:
         z = model.new_bool_var("neq_z")
-    model.add(x - y - n * (z - 1) >= 1)
-    model.add(y - x + n * z >= 1)
+    # weighted_sum keeps every operand one LinearExpr type: ortools
+    # 9.12 cannot subtract an IntAffine from an IntWeightedSum
+    model.add(cp_model.LinearExpr.weighted_sum([x, y, z], [1, -1, -n])
+              >= 1 - n)
+    model.add(cp_model.LinearExpr.weighted_sum([x, y, z], [-1, 1, n]) >= 1)
     return z
 
 

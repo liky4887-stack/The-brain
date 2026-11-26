@@ -9,6 +9,16 @@ name: scale-ceiling
 on:
   push:
     branches: [gate-scale/run]
+  workflow_dispatch:
+    inputs:
+      block:
+        description: "Block letter (A=plants 0-2047, B=2048-4095, ...)"
+        required: true
+        type: string
+      step:
+        description: "Ladder step number"
+        required: true
+        type: string
 
 permissions:
   contents: write   # merge job commits RESULT.json to gate-scale-results
@@ -28,6 +38,23 @@ jobs:
       step: ${{ steps.cfg.outputs.step }}
     steps:
       - uses: actions/checkout@v4
+      - name: materialize config from dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python - << 'PY'
+          import json
+          # same block table as benchmarks/launch_scale.py: the letter
+          # IS the range, 2048 plants per block, 256 shards
+          block = "${{ inputs.block }}".strip().upper()
+          assert len(block) == 1 and block.isalpha(), block
+          off = 2048 * (ord(block) - ord("A"))
+          c = {"step": int("${{ inputs.step }}"), "plants": 2048,
+               "shards": 256, "plant_offset": off, "block": block,
+               "note": "ladder step ${{ inputs.step }} block " + block +
+                       " via workflow_dispatch on main"}
+          json.dump(c, open("config/scale.json", "w"), indent=1)
+          print(json.dumps(c))
+          PY
       - id: cfg
         run: |
           python - << 'PY'
@@ -67,12 +94,18 @@ jobs:
           import json
           off = ${{ needs.setup.outputs.plant_offset }}
           plants = ${{ needs.setup.outputs.plants }}
+          manifest = json.load(open("../scale/plants-manifest.json"))["hashes"]
           for f in ("canary0.json", "canaryN.json"):
               c = json.load(open(f))
               assert c["range"] == [off, off + plants], c
               assert all(off <= i < off + plants
                          for i in c["indices"]), c["indices"]
-              print(f, "indices", c["indices"], "IN RANGE")
+              # frozen manifest (committed), never the generator under
+              # test alone: a drifted generator must fail here, not
+              # forge its own expectation
+              for i, h in c["sample_hashes"].items():
+                  assert manifest.get(i) == h, (i, h, manifest.get(i))
+              print(f, "indices", c["indices"], "IN RANGE, hashes match manifest")
           PY
 
   solve:
