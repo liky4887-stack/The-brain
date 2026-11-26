@@ -38,6 +38,12 @@ def _accumulate(r: dict, problems: list, tot: dict,
             tot["rows"] += w["rows"]
             tot["binaries"] += w["binaries"]
             tot["windows"] += 1
+            # per-window solver evidence: the only place status/gap
+            # exists (no merged-model solve, so no merged status/gap)
+            tot["statuses"][w.get("status", "?")] =                 tot["statuses"].get(w.get("status", "?"), 0) + 1
+            g = w.get("gap")
+            if g is not None:
+                tot["gap_max"] = max(tot["gap_max"], g)
     tot["assignments"] += len(r["assignments"])
     tot["changeover_minutes"] += kpis["changeover_minutes"]
     tot["backlog_units_end"] += kpis["backlog_units_end"]
@@ -74,7 +80,7 @@ def main() -> None:
         f"timeout/OOM/cancel)" for k in missing]
     tot = {"vars": 0, "rows": 0, "binaries": 0, "windows": 0,
            "assignments": 0, "changeover_minutes": 0.0,
-           "backlog_units_end": 0.0}
+           "backlog_units_end": 0.0, "statuses": {}, "gap_max": 0.0}
     solve_times = []
     n = 0
     seen: dict[int, int] = {}   # plant -> shard (disjointness check)
@@ -140,6 +146,12 @@ def main() -> None:
             "merge_validate_s": round(merge_s, 1),
             "kpis": {"changeover_minutes": round(tot["changeover_minutes"], 1),
                      "backlog_units_end": tot["backlog_units_end"]},
+            # solver-status census across windows (bucket MILP per
+            # window; per-window mip_gap, never a merged-model gap -
+            # plants are independent by construction and windows roll
+            # sequentially, so no global bound exists to report)
+            "window_statuses": tot["statuses"],
+            "window_mip_gap_max": round(tot["gap_max"], 6),
         },
         "extrapolated_single_32core_box": {
             "method": "ceil(plants/32) waves x slowest measured plant "
