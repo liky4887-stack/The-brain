@@ -137,6 +137,8 @@ jobs:
                       "--plants", "${{ needs.setup.outputs.plants }}",
                       "--plant-offset", "${{ needs.setup.outputs.plant_offset }}",
                       "--workers", "4", "--seq-workers", "1",
+                      "--job-budget-s", "5700",  # 6000s job timeout - setup (~180s) - upload margin; solve_shard's default 6000 is too tight once checkout+install are counted
+                      "--upload-margin-s", "300",
                       "--out", os.path.join(os.environ["GITHUB_WORKSPACE"],
                                             "benchmarks", "scale", "out")]
           sys.path.insert(0, ".")
