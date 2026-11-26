@@ -138,3 +138,57 @@ def test_merge_rejects_mixed_shas_and_bad_hashes(tmp_path):
     assert res["verdict"] == "OPEN"
     text = json.dumps(res)
     assert "MIXED SHAs" in text and "data hash mismatch" in text, text
+
+
+def test_merge_rejects_missing_or_wrong_budget_guard(tmp_path):
+    """Review-#11: with --expected-job-budget-s set, a shard that does
+    not record the budget actually used (or records a different one)
+    must turn the verdict OPEN."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                           / "benchmarks" / "gate2m"))
+    from common import plant_data_hash
+
+    def shard(k, budget):
+        rec = {"plant": k, "seed": 1000 + k, "gen_s": 0.1,
+               "solve_s": 1.0, "window_days": 7, "freeze_days": 3,
+               "n_windows": 2, "horizon_start": "2026-11-30T00:00:00",
+               "cap_min": 1440.0, "problems": [],
+               "data_hash": plant_data_hash(k),
+               "kpis": {"changeover_minutes": 0.0,
+                        "backlog_units_end": 0.0, "setups": 1},
+               "windows": [{"vars": 1500000, "rows": 2100000,
+                            "binaries": 50000, "status": "optimal",
+                            "gap": 0.0}],
+               "assignments": []}
+        s = {"shard": k, "shards": 2, "plant_offset": 0,
+             "indices": [k], "started_utc": "", "wall_s": 1.0,
+             "sha": "aaa", "env": {"python": "3.11"},
+             "records": [rec]}
+        if budget is not None:
+            s["guards_actual"] = {"job_budget_s": budget}
+        return s
+
+    for budgets, expect in (((5700.0, 5700.0), "PASS"),
+                            ((5700.0, None), "OPEN"),
+                            ((5700.0, 6000.0), "OPEN")):
+        d = tmp_path / f"case_{budgets[1]}"
+        d.mkdir()
+        for k, b in enumerate(budgets):
+            (d / f"shard-{k}.json").write_text(json.dumps(shard(k, b)))
+        subprocess.run(
+            [sys.executable,
+             str(Path(__file__).resolve().parents[1] / "benchmarks"
+                 / "gate2m" / "merge_validate.py"),
+             "--artifacts", str(d), "--shards", "2", "--plants", "2",
+             "--plant-offset", "0",
+             "--expected-job-budget-s", "5700",
+             "--out", str(d / "merged")],
+            capture_output=True, text=True)
+        res = json.loads((d / "merged" / "RESULT.json").read_text())
+        assert res["verdict"] == expect, (budgets, res["verdict"],
+                                          res["measured"].get(
+                                              "validation_problems"))

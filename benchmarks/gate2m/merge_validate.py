@@ -66,6 +66,12 @@ def main() -> None:
         os.path.dirname(__file__), "..", "scale", "plants-manifest.json"),
         help="frozen plant-hash manifest (committed; never derived "
              "from the generator under test)")
+    ap.add_argument("--expected-job-budget-s", type=float, default=None,
+                    help="when set, every shard must record "
+                         "guards_actual.job_budget_s with exactly this "
+                         "value (review-#11: an unpassed or wrong "
+                         "--job-budget-s flag shows from the first "
+                         "shard instead of after 8h)")
     ap.add_argument("--out", default=os.path.dirname(__file__))
     a = ap.parse_args()
 
@@ -119,6 +125,14 @@ def main() -> None:
                 f"(deterministic reproducibility violated)")
         envs.setdefault(env, shard["shard"])
         loaded.update(shard.get("loaded_files") or [])
+        if a.expected_job_budget_s is not None:
+            got = (shard.get("guards_actual") or {}).get("job_budget_s")
+            if got != a.expected_job_budget_s:
+                problems.append(
+                    f"shard {shard['shard']}: job budget guard "
+                    f"{got!r} != expected {a.expected_job_budget_s} "
+                    f"(the --job-budget-s flag was missing or wrong "
+                    f"when this shard ran)")
         for r in shard["records"]:
             n += 1
             if r["plant"] in seen:

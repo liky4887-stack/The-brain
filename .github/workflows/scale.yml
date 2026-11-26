@@ -160,6 +160,12 @@ jobs:
               if os.path.exists(out):
                   d = json.load(open(out))
                   d["loaded_files"] = rel
+                  # review-#11: the budget ACTUALLY passed, recorded by
+                  # the caller (not the solver's defaults): an unpassed
+                  # or wrong flag is visible from the first shard and
+                  # the merge rejects it
+                  d["guards_actual"] = {"job_budget_s": 5700.0,
+                                        "upload_margin_s": 300.0}
                   json.dump(d, open(out, "w"))
               print("loaded_files recorded:", len(rel))
           PY
@@ -195,6 +201,7 @@ jobs:
             --shards ${{ needs.setup.outputs.shards }} \
             --plants ${{ needs.setup.outputs.plants }} \
             --plant-offset ${{ needs.setup.outputs.plant_offset }} \
+            --expected-job-budget-s 5700 \
             --artifacts "$GITHUB_WORKSPACE/benchmarks/scale/artifacts" \
             --out "$GITHUB_WORKSPACE/benchmarks/scale"
       - name: stamp ladder metadata
