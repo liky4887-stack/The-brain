@@ -96,6 +96,13 @@ def solve_highspy(mip, limit, threads, rel_gap=None):
     h.setOptionValue("mip_rel_gap", float(
         os.environ.get("MS_REL_GAP", "1e-4") if rel_gap is None
         else rel_gap))
+    for kv in filter(None, os.environ.get("MS_HIGHS_OPTS", "").split(",")):
+        k, _, v = kv.partition("=")
+        if v.lstrip("-").isdigit():
+            v = int(v)
+        elif v in ("true", "false"):
+            v = v == "true"
+        h.setOptionValue(k, v)
     h.passModel(lp)
     first = {}
     t0 = time.perf_counter()
@@ -143,6 +150,54 @@ def time_to_gap(traj):
                           if g is not None and g == g and g <= thr),
                          None)
     return out
+
+
+def _solo(args):
+    f, hs, days, cap, cap_solve = args
+    b = solve_buckets(f, hs, days, cap, time_limit_s=cap_solve)
+    if b.objective is None:
+        return None
+    return _plant_usage(f, b.qty)
+
+
+def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
+    """Binding shared caps = factor x usage of one solo plan per plant.
+    Cached per (class, n) in /tmp; solo solves run in a process pool
+    (deterministic: results are combined in plant order) when no other
+    probe is running."""
+    cache = Path(f"/tmp/caps-{cls}-{n}-{cap_solve:g}.json")
+    if cache.exists():
+        d = json.loads(cache.read_text())
+        sup = {(k.split("|")[0], int(k.split("|")[1])): v
+               for k, v in d["sup"].items()}
+        lab = {int(k): v for k, v in d["lab"].items()}
+        return sup, lab, d["unsolved"], "cache hit " + cache.name
+    workers = int(os.environ.get("MS_CAP_WORKERS", "0")) or (
+        1 if other_probes() else (os.cpu_count() or 1))
+    args = [(p.factory, hs, days, cap, cap_solve) for p in ps]
+    if workers > 1:
+        import multiprocessing as mp
+        with mp.get_context("fork").Pool(workers) as pool:
+            res = pool.map(_solo, args, chunksize=4)
+    else:
+        res = [_solo(a) for a in args]
+    mat_tot, lab_tot, unsolved = {}, {}, 0
+    for r in res:                       # plant order: deterministic
+        if r is None:
+            unsolved += 1
+            continue
+        m_p, l_p = r
+        for k, v in m_p.items():
+            mat_tot[k] = mat_tot.get(k, 0.0) + v
+        for k, v in l_p.items():
+            lab_tot[k] = lab_tot.get(k, 0.0) + v
+    sup = {k: c["sup"] * v for k, v in mat_tot.items()}
+    lab = {k: c["lab"] * v for k, v in lab_tot.items()}
+    cache.write_text(json.dumps({
+        "sup": {f"{k[0]}|{k[1]}": v for k, v in sup.items()},
+        "lab": {str(k): v for k, v in lab.items()},
+        "unsolved": unsolved}))
+    return sup, lab, unsolved, f"computed with {workers} workers"
 
 
 def other_probes():
@@ -211,22 +266,10 @@ def main():
     except Exception:
         pass
     save("generate")
-    mat_tot, lab_tot = {}, {}
-    unsolved = 0
-    for p in ps:
-        b = solve_buckets(p.factory, hs, days, cap,
-                          time_limit_s=cap_solve)
-        if b.objective is None:
-            unsolved += 1
-            continue
-        m_p, l_p = _plant_usage(p.factory, b.qty)
-        for k, v in m_p.items():
-            mat_tot[k] = mat_tot.get(k, 0.0) + v
-        for k, v in l_p.items():
-            lab_tot[k] = lab_tot.get(k, 0.0) + v
-    sup = {k: c["sup"] * v for k, v in mat_tot.items()}
-    lab = {k: c["lab"] * v for k, v in lab_tot.items()}
+    sup, lab, unsolved, caps_note = make_caps(ps, hs, days, cap, c,
+                                              cap_solve, cls, n)
     out["plants_solo_unsolved"] = unsolved
+    out["caps_note"] = caps_note
     save("caps")
     mip, meta = build_coupled_mip(factories, hs, days, cap, sup, lab)
     out["mip"] = {"rows": int(mip.A.shape[0]), "cols": int(mip.A.shape[1]),
@@ -254,6 +297,7 @@ def main():
                "other_probes_at_solve_start": others_start,
                "other_probes_at_solve_end": other_probes(),
                "threads": int(th) if th else None,
+               "highs_opts": os.environ.get("MS_HIGHS_OPTS", ""),
                "trajectory": r.get("trajectory"),
                "mip_rel_gap_setting": (0.0 if name == "scipy" else float(
                    os.environ.get("MS_REL_GAP", "1e-4")))}
