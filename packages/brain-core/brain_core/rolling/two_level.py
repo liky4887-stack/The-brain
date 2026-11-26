@@ -140,7 +140,11 @@ def _sku_data(factory: Factory) -> dict:
         if not produced or op.duration_per <= timedelta(0):
             continue
         rate = 1.0 / (op.duration_per.total_seconds() / 60.0)
-        lines = [ld.resource for ld in op.loads]
+        # de-duplicate, keep order: a plant generated with 2 lines lists
+        # every line twice, which orphaned MIP columns and doubled the
+        # coefficients of x in the coverage / link rows (found 2026-11-26
+        # by the brute-force fix-test of the monolith probe)
+        lines = list(dict.fromkeys(ld.resource for ld in op.loads))
         state = next((ld.setup for ld in op.loads if ld.setup), None)
         out[produced[0]] = (rate, lines, state)
     return out
