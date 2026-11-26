@@ -40,6 +40,16 @@ def rss_mb():
                  / 1024.0, 1)
 
 
+def _sha():
+    import subprocess
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"],
+                              capture_output=True, text=True,
+                              cwd=os.path.dirname(__file__)).stdout.strip()
+    except Exception:
+        return "unknown"
+
+
 def runner_specs():
     """Measured machine spec: the failure point depends on it."""
     import platform
@@ -54,6 +64,68 @@ def runner_specs():
     except OSError:
         pass
     return spec
+
+
+def solve_highspy(mip, limit, threads):
+    """Same MIP through highspy (HiGHS pinned to scipy's bundled
+    version) with an explicit threads option and an improving-solution
+    callback, which gives the time of the first incumbent."""
+    import highspy
+    import numpy as np
+    lo = np.where(np.array(mip.sense) == "G", mip.rhs, -np.inf)
+    hi = np.where(np.array(mip.sense) == "L", mip.rhs, np.inf)
+    eq = np.array(mip.sense) == "E"
+    lo[eq] = hi[eq] = mip.rhs[eq]
+    A = mip.A.tocsr()
+    lp = highspy.HighsLp()
+    lp.num_col_, lp.num_row_ = A.shape[1], A.shape[0]
+    lp.col_cost_ = mip.c
+    lp.col_lower_, lp.col_upper_ = mip.lb, mip.ub
+    lp.row_lower_, lp.row_upper_ = lo, hi
+    lp.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
+    lp.a_matrix_.start_ = A.indptr
+    lp.a_matrix_.index_ = A.indices
+    lp.a_matrix_.value_ = A.data
+    lp.integrality_ = [highspy.HighsVarType.kInteger if v else
+                       highspy.HighsVarType.kContinuous
+                       for v in mip.integrality]
+    h = highspy.Highs()
+    h.setOptionValue("output_flag", False)
+    h.setOptionValue("threads", int(threads))
+    h.setOptionValue("time_limit", float(limit))
+    h.setOptionValue("mip_rel_gap", 0.0)
+    h.passModel(lp)
+    first = {}
+    t0 = time.perf_counter()
+
+    def cb(*a):
+        first.setdefault("t", round(time.perf_counter() - t0, 2))
+    h.cbMipImprovingSolution.subscribe(cb)
+    h.run()
+    info = h.getInfo()
+    sol = h.getSolution()
+    x = np.array(sol.col_value) if len(sol.col_value) else None
+    ms = h.modelStatusToString(h.getModelStatus())
+    ok = x is not None and info.primal_solution_status == 2
+    return {"status": ms, "x": x if ok else None,
+            "objective": float(mip.c @ x) if ok else None,
+            "gap": info.mip_gap, "node_count": info.mip_node_count,
+            "dual_bound": info.mip_dual_bound,
+            "first_incumbent_s": first.get("t")}
+
+
+def cpu_wall(fn):
+    """Run fn, return (result, wall_s, avg_cores_used) from process
+    CPU time (user+sys, children included) over wall time."""
+    t0 = os.times()
+    w0 = time.perf_counter()
+    r = fn()
+    t1 = os.times()
+    w = time.perf_counter() - w0
+    cpu = (t1.user - t0.user) + (t1.system - t0.system) + \
+        (t1.children_user - t0.children_user) + \
+        (t1.children_system - t0.children_system)
+    return r, w, cpu / w if w > 0 else None
 
 
 def main():
@@ -83,6 +155,14 @@ def main():
     factories = [p.factory for p in ps]
     days = c["days"]
     out["runner"] = runner_specs()
+    out["code_sha"] = _sha()
+    try:
+        import scipy
+        out["versions"] = {"scipy": scipy.__version__}
+        import highspy
+        out["versions"]["highspy"] = highspy.Highs().version()
+    except Exception:
+        pass
     save("generate")
     mat_tot, lab_tot = {}, {}
     unsolved = 0
@@ -106,18 +186,38 @@ def main():
                   "nnz": int(mip.A.nnz),
                   "binaries": int(mip.integrality.sum())}
     save("build")
-    t0 = time.perf_counter()
-    res = solve_mip(mip, time_limit_s=limit, mip_rel_gap=0.0)
-    out["solve_wall_s"] = round(time.perf_counter() - t0, 1)
-    out["status"] = str(res["status"])
-    out["optimal_proven"] = "Optimal" in str(res["status"])
-    out["has_incumbent"] = res["x"] is not None
-    if res["x"] is not None:
-        out["incumbent"] = res["objective"]
-        out["mip_gap"] = res.get("gap")
-        out["nodes"] = res.get("node_count")
-        if res.get("gap") is not None and res["objective"]:
-            out["derived_bound"] = res["objective"] * (1 - res["gap"])
+    out["solves"] = {}
+    res = None
+    for spec in os.environ.get("MS_SOLVERS", "scipy").split(","):
+        name, _, th = spec.partition(":")
+        if name == "scipy":
+            r, w, cores = cpu_wall(lambda: solve_mip(
+                mip, time_limit_s=limit, mip_rel_gap=0.0))
+        else:
+            r, w, cores = cpu_wall(lambda: solve_highspy(
+                mip, limit, th or 4))
+        rec = {"solve_wall_s": round(w, 1),
+               "avg_cores_used": round(cores, 2),
+               "status": str(r["status"]),
+               "optimal_proven": "ptimal" in str(r["status"]),
+               "has_incumbent": r["x"] is not None,
+               "first_incumbent_s": r.get("first_incumbent_s")}
+        if r["x"] is not None:
+            rec["incumbent"] = r["objective"]
+            rec["mip_gap"] = r.get("gap")
+            rec["nodes"] = r.get("node_count")
+        out["solves"][spec] = rec
+        out["stages"]["solve:" + spec] = {
+            "t_s": round(time.perf_counter() - T0, 1),
+            "peak_rss_mb": rss_mb()}
+        if res is None:
+            res = r
+            out.update({k: rec[k] for k in rec})
+            out["solve_wall_s"] = rec["solve_wall_s"]
+            if rec.get("incumbent") and rec.get("mip_gap") is not None:
+                out["derived_bound"] = rec["incumbent"] * (
+                    1 - rec["mip_gap"])
+        Path(out_path).write_text(json.dumps(out, indent=1))
     save("solve")
     if res["x"] is not None:
         qtys = qty_from_mip_x(res["x"], meta["maps"], meta["offsets"])
