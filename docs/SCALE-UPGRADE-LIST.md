@@ -249,3 +249,57 @@ License verification (done 2026-11-25, live pages):
   citation of the arXiv preprint. Academic use with citation; do not
   vendor; note instances carry no proven optima ("global optimum
   cannot be guaranteed" per README).
+
+### GitHub-free ceiling: how many sequential blocks (2026-11-26, user question)
+
+Answered from the live GitHub docs + our measured block stats. Repo
+visibility confirmed public (api.github.com repo record, 2026-11-26), so
+standard-runner compute is free and does NOT draw from any minutes quota.
+
+Live-doc facts (URLs at the end):
+- Public repos: standard GitHub-hosted runner usage remains free, no
+  monthly minutes quota applies (billing concept page + billing/usage
+  page).
+- Job execution limit 6 h/job; workflow run limit 35 days; matrix cap
+  256 jobs/run; re-run cap 50/run (actions/reference/limits).
+- Concurrency: Free plan = 20 total concurrent jobs (same page).
+- Free plan included storage: 500 MB Actions artifacts + $12/month
+  included compute (compute is for PRIVATE repos; ours is public)
+  (billing/reference/product-usage-included). Storage bills by GB-hours
+  accrued; deleting artifacts stops future accrual (billing concept page).
+- API: GITHUB_TOKEN 1000 req/h/repo; PAT 5000 req/h (limits page).
+
+Measured block stats:
+- Step 5 (1536 plants): 7h20m end-to-end, 106,147,349 vars
+  (69,071 vars/plant measured mean), 192 artifacts totaling 5.0 MB.
+- Step 6 block (2048 plants): ESTIMATED ~141.4M vars at the measured
+  per-plant mean; wall measuring now.
+
+Ceiling analysis:
+- COMPUTE: no cap on the number of sequential runs for a public repo on
+  standard runners. 100 blocks is mechanically allowed. 100 x ~8h
+  (ESTIMATED from the measured 7h20m; step 6 refines) = ~33 days
+  continuous. Per-run limits (6 h job, 35-day run, 256 matrix, 50
+  re-runs) are all far from our shape (~45-50 min shard jobs, fresh run
+  per block).
+- STORAGE: the only metered resource. 5.0 MB/block measured; 100 blocks
+  with the 30-day retention ~= 500-700 MB vs the 500 MB Free allowance -
+  borderline (ESTIMATED). Mitigation (standard hygiene, not evasion):
+  delete a block's artifacts after its merge validation + the spot
+  re-validation window; RESULT.json on gate-scale-results is the
+  permanent record. In-flight storage then stays ~2 blocks (~14 MB).
+- RELIABILITY over ~33 days continuous: weekly runner-image updates can
+  trip the environment-drift check (by design it flags, supervisor
+  pauses+heals); the 2-attempt heal rule bounds automatic recovery.
+- VARIABLES: 100 blocks x ~141.4M = ~14.1 BILLION vars (ESTIMATED);
+  1 billion vars at ~7 blocks of 2048 plants (~2.5 days, ESTIMATED).
+- Answer: yes, 100 blocks is within the documented free use; the honest
+  constraints are wall-clock (~33 days) and artifact-storage hygiene,
+  not quotas. ToS: normal CI of our own code on a public repo, standard
+  runners, single account - no evasion.
+
+Sources:
+- https://docs.github.com/en/actions/administering-github-actions/usage-limits-billing-and-administration
+- https://docs.github.com/en/actions/reference/limits
+- https://docs.github.com/en/billing/concepts/product-billing/github-actions
+- https://docs.github.com/en/billing/reference/product-usage-included
