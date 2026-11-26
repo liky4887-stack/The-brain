@@ -1,6 +1,6 @@
 {
- "step": 5,
- "plants": 1536,
- "shards": 192,
- "note": "ladder step 5: 8 plants/shard (measured-safe memory)"
+ "step": 6,
+ "plants": 2048,
+ "shards": 256,
+ "note": "ladder step 6: 8 plants/shard (measured-safe memory); 256 = matrix cap, next step needs super-block"
 }
