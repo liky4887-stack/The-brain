@@ -1,4 +1,4 @@
-# HANDOFF - The-brain scale program (updated 2026-11-26, ~6:30 AM EET)
+# HANDOFF - The-brain scale program (updated 2026-11-26, ~10:50 AM EET)
 
 Project state only: verified benchmark results, public evidence, and
 technical next steps. Everything below is measured, not planned, unless
@@ -20,9 +20,10 @@ by ladder.run_id):
 | 3    | 256    | 32     | 30.9M     | -          | all, 0 problems       | 45637538991 | PASS    |
 | 4    | 768    | 96     | 53,003,363| 18,528,930 | 249,178, 0 problems   | 45663952096 | PASS    |
 | 5    | 1536   | 192    | 106,147,349| 37,106,181| 499,393, 0 problems   | 45694139435 | PASS    |
+| 6    | 2048   | 256    | 141,608,152| 49,501,928| 666,396, 0 problems   | 45737026860 | PASS    |
 
-- Step 6 (2048 plants / 256 shards, run 45737026860): RUNNING at this
-  update. 256 is the workflow matrix cap; step 7+ is super-blocks
+- Step 6 closed the single-block ladder: 256 is the workflow matrix
+  cap, so step 7+ is super-blocks
   (sequential disjoint plant ranges, see benchmarks/superblock.py and
   docs/SUPERVISOR.md layer 2).
 - Validation: every produced assignment is re-checked by an independent
@@ -74,9 +75,10 @@ by ladder.run_id):
 
 ## Technical next steps (ranked)
 
-1. Step 6 verdict handling, then step 7+ super-blocks toward the free
-   ceiling; report the real measured ceiling + cause when free compute
-   stops scaling.
+1. Step 7+ super-blocks (linear chain via --plant-offset +
+   benchmarks/superblock.py extend_chain) toward the free ceiling;
+   report the real measured ceiling + cause when free compute stops
+   scaling.
 2. Serving layer (serving/): postgres queue + stdlib API + worker that
    runs the same brain_core rolling solver with the same independent
    validation; CI in .github/workflows/serving.yml. Next slices: real
