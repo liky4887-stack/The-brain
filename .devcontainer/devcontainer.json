@@ -4,5 +4,5 @@
   "features": {
     "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
   },
-  "postStartCommand": "nohup bash benchmarks/codespace_runner.sh > /tmp/codespace_runner.log 2>&1 &"
+  "postStartCommand": "setsid nohup bash benchmarks/codespace_runner.sh > /tmp/codespace_runner.log 2>&1 < /dev/null &"
 }
