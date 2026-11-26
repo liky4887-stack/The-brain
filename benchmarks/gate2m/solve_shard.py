@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import resource
+import sys
 import time
 
 import traceback
@@ -185,6 +186,24 @@ def env_stamp(workers: int, seq_workers) -> dict:
             "workers": workers, "seq_workers": seq_workers}
 
 
+def _checkpoint(a, idx, env, started, path, records):
+    # compact separators (artifact quota); atomic-ish via tmp+rename
+    # env included so a partial upload does not fake "drift" in the
+    # merge's cross-shard stamp check
+    payload = {"shard": a.shard, "shards": a.shards,
+               "plant_offset": a.plant_offset, "indices": idx,
+               "started_utc": started, "partial": True,
+               "sha": os.environ.get("GITHUB_SHA", "local"),
+               "argv": sys.argv,
+               "expected_range": [a.plant_offset,
+                                  a.plant_offset + a.plants],
+               "env": env,
+               "records": [records[i] for i in idx if i in records]}
+    tmp = path + ".tmp"
+    json.dump(payload, open(tmp, "w"), separators=(",", ":"))
+    os.replace(tmp, path)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shard", type=int, required=True)
@@ -249,28 +268,14 @@ def main() -> None:
 
     env = env_stamp(a.workers, a.seq_workers)
 
-    def _checkpoint(records):
-        # compact separators (artifact quota); atomic-ish via tmp+rename
-        # env included so a partial upload does not fake "drift" in the
-        # merge's cross-shard stamp check
-        payload = {"shard": a.shard, "shards": a.shards,
-                   "plant_offset": a.plant_offset, "indices": idx,
-                   "started_utc": started, "partial": True,
-                   "sha": os.environ.get("GITHUB_SHA", "local"),
-                   "argv": sys.argv,
-                   "expected_range": [a.plant_offset,
-                                      a.plant_offset + a.plants],
-                   "env": env,
-                   "records": [records[i] for i in idx if i in records]}
-        tmp = path + ".tmp"
-        json.dump(payload, open(tmp, "w"), separators=(",", ":"))
-        os.replace(tmp, path)
+    def _cp(records):
+        _checkpoint(a, idx, env, started, path, records)
 
     records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
                                   a.mem_guard_mb,
                                   job_budget_s=a.job_budget_s,
                                   upload_margin_s=a.upload_margin_s,
-                                  checkpoint=_checkpoint)
+                                  checkpoint=_cp)
     wall = time.monotonic() - t0
     payload = {"shard": a.shard, "shards": a.shards,
                "plant_offset": a.plant_offset, "indices": idx,

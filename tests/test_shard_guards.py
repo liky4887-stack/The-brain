@@ -214,3 +214,29 @@ def test_job_budget_guard_stops_starting_before_budget():
     assert stopped is not None and "job budget guard" in stopped
     assert any(r["problems"] and "not attempted" in r["problems"][0]
                for r in records)
+
+
+def test_checkpoint_payload_end_to_end(tmp_path):
+    """Regression (run 45852637645, all solve jobs NameError'd at the
+    first checkpoint): the provenance payload uses sys.argv - call the
+    REAL module-level _checkpoint so a missing import can never ship.
+    """
+    import json
+    import types
+    import sys as _sys
+    from pathlib import Path
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                            / "benchmarks" / "gate2m"))
+    import solve_shard
+
+    a = types.SimpleNamespace(shard=0, shards=1, plant_offset=0,
+                              plants=2)
+    path = str(tmp_path / "shard-0.json")
+    records = {0: {"plant": 0}, 1: {"plant": 1}}
+    solve_shard._checkpoint(a, [0, 1], {"python": "3.11"},
+                            "2026-11-26T00:00:00Z", path, records)
+    d = json.loads(open(path).read())
+    assert d["partial"] is True
+    assert isinstance(d["argv"], list) and d["argv"]
+    assert d["expected_range"] == [0, 2]
+    assert [r["plant"] for r in d["records"]] == [0, 1]

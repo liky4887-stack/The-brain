@@ -19,6 +19,24 @@
    "status": "fixed",
    "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)"
   },
+  "43c2596bdee8": {
+   "attempts": 0,
+   "avoidance": "wave hard bound: each wave is submitted with timeout = job budget (6000s, matches the 100-min job timeout) - upload margin (300s) - elapsed; on expiry the pool is terminated (SIGTERM) and unfinished plants are recorded not-attempted, so the solve step always exits and the upload step always runs. Soft wall guard 5400s remains the first line. Jobs are NEVER rerun.",
+   "first_seen": {
+    "run_id": "45786313189",
+    "sha": "1e8ef94",
+    "step": 7
+   },
+   "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
+   "last_seen": {
+    "run_id": "45786313189",
+    "sha": "1e8ef94",
+    "step": 7
+   },
+   "signature": "43c2596bdee8",
+   "status": "fixed",
+   "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded"
+  },
   "9f1a8959beb4": {
    "attempts": 1,
    "avoidance": "rm -f the RESULT path after the /tmp backup, before checkout -B onto the results branch",
@@ -36,6 +54,25 @@
    "signature": "9f1a8959beb4",
    "status": "fixed",
    "summary": "publish: checkout -B onto results branch refuses to clobber local RESULT.json -> exit 1 before push (gate2m #6 45622543829, scale #3 45622547998)"
+  },
+  "e1945e36a495": {
+   "attempts": 1,
+   "avoidance": "regression test test_checkpoint_payload_end_to_end calls the real _checkpoint; launches run the canary but only a full shard run reaches checkpoints - the test covers that gap",
+   "first_seen": {
+    "run_id": "45852637645",
+    "sha": "366983699cd63f68bd533726856f00d9d63dae94",
+    "step": 7
+   },
+   "fix": "import sys added; _checkpoint lifted to module level and exercised by a direct regression test (negative control: removing the import makes the test error)",
+   "fix_commit": "(this commit)",
+   "last_seen": {
+    "run_id": "45852637645",
+    "sha": "366983699cd63f68bd533726856f00d9d63dae94",
+    "step": 7
+   },
+   "root_cause": "measured from job logs (solve(6) id 140023017284): NameError at solve_shard.py _checkpoint 'argv': sys.argv; the argv provenance field was added in 2b1b853 without the import; no test exercised the checkpoint path (execute() defaults checkpoint=None)",
+   "signature": "e1945e36a495",
+   "title": "solve_shard checkpoint payload references sys.argv but solve_shard.py never imports sys: every solve job NameErrors at its first checkpoint, minutes in; the canary (--dry-run) never reaches the checkpoint path, so it passes green"
   },
   "ec7d0c9923f8": {
    "attempts": 0,
@@ -68,24 +105,6 @@
    "signature": "fc9f56ec5ce7",
    "status": "fixed",
    "summary": "day-model CP-SAT UNKNOWN after 120s at 53M-var scale (window 1 day 5 plant 594, window 1 day 4 plant 766) WITH the 3b7e07ee1b2f heal chain already in place (hint + x4 escalation + fix-and-optimize fallback all ran): same class, deeper density. 2 of 249,179 assignments; verdict OPEN, everything else PASS-clean."
-  },
-  "43c2596bdee8": {
-   "attempts": 0,
-   "first_seen": {
-    "run_id": "45786313189",
-    "sha": "1e8ef94",
-    "step": 7
-   },
-   "signature": "43c2596bdee8",
-   "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded",
-   "status": "fixed",
-   "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
-   "avoidance": "wave hard bound: each wave is submitted with timeout = job budget (6000s, matches the 100-min job timeout) - upload margin (300s) - elapsed; on expiry the pool is terminated (SIGTERM) and unfinished plants are recorded not-attempted, so the solve step always exits and the upload step always runs. Soft wall guard 5400s remains the first line. Jobs are NEVER rerun.",
-   "last_seen": {
-    "run_id": "45786313189",
-    "sha": "1e8ef94",
-    "step": 7
-   }
   }
  },
  "version": 1
