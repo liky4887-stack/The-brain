@@ -49,11 +49,12 @@ from brain_core.solvers.highs_mip import solve_mip
 DAYS = 7
 SUPPLIER_FACTOR = 0.75
 LABOR_FACTOR = 0.8
-SEEDS = [101 * (i + 1) for i in range(8)]
+SEEDS = [101 * (i + 1) for i in range(64)]
 
 
-def build_cluster(n):
-    ps = [generate_fnb_factory(FnbParams(seed=SEEDS[i], n_lines=3,
+def build_cluster(n, seed_base=0):
+    ps = [generate_fnb_factory(FnbParams(seed=SEEDS[i] + seed_base,
+                                         n_lines=3,
                                          n_skus=12, days=DAYS,
                                          active_fraction=0.9,
                                          utilization=0.6,
@@ -93,8 +94,9 @@ def qty_from_mip_x(res_x, maps, offsets):
     return qtys
 
 
-def run(n, monolith_limit_s=90.0, crash_inject=False):
-    ps, hs, cap = build_cluster(n)
+def run(n, monolith_limit_s=90.0, crash_inject=False,
+        seed_base=0):
+    ps, hs, cap = build_cluster(n, seed_base=seed_base)
     factories = [p.factory for p in ps]
     sup, lab, solo = binding_caps(ps, hs, cap)
     out = {"plants": n, "days": DAYS, "cap_factors": {
@@ -107,7 +109,9 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
     mip, meta = build_coupled_mip(factories, hs, DAYS, cap, sup, lab)
     res = solve_mip(mip, time_limit_s=monolith_limit_s, mip_rel_gap=0.0)
     t_mono = time.perf_counter() - t0
-    mono = {"wall_s": round(t_mono, 2), "status": str(res["status"])}
+    mono = {"wall_s": round(t_mono, 2), "status": str(res["status"]),
+            "optimal_proven": "Optimal" in str(res["status"]),
+            "time_limit_s": monolith_limit_s}
     if res["x"] is not None:
         qtys = qty_from_mip_x(res["x"], meta["maps"],
                               meta["offsets"])
@@ -192,7 +196,12 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
         t_im = time.perf_counter() - t0
     finally:
         coupled_dw.solve_buckets = real_solve_buckets
-    dist = {"ub_series": dw.ub_series,
+    comb = None
+    if dw.lower_bound is not None and dw.upper_bound is not None:
+        comb = (dw.upper_bound - dw.lower_bound) / \
+            max(abs(dw.upper_bound), 1e-9)
+    dist = {"combined_certified_gap": comb,
+            "ub_series": dw.ub_series,
             "first_ub_s": dw.first_ub_s,
             "iter_times_tail": dw.iter_times[-3:],
             "seed": ("none" if os.environ.get("CMP_NO_SEED") == "1"
@@ -228,9 +237,49 @@ def main():
     path = os.environ.get("CMP_OUT", "/tmp/coupled-comparison.json")
     out = {"measured": True}
     if phase in ("all", "base"):
-        out["rows"] = [run(n, limit, crash_inject=False) for n in sizes]
+        reps = int(os.environ.get("CMP_REPLICAS", "1"))
+        rows = []
+        for n in sizes:
+            for rep in range(reps):
+                r = run(n, limit, crash_inject=False,
+                        seed_base=rep * 100003)
+                r["replica"] = rep
+                rows.append(r)
+        out["rows"] = rows
+        # per-size replica aggregate: plan cost / monolith incumbent,
+        # mean and worst case (review: 5 seeds before any "1.1x" claim)
+        agg = {}
+        for r in rows:
+            n = r["plants"]
+            ub = r["distributed"].get("upper_bound")
+            mo = r["monolithic"].get("incumbent")
+            lb = r["distributed"].get("lower_bound")
+            a = agg.setdefault(n, {"ratios": [], "gaps": [],
+                                   "mono_proven": []})
+            if ub and mo:
+                a["ratios"].append(ub / mo)
+            if lb is not None and ub:
+                a["gaps"].append((ub - lb) / max(abs(ub), 1e-9))
+            a["mono_proven"].append(
+                r["monolithic"].get("optimal_proven"))
+        out["per_size"] = {
+            str(n): {"replicas": len(a["ratios"]),
+                     "plan_vs_monolith_mean":
+                     (sum(a["ratios"]) / len(a["ratios"]))
+                     if a["ratios"] else None,
+                     "plan_vs_monolith_worst":
+                     max(a["ratios"]) if a["ratios"] else None,
+                     "combined_certified_gap_mean":
+                     (sum(a["gaps"]) / len(a["gaps"]))
+                     if a["gaps"] else None,
+                     "combined_certified_gap_worst":
+                     max(a["gaps"]) if a["gaps"] else None,
+                     "monolith_optimal_proven_all":
+                     all(a["mono_proven"])}
+            for n, a in agg.items()}
         for r in out["rows"]:
-            print(f"[{r['plants']}p] mono {r['monolithic']['wall_s']}s "
+            print(f"[{r['plants']}p r{r['replica']}] mono "
+                  f"{r['monolithic']['wall_s']}s "
                   f"{r['monolithic']['status'][:40]} | CG "
                   f"{r['distributed']['cg_wall_s']}s LB "
                   f"{r['distributed']['lower_bound']} certified="

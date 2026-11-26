@@ -44,7 +44,10 @@ jobs:
   solve:
     needs: setup
     runs-on: ubuntu-latest   # free tier on public repos: 4 vCPU / 16 GB
-    timeout-minutes: 60
+    timeout-minutes: 100  # above the 90-min shard wall guard: the
+                          # guard fires first and uploads partials;
+                          # the merge completeness check owns the
+                          # verdict; jobs are NEVER rerun
     strategy:
       fail-fast: false
       matrix:

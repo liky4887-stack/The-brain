@@ -28,6 +28,7 @@ jobs:
       im_every: ${{ steps.cfg.outputs.im_every }}
       stab_alpha: ${{ steps.cfg.outputs.stab_alpha }}
       iters: ${{ steps.cfg.outputs.iters }}
+      replicas: ${{ steps.cfg.outputs.replicas }}
     steps:
       - uses: actions/checkout@v4
       - id: cfg
@@ -38,12 +39,13 @@ jobs:
           out = {}
           out["sizes_json"] = json.dumps(c.get("sizes", [2, 4, 8]))
           for k in ("cg_wall_s", "monolith_limit_s", "alloc_every",
-                    "im_every", "stab_alpha", "iters"):
+                    "im_every", "stab_alpha", "iters", "replicas"):
               out[k] = str(c.get(k, {"cg_wall_s": 600,
                                      "monolith_limit_s": 600,
                                      "alloc_every": 5, "im_every": 25,
                                      "stab_alpha": 0.3,
-                                     "iters": 1000}[k]))
+                                     "iters": 1000,
+                                     "replicas": 5}[k]))
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               for k, v in out.items():
                   fh.write(f"{k}={v}\n")
@@ -52,7 +54,7 @@ jobs:
   compare:
     needs: setup
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 150  # 5 replicas x (600s mono + 600s CG + seeds)
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +78,7 @@ jobs:
           CMP_IM_EVERY: ${{ needs.setup.outputs.im_every }}
           CMP_LR_ROUNDS: "0"
           CMP_MONOLITH_LIMIT: ${{ needs.setup.outputs.monolith_limit_s }}
+          CMP_REPLICAS: ${{ needs.setup.outputs.replicas }}
         run: |
           python benchmarks/coupled_comparison.py
           cp /tmp/coupled-comparison.json crossover-n${{ matrix.size }}.json

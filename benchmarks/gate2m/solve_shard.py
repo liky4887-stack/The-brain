@@ -152,10 +152,12 @@ def main() -> None:
     ap.add_argument("--seq-workers", type=int, default=None,
                     help="CP-SAT workers per day-sequencing solve; set 1 "
                          "when --workers already saturates the cores")
-    ap.add_argument("--wall-guard-s", type=float, default=2700.0,
+    ap.add_argument("--wall-guard-s", type=float, default=5400.0,
                     help="stop STARTING new plants past this wall "
-                         "(job timeout is 60 min; default leaves merge "
-                         "margin)")
+                         "(job timeout is 100 min; the 90-min default "
+                         "leaves merge margin). Jobs are NEVER rerun; "
+                         "partials upload and the merge completeness "
+                         "check owns the verdict")
     ap.add_argument("--mem-guard-mb", type=float, default=12288.0,
                     help="stop STARTING new plants when the children "
                          "peak RSS passes this (runner has 16 GB)")
