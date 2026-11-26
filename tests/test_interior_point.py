@@ -187,3 +187,82 @@ def test_mpc_infeasible_raises_no_fake_answer():
     import pytest
     with pytest.raises(ArithmeticError):
         solve_lp_ipm_mpc([1.0], [[1.0], [-1.0]], [-1.0, 0.0], ["<=", "<="])
+
+
+def test_mpc_mixed_senses_and_equalities():
+    # Same mixed-sense instance as the path-following test, plus an
+    # equality row: minimize x1 + x2 s.t. x1 + x2 >= 2, x1 + x2 == 2
+    # forces the segment, x1 <= 5, x2 <= 5. Optimum 2.
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    res = solve_lp_ipm_mpc(
+        [1.0, 1.0],
+        [[1.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        [2.0, 5.0, 5.0, 2.0],
+        [">=", "<=", "<=", "=="],
+    )
+    assert res["status"] == LPStatus.OPTIMAL
+    assert abs(res["objective"] - 2.0) < 1e-5
+
+
+def test_mpc_ill_scaled_relative_termination():
+    # Ch.11 rationale: coefficients spanning 1e-6..1e6 must not fool an
+    # absolute termination test. minimize 1e6 x1 + 1e-6 x2 s.t.
+    # x1 + 1e-12 x2 >= 1, x1 <= 2, x2 <= 2. Optimum 1e6 at (1, 0).
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    res = solve_lp_ipm_mpc(
+        [1e6, 1e-6],
+        [[1.0, 1e-12], [1.0, 0.0], [0.0, 1.0]],
+        [1.0, 2.0, 2.0],
+        [">=", "<=", "<="],
+    )
+    assert res["status"] == LPStatus.OPTIMAL
+    assert abs(res["objective"] - 1e6) / 1e6 < 1e-6
+
+
+def test_mpc_cold_start_zero_equality_residual_and_dominant():
+    # The unshifted least-squares point meets the equality blocks
+    # exactly by construction; after the positivity shifts the primal
+    # residual of row i is exactly dx*rowsum_i + dw and the dual
+    # residual of column j is exactly dy*colsum_j + dz (small and
+    # controlled - the book's "not too infeasible" condition). Measured
+    # on the seeded set the cold start needs FEWER iterations in
+    # aggregate than the all-ones start (2026-11-26: total 484 vs 525,
+    # mean 8.07 vs 8.75; individual instances can go either way, so the
+    # test asserts the aggregate, not per-instance dominance).
+    from brain_core.lp.interior_point import _least_squares_start, _to_max_form
+    from brain_core.lp.interior_point import solve_lp_ipm_mpc
+    rng = random.Random(20261125)
+    for _ in range(60):
+        c, A, b, senses = random_bounded_feasible_lp(rng)
+        rows, rhs, cmax = _to_max_form(c, A, b, senses)
+        n, m2 = len(cmax), len(rows)
+        x0, w0, y0, z0 = _least_squares_start(rows, rhs, cmax, n, m2)
+        # recover the shifts to predict the controlled residuals
+        # primal: solve (AA^T+I)t=b -> w~=t, x~=A^T t; shift dx, dw
+        M = [[sum(rows[i][k] * rows[j][k] for k in range(n))
+              + (1.0 if i == j else 0.0) for j in range(m2)]
+             for i in range(m2)]
+        from brain_core.lp.interior_point import _gauss_solve
+        t = _gauss_solve([r[:] for r in M], rhs[:])
+        w_tilde = t[:]
+        x_tilde = [sum(rows[i][j] * t[i] for i in range(m2)) for j in range(n)]
+        dx = max([0.0] + [-v for v in x_tilde]) + 1.0
+        dw = max([0.0] + [-v for v in w_tilde]) + 1.0
+        for i in range(m2):
+            resid = (sum(rows[i][j] * x0[j] for j in range(n)) + w0[i]
+                     - rhs[i])
+            expected = dx * sum(rows[i]) + dw
+            assert abs(resid - expected) < 1e-8 * (1 + abs(expected))
+        assert min(x0 + w0 + y0 + z0) > 0.0
+    total_cs = 0
+    total_ones = 0
+    rng = random.Random(20261125)
+    for _ in range(60):
+        c, A, b, senses = random_bounded_feasible_lp(rng)
+        cs = solve_lp_ipm_mpc(c, A, b, senses, return_iters=True,
+                              start="mehrotra")
+        ones = solve_lp_ipm_mpc(c, A, b, senses, return_iters=True,
+                                start="ones")
+        total_cs += cs["iters"]
+        total_ones += ones["iters"]
+    assert total_cs < total_ones

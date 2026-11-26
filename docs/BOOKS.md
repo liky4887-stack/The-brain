@@ -167,12 +167,14 @@ text, no OCR gate needed; each read twice):
   from ch.10: packages/brain-core/brain_core/lp/interior_point.py,
   solve_lp_ipm_mpc - Mehrotra predictor-corrector with adaptive
   centering sigma=(mu_aff/mu)^3, second-order correction, separate
-  primal/dual step lengths, ch.11 relative termination, ch.9 blowup
-  infeasibility diagnostic (never a certificate). Measured against the
+  primal/dual step lengths, ch.11 least-squares cold start and
+  relative termination, ch.9 blowup infeasibility diagnostic (never a
+  certificate). Exported from brain_core.lp. Measured against the
   existing fixed-centering solver on the shared seeded 60-LP set:
-  strictly fewer iterations on every instance (mean 8.75 vs 19.22),
+  strictly fewer iterations on every instance (mean 8.07 vs 19.22),
   same optima as the exact simplex; tests/test_interior_point.py
-  asserts per-instance dominance. CG master LP solver decision:
+  asserts per-instance dominance of MPC, the aggregate cold-start
+  gain, mixed senses/== rows, and ill-scaled termination. CG master LP solver decision:
   dual simplex kept (ch.11 hot-start analysis + measured one-shot A/B,
   see the skill file).
 - Wright, "Interior-Point Methods" (Simons Institute slides, 2017).

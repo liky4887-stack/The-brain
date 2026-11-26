@@ -181,8 +181,53 @@ def _fraction_to_boundary(pos, d):
     return alpha
 
 
+def _least_squares_start(rows, rhs, cmax, n, m2):
+    """Mehrotra-style cold start (Wright 1997 ch.11, principle restated).
+
+    The book's two requirements for a start: well centered (pairwise
+    products x_i*s_i similar) and not too infeasible (residual norm not
+    large relative to the duality measure). The heuristic it describes
+    takes the minimum-norm solutions of the two least-squares problems
+    (primal equalities; dual equalities) and shifts for positivity.
+    In the max-form with slacks the equality matrix is [A' I], so the
+    min-norm (x, w) with A'x + w = b is
+        w~ = (A'A'^T + I)^-1 b,   x~ = A'^T w~
+    and the min-norm (y, z) with A'^T y - z = c is
+        y~ = A' (A'^T A' + I)^-1 c,   z~ = -(A'^T A' + I)^-1 c.
+    Both normal matrices are SPD (identity shift), solved with the same
+    dense elimination as the KKT systems. The unshifted min-norm point
+    meets both equality blocks exactly; the positivity shifts then make
+    every component strictly positive with a unit margin, leaving small
+    controlled residuals (row i: dx*rowsum_i + dw) - the book's "not too
+    infeasible" condition.
+    """
+    # primal min-norm: solve (A A^T + I) t = b ; w = t, x = A^T t
+    M = [[sum(rows[i][k] * rows[j][k] for k in range(n)) + (1.0 if i == j else 0.0)
+          for j in range(m2)] for i in range(m2)]
+    t = _gauss_solve([row[:] for row in M], rhs[:])
+    w0 = t[:]
+    x0 = [sum(rows[i][j] * t[i] for i in range(m2)) for j in range(n)]
+    # dual min-norm: solve (A^T A + I) u = c ; y = A u, z = -u
+    N = [[sum(rows[i][j] * rows[i][k] for i in range(m2)) + (1.0 if j == k else 0.0)
+          for k in range(n)] for j in range(n)]
+    u = _gauss_solve([row[:] for row in N], cmax[:])
+    y0 = [sum(rows[i][j] * u[j] for j in range(n)) for i in range(m2)]
+    z0 = [-v for v in u]
+    # positivity + centrality shifts (unit margin)
+    dx = max([0.0] + [-v for v in x0]) + 1.0
+    dw = max([0.0] + [-v for v in w0]) + 1.0
+    dy = max([0.0] + [-v for v in y0]) + 1.0
+    dz = max([0.0] + [-v for v in z0]) + 1.0
+    x0 = [v + dx for v in x0]
+    w0 = [v + dw for v in w0]
+    y0 = [v + dy for v in y0]
+    z0 = [v + dz for v in z0]
+    return x0, w0, y0, z0
+
+
 def solve_lp_ipm_mpc(c, A, b, senses, tol: float = TOL,
-                     max_iter: int = MAX_ITER, return_iters: bool = False):
+                     max_iter: int = MAX_ITER, return_iters: bool = False,
+                     start: str = "mehrotra"):
     """Mehrotra predictor-corrector IPM (Wright, Primal-Dual Interior-Point
     Methods, SIAM 1997, ch.10 Algorithm MPC) - math rederived, no text copied.
 
@@ -194,6 +239,8 @@ def solve_lp_ipm_mpc(c, A, b, senses, tol: float = TOL,
         sigma*mu*e - DAff X/S products (second-order correction);
       - centering sigma chosen adaptively as (mu_aff/mu)^3;
       - separate primal (x,w) and dual (y,z) step lengths;
+      - ch.11 least-squares cold start (start="mehrotra", default;
+        start="ones" keeps the all-ones start for comparison);
       - relative termination tests (ch.11): residuals scaled by
         1+||b||, 1+||c||, and the relative duality gap;
       - ch.9 blowup diagnostic: diverging iterates with stalled residuals
@@ -207,10 +254,15 @@ def solve_lp_ipm_mpc(c, A, b, senses, tol: float = TOL,
     nc = max(abs(v) for v in cmax) if cmax else 0.0
     scale_p, scale_d = 1.0 + nb, 1.0 + nc
 
-    x = [1.0] * n
-    w = [1.0] * m2
-    y = [1.0] * m2
-    z = [1.0] * n
+    if start == "mehrotra":
+        x, w, y, z = _least_squares_start(rows, rhs, cmax, n, m2)
+    elif start == "ones":
+        x = [1.0] * n
+        w = [1.0] * m2
+        y = [1.0] * m2
+        z = [1.0] * n
+    else:
+        raise ValueError(f"bad start {start!r}")
 
     def kkt_solve(g1, rc, g2, rp, x, y, rows):
         """Solve [Z XA^T; A -Y^-1 W] [dx;dy] = [g1 + X rc; rp - Y^-1 g2]."""

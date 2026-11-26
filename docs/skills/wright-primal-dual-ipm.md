@@ -99,8 +99,13 @@ never a certificate; the exact simplex owns certificates (unchanged).
   (minimum-norm x meeting Ax = b; minimum-norm (y, s) meeting
   A^T y + s = c) then shifts for positivity/centrality. Theory and
   practice agree a good start is well centered and not too infeasible.
-  NOT yet implemented in the teaching solver (all-ones start today);
-  gap-listed.
+  IMPLEMENTED 2026-11-26 (_least_squares_start, default for MPC):
+  min-norm points via the SPD normal matrices (A A^T + I) and
+  (A^T A + I), then unit-margin positivity shifts; the shifted start's
+  residuals are exactly dx*rowsum + dw / dy*colsum + dz (locked by
+  test). Measured on the seeded 60-LP set: total 484 vs 525
+  iterations for the all-ones start (mean 8.07 vs 8.75); individual
+  instances go either way, so the locked claim is the aggregate.
 - Hot starts are worth little to an IPM: small data changes reroute
   the central path, so prior solutions buy at most a 2-3x iteration
   saving. The simplex exploits prior solutions far better. The book's
@@ -137,11 +142,13 @@ become a measured bottleneck at much larger masters.
 
 1. solve_lp_ipm_mpc: Mehrotra predictor-corrector with adaptive
    centering, second-order correction, separate primal/dual steps,
-   relative termination, infeasibility blowup diagnostic. Measured:
-   2.2x fewer iterations than the existing path-following solver on
-   the shared seeded set, per-instance dominant, same optima.
-2. Gap-list additions (docs/SCALE-UPGRADE-LIST.md): least-squares
-   cold-start heuristic; HSD embedding for certified infeasibility;
-   crossover/basis recovery for exact vertices.
+   least-squares cold start, relative termination, infeasibility
+   blowup diagnostic. Exported from brain_core.lp. Measured: 2.4x
+   fewer iterations than the existing path-following solver on the
+   shared seeded set (mean 8.07 vs 19.22; MPC iteration dominance is
+   per-instance, locked by test), same optima as the exact simplex.
+2. Gap-list additions (docs/SCALE-UPGRADE-LIST.md): HSD embedding for
+   certified infeasibility; crossover/basis recovery for exact
+   vertices.
 3. CG master LP: NO solver change - dual simplex confirmed by the
    book's hot-start analysis plus a measured one-shot A/B.

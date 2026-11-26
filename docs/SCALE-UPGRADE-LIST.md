@@ -211,12 +211,13 @@ already pipelines.
    adaptive shard sizing, super-block supervisor, tree-merge,
    coverage ratchet, generator-stats publication.
 8. IPM items from Wright 1997 (skill: docs/skills/
-   wright-primal-dual-ipm.md, 2026-11-26): (a) least-squares cold-start
-   heuristic for the teaching IPMs (all-ones start today); (b) HSD
-   embedding for CERTIFIED infeasibility in the IPM (today: blowup
-   diagnostic only, simplex owns certificates); (c) crossover /
-   optimal-basis recovery (ch.7 BUN partition) if an exact vertex from
-   an IPM solution is ever needed. CG master LP solver: dual simplex
+   wright-primal-dual-ipm.md, 2026-11-26): (a) DONE - least-squares
+   cold start implemented (_least_squares_start, measured: 484 vs 525
+   total iterations vs all-ones on the seeded set); (b) HSD embedding
+   for CERTIFIED infeasibility in the IPM (today: blowup diagnostic
+   only, simplex owns certificates); (c) crossover / optimal-basis
+   recovery (ch.7 BUN partition) if an exact vertex from an IPM
+   solution is ever needed. CG master LP solver: dual simplex
    KEPT - ch.11 sequence-of-similar-LPs analysis + measured one-shot
    A/B vs HiGHS IPM (<=8000 cols: within noise, same objective).
 
