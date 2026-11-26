@@ -56,3 +56,10 @@ the repo owner.
   future UI consumes, so no work is thrown away; every number served
   is recomputed by the independent validator. Revisit Next.js when a
   planner needs interactive editing, not just reading.
+
+## 2026-11-26 - Serving layer: pg8000 for Postgres, stdlib everywhere else
+The serving queue talks to Postgres via pg8000 (pure Python, BSD-3
+license - AGPL-free, checked) so the container and CI need no system
+libpq. API is stdlib http.server; local/CI tests use a sqlite twin of
+the same queue semantics. No framework, no ORM: same zero-dependency
+precedent as the Stage 2 cockpit.

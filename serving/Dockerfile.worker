@@ -1,0 +1,9 @@
+# Serving worker container: queue -> brain -> result. Same image shape
+# serves API and worker; the command picks the role.
+FROM python:3.11-slim
+WORKDIR /app
+COPY packages/brain-core /app/packages/brain-core
+COPY serving /app/serving
+RUN pip install --no-cache-dir "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" "pg8000==1.31.2"
+ENV PYTHONPATH=/app/packages/brain-core:/app/serving
+CMD ["python", "-m", "worker"]

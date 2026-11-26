@@ -104,3 +104,33 @@ def test_consistency_flag_on_drifted_block():
     # same three without the drift passes
     c2 = block("3", 4096, 2048, mean_solve=520.0)
     assert aggregate([a, b, c2])["verdict"] == "PASS"
+
+
+def test_chain_appends_tail_to_head():
+    from superblock import extend_chain
+    chain = extend_chain(None, block("1", 0, 2048))
+    assert chain["verdict"] == "PASS"
+    chain = extend_chain(chain, block("2", 2048, 2048))
+    assert chain["verdict"] == "PASS"
+    assert chain["chain"]["plant_span"] == [0, 4096]
+    assert chain["chain"]["ordered_run_ids"] == ["1", "2"]
+    assert chain["measured"]["plants"] == 4096
+    # one final output carries the full ordered provenance
+    assert [b["ladder"]["run_id"] for b in chain["blocks_raw"]] == ["1", "2"]
+
+
+def test_chain_rejects_gap_and_reorder():
+    from superblock import extend_chain
+    chain = extend_chain(None, block("1", 0, 2048))
+    gap = extend_chain(chain, block("2", 4096, 2048))   # gap at [2048,4096)
+    assert gap["verdict"] == "OPEN"
+    assert any("chain break" in p for p in gap["problems"])
+    dup = extend_chain(chain, block("2", 0, 2048))      # reorder/repeat
+    assert dup["verdict"] == "OPEN"
+
+
+def test_chain_rejects_bad_first_block():
+    from superblock import extend_chain
+    out = extend_chain(None, block("1", 2048, 2048))    # must start at 0
+    assert out["verdict"] == "OPEN"
+    assert any("chain break" in p for p in out["problems"])

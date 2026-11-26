@@ -147,6 +147,41 @@ def aggregate(blocks: list[dict]) -> dict:
     }
 
 
+def extend_chain(chain: dict | None, new_block: dict) -> dict:
+    """ONE linear chain (user requirement 2026-11-26): blocks append in
+    order to a single super-block result, never scattered merges.
+
+    Rules on top of aggregate():
+    - the first block must start at plant 0;
+    - every appended block's plant range must start EXACTLY where the
+      chain currently ends (no gaps, no overlaps, no reordering);
+    - the chain's blocks stay in append order in the output; the final
+      output is ONE object with the full ordered provenance chain.
+    A broken append makes the chain verdict OPEN with the reason; the
+    previous chain content is preserved in the output's blocks list.
+    """
+    prior = [] if chain is None else list(chain.get("blocks_raw", []))
+    prior.append(new_block)
+    out = aggregate(prior)
+    problems = list(out["problems"])
+    end = 0
+    for i, b in enumerate(prior):
+        lo, hi = _plant_range(b)
+        if lo != end:
+            problems.append(
+                f"chain break at block {i}: range starts at {lo}, chain "
+                f"ends at {end} - blocks must append exactly tail-to-head")
+        end = max(end, hi)
+    out["problems"] = problems
+    out["verdict"] = "PASS" if not problems else "OPEN"
+    out["chain"] = {"length": len(prior),
+                    "plant_span": [0, end],
+                    "ordered_run_ids": [str(b.get("ladder", {}).get("run_id"))
+                                        for b in prior]}
+    out["blocks_raw"] = prior  # the chain, for the next append
+    return out
+
+
 def main() -> None:
     if len(sys.argv) < 3:
         print(__doc__)
