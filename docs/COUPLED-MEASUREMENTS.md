@@ -146,3 +146,35 @@ monolith - per the crossover protocol):
 - Per-iteration times are now logged (DWResult.iter_times); mean
   iteration ~0.93s at n=2, so iteration caps of 300-500 are feasible
   under a wall guard.
+
+## Review-4 LR attainment study (2026-11-26, same n=2 instance)
+
+Both methods relax exactly the same linking constraints (shared
+supplier (material, day) caps + shared labor day caps) and solve the
+same per-plant bucket subproblems (solve_buckets with linear price
+terms) - verified by reading coupled_dual and the coupled_dw pricing
+worker; the asymptotic DW bound is identical. The difference is
+attainment, measured with three subgradient step rules (40 rounds
+each, same subproblem time limits):
+
+| step rule | best LB after 40 rounds |
+|---|---|
+| old scale-blind eta/(k+1) | 4,457,322.67 (stuck at round-0) |
+| self-scaled eta*|LB|/||g||^2 | 9,346,048.60 |
+| Polyak with loose UB target 2,594,680,000 | 4,457,322.67 (overshoots) |
+| Polyak with ORACLE UB target 321,859,494.66 | 123,457,697.93 |
+
+CG Farley bound on the same instance: 309,677,407.77 (112 iterations).
+
+Conclusion (measured): LR attainment is limited by UB-target quality
+and iteration count, not by a formulation difference. 40 subgradient
+rounds do not attain the CG bound even with the oracle target. CG
+with exact pricing is the certified-bound workhorse; LR remains an
+alongside cross-check. LR is NOT described as a weaker method
+anywhere in the docs - only its measured attainment is reported.
+
+Primal side (review 4): periodic restricted integer master added
+(column_generation im_every parameter, best UB tracked in ub_series);
+harness knob CMP_IM_EVERY. Allocate-then-solve-exactly and diving are
+designed but not yet implemented - next work item, measured before
+any claim.

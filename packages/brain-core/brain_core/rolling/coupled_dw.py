@@ -138,7 +138,8 @@ def column_generation(factories: list, horizon_start, days: int,
                       seed_qtys: list | None = None,
                       stab_alpha: float = 0.0,
                       exact_every: int = 5,
-                      wall_s: float | None = None) -> DWResult:
+                      wall_s: float | None = None,
+                      im_every: int = 0) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
     plant: warm start with an already-feasible coupled solution);
@@ -290,6 +291,17 @@ def column_generation(factories: list, horizon_start, days: int,
             farley if (round_exact and at_master) else None)
         res.iter_times.append(round(_time.monotonic() - _it_t0, 3))
         res.iterations = it + 1
+        if im_every and (it + 1) % im_every == 0:
+            # periodic restricted integer master (primal side): the
+            # pool refs live on res for the integer master to read
+            res._colsets = colsets
+            res._pools, res._caps = pools, caps
+            prev_ub = res.upper_bound
+            integer_master(res, factories, horizon_start, days,
+                           time_limit_s=time_limit_s)
+            if (res.upper_bound is not None
+                    and res.upper_bound != prev_ub):
+                res.ub_series.append(res.upper_bound)
         if (wall_s is not None
                 and _time.monotonic() - t_start > wall_s):
             res.problems.append(f"iter {it}: wall budget "

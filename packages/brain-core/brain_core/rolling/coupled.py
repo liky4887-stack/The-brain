@@ -64,7 +64,8 @@ def coupled_dual(factories: list, horizon_start, days: int,
                  labor_cap: dict[int, float] | None = None,
                  rounds: int = 50, time_limit_s: float = 60.0,
                  eta0: float = 2.0, inv0s: list | None = None,
-                 repair_every: int = 0) -> CoupledResult:
+                 repair_every: int = 0,
+                 ub0: float | None = None) -> CoupledResult:
     """Subgradient ascent on the Lagrangian dual of the coupled
     cluster problem. Returns the best PROVEN lower bound found.
 
@@ -82,8 +83,11 @@ def coupled_dual(factories: list, horizon_start, days: int,
     uL = {k: 0.0 for k in labor_cap}
     res = CoupledResult(lower_bound=None)
     best_lb = float("-inf")
-    ub_est = float("inf")   # Polyak step needs a UB estimate; a real
-                            # primal UB replaces it once repair lands
+    ub_est = ub0 if ub0 is not None else float("inf")
+                            # Polyak step needs a UB target; a real
+                            # primal UB replaces it once repair lands,
+                            # or the caller seeds one (ub0) - e.g. the
+                            # best known feasible plan cost.
     stall = 0
     eta = eta0
     for k in range(rounds):

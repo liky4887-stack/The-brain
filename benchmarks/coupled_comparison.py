@@ -135,7 +135,9 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
     t0 = time.perf_counter()
     lr = coupled_dual(factories, hs, DAYS, cap, sup, lab,
                       rounds=int(os.environ.get("CMP_LR_ROUNDS", "40")),
-                      time_limit_s=30.0)
+                      time_limit_s=30.0,
+                      ub0=float(os.environ["CMP_LR_UB0"])
+                      if os.environ.get("CMP_LR_UB0") else None)
     t_lr = time.perf_counter() - t0
     out["lagrangian"] = {"wall_s": round(t_lr, 2),
                          "lower_bound": lr.lower_bound,
@@ -178,7 +180,9 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
                                exact_every=int(os.environ.get(
                                    "CMP_EXACT_EVERY", "5")),
                                wall_s=float(os.environ.get(
-                                   "CMP_CG_WALL_S", "0")) or None)
+                                   "CMP_CG_WALL_S", "0")) or None,
+                               im_every=int(os.environ.get(
+                                   "CMP_IM_EVERY", "0")))
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
         dw = integer_master(dw, factories, hs, DAYS,
