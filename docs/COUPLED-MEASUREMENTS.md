@@ -39,6 +39,20 @@ Findings (all measured, LB and UB computed independently):
    optimum at 2/4/8 plants (60,940,576 vs 60,940,849; 118,762,678 vs
    118,763,029; 231,949,488 vs 231,949,665). The convexification bound
    on this instance class is essentially exact.
+
+CERTIFICATION (re-measured 2026-11-26 after an outside review):
+a DW master LP value is a certified bound ONLY when the final pricing
+round solved every subproblem to proven optimality - a time-limited
+incumbent can fake "no negative reduced cost". coupled_dw.py now
+checks this explicitly: DWResult.bound_certified is True only under
+exact final-round pricing; inexact rounds no longer contribute Farley
+bounds, and a run that cannot certify says so instead of reporting a
+bound. Re-run with the certificate: ALL FOUR sizes (2/4/8/16)
+converged with certified exact pricing and bit-identical LBs
+(60,940,575.55 / 118,762,677.7 / 231,949,488.2 / 457,113,182.24), so
+the tightness claim above stands, now with a certificate. (IM at 16
+plants unchanged code path; the 240 s-limited UB 470,224,889 is
+carried over from the run above, labeled as such.)
 2. At 16 plants the monolithic MIP hit the 240 s limit (incumbent
    457,113,347, not proven optimal) while CG converged in 59.9 s with
    LB 457,113,182 - the decomposition scales where the monolith fails,

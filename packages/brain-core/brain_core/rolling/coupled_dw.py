@@ -44,6 +44,15 @@ class DWResult:
     iterations: int = 0
     columns_per_plant: list[int] = field(default_factory=list)
     converged: bool = False
+    bound_certified: bool = False   # True only when the final pricing
+                                    # round solved EVERY subproblem to
+                                    # proven optimality: the converged
+                                    # master value is then a certified
+                                    # convexification bound. A
+                                    # time-limited incumbent can fake
+                                    # "no negative reduced cost", so
+                                    # without this flag the value is a
+                                    # measured number, not a bound.
     status: str = ""
     selected_qtys: list | None = None  # per-plant qty maps of the UB
     problems: list[str] = field(default_factory=list)
@@ -63,6 +72,14 @@ def _column(factory, hs, days, qty, inv0, weights):
     cost = base(factory, hs, days, qty, inv0, weights)
     mat, lab = _plant_usage(factory, qty)
     return {"cost": cost, "mat": mat, "lab": lab, "qty": qty}
+
+
+def _proven_optimal(b) -> bool:
+    """A bucket solve certifies pricing only when proven optimal (or
+    trivially empty). A time-limit incumbent is a VALID COLUMN but
+    proves nothing about the minimum reduced cost."""
+    return b.objective is not None and \
+        ("Optimal" in b.status or b.status == "no-demand")
 
 
 def _solve_master(colsets, pools, caps):
@@ -158,6 +175,7 @@ def column_generation(factories: list, horizon_start, days: int,
         # price every plant (the worker step)
         new_cols = 0
         farley = obj
+        round_exact = True
         for p_i, f in enumerate(factories):
             # price only pools whose DAY matches t: a supplier pool
             # (material, day) or labor pool (day) binds production on
@@ -194,7 +212,14 @@ def column_generation(factories: list, horizon_start, days: int,
                 res.problems.append(f"iter {it} plant {p_i}: bucket "
                                     f"status {b.status!r}; priced "
                                     "column skipped")
+                round_exact = False    # rc unknown for this plant
                 continue
+            if not _proven_optimal(b):
+                res.problems.append(
+                    f"iter {it} plant {p_i}: pricing NOT proven "
+                    f"optimal ({b.status!r}); incumbent kept as a "
+                    "valid column but this round certifies nothing")
+                round_exact = False
             rc = b.objective - sigma[p_i]
             farley += min(0.0, rc)
             if rc < -tol:
@@ -202,20 +227,38 @@ def column_generation(factories: list, horizon_start, days: int,
                                             b.qty, inv0s[p_i],
                                             weights))
                 new_cols += 1
-        res.lb_series.append(farley)
+        # Farley bound is valid ONLY under exact pricing: rc from an
+        # incumbent upper-estimates the true min reduced cost, which
+        # would overstate the bound.
+        res.lb_series.append(farley if round_exact else None)
         res.iterations = it + 1
         if new_cols == 0:
-            res.converged = True
-            res.lower_bound = obj      # attained convexification bound
-            res.status = "converged"
+            if round_exact:
+                res.converged = True
+                res.bound_certified = True
+                res.lower_bound = obj   # certified convexification bd
+                res.status = "converged (certified: exact pricing)"
+            else:
+                # no new columns but the no-column proof is not exact:
+                # honest stop, NOT a certified convergence
+                res.status = ("stalled: no new columns but final "
+                              "pricing not proven exact - bound NOT "
+                              "certified")
             break
     else:
         pass
-    if not res.converged and res.lb_series:
-        res.lower_bound = max(res.lb_series)
-        res.status = res.status or f"NOT CONVERGED after " \
-            f"{res.iterations} iterations; reporting last Farley " \
-            "bound"
+    if not res.converged:
+        certified = [v for v in res.lb_series if v is not None]
+        if certified:
+            res.lower_bound = max(certified)
+            res.status = res.status or (
+                f"NOT CONVERGED after {res.iterations} iterations; "
+                "reporting best CERTIFIED Farley bound")
+        elif res.lb_series:
+            res.lower_bound = None
+            res.status = res.status or (
+                f"NOT CONVERGED after {res.iterations} iterations and "
+                "no pricing round was exact - NO valid lower bound")
     res.columns_per_plant = [len(cs) for cs in colsets]
     res._colsets = colsets          # internal: for the integer master
     res._pools, res._caps = pools, caps

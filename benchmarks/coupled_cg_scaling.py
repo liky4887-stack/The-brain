@@ -52,28 +52,46 @@ def binding_caps(ps, hs, cap):
     return {k: CAP_FACTOR * v for k, v in mat_tot.items()}, slowest
 
 
-def main():
-    rows = []
-    for n in (2, 4, 8, 16):
-        ps, hs, cap = build_cluster(n)
-        caps, slowest = binding_caps(ps, hs, cap)
+def run_one(n, mode):
+    ps, hs, cap = build_cluster(n)
+    caps, slowest = binding_caps(ps, hs, cap)
+    dw = None
+    t_cg = t_im = None
+    if mode in ("cg", "both"):
         t0 = time.perf_counter()
         dw = column_generation([p.factory for p in ps], hs, DAYS, cap,
                                supplier_cap=caps, max_iter=60,
                                time_limit_s=30.0)
         t_cg = time.perf_counter() - t0
+    if mode in ("im", "both"):
+        if dw is None:
+            dw = column_generation([p.factory for p in ps], hs, DAYS,
+                                   cap, supplier_cap=caps, max_iter=60,
+                                   time_limit_s=30.0)
         t0 = time.perf_counter()
         dw = integer_master(dw, [p.factory for p in ps], hs, DAYS,
                             time_limit_s=240.0)
         t_im = time.perf_counter() - t0
+    return dw, t_cg, t_im, slowest
+
+
+def main():
+    import os
+    sizes = [int(x) for x in
+             os.environ.get("CG_SIZES", "2,4,8,16").split(",")]
+    mode = os.environ.get("CG_MODE", "both")
+    rows = []
+    for n in sizes:
+        dw, t_cg, t_im, slowest = run_one(n, mode)
         rows.append({
             "plants": n, "seeds": SEEDS[:n], "cap_factor": CAP_FACTOR,
-            "cg": {"wall_s": round(t_cg, 3),
+            "cg": {"wall_s": round(t_cg, 3) if t_cg is not None else None,
                    "iterations": dw.iterations,
                    "columns_per_plant": dw.columns_per_plant,
                    "converged": dw.converged, "status": dw.status,
+                   "bound_certified": dw.bound_certified,
                    "lower_bound": dw.lower_bound},
-            "integer_master": {"wall_s": round(t_im, 3),
+            "integer_master": {"wall_s": round(t_im, 3) if t_im is not None else None,
                                "upper_bound": dw.upper_bound,
                                "problems": dw.problems[-3:]},
             "proven_gap": dw.proven_gap,
@@ -82,13 +100,16 @@ def main():
             "parallel_wall_note": "EXTRAPOLATED: iterations x slowest "
                 "single-plant solve; dispatch overhead not included",
         })
-        print(f"[done] {n} plants: CG {t_cg:.1f}s "
-              f"({dw.iterations} iters, conv={dw.converged}), "
-              f"IM {t_im:.1f}s, LB={dw.lower_bound}, "
-              f"UB={dw.upper_bound}, gap={dw.proven_gap}", flush=True)
-    Path("/tmp/coupled-cg-scaling.json").write_text(
+        print(f"[done] {n} plants: CG "
+              f"{t_cg if t_cg is None else round(t_cg,1)}s "
+              f"({dw.iterations} iters, conv={dw.converged}, "
+              f"certified={dw.bound_certified}), IM "
+              f"{t_im if t_im is None else round(t_im,1)}s, "
+              f"LB={dw.lower_bound}, UB={dw.upper_bound}, "
+              f"gap={dw.proven_gap}", flush=True)
+    Path(os.environ.get("CG_OUT", "/tmp/coupled-cg-scaling.json")).write_text(
         json.dumps({"measured": True, "rows": rows}, indent=1))
-    print("WROTE /tmp/coupled-cg-scaling.json", flush=True)
+    print("WROTE", os.environ.get("CG_OUT", "/tmp/coupled-cg-scaling.json"), flush=True)
 
 
 if __name__ == "__main__":
