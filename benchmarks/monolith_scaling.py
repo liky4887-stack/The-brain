@@ -590,6 +590,11 @@ def main():
             ml = min_lot_violations(qtys, lots)
             problems = problems + ml
             out["min_lot_violations"] = len(ml)
+        if n <= 4:  # small runs: keep the decision (which sku-days run)
+            out["plan_keys"] = sorted(
+                f"{pi}|" + "|".join(str(v) for v in k)
+                for pi, qd in enumerate(qtys)
+                for k, q in qd.items() if q > 1e-6)
         out["validation_problems"] = problems[:20]
         out["validation_problem_count"] = len(problems)
         out["kpis"] = kpis
