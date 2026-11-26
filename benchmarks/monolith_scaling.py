@@ -49,12 +49,19 @@ CLASSES = {
     # the tight big-M. Parameters are synthetic; no benchmark library
     # (Trigeiro / Tempelmeier-Derstroff) is used: those have setup
     # TIMES and a different structure the core model does not support.
-    "calib1": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
-                   tbo=1.0, minlot_tbo=0.5),
-    "calib3": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
-                   tbo=3.0, minlot_tbo=0.5),
-    "calib5": dict(days=14, n_skus=16, util=0.85, sup=0.65, lab=0.7,
-                   tbo=5.0, minlot_tbo=0.5),
+    # calibB (replaces the first calib1/3/5, review 9:40 PM): the first
+    # version left 1.8e9 of FORCED lateness in the objective (caps too
+    # tight), so setup (27) and min lot never mattered. Here the shared
+    # pools are loose (sup/lab 1.5x the uncoupled usage) and util 0.7, so
+    # the plan is lateness-free and the objective is setup + holding;
+    # setup is calibrated by EOQ vs holding (TBO 1/3/5 days), min lot =
+    # one TBO of that SKU's demand.
+    "calib1": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
+                   tbo=1.0, minlot_tbo=1.0),
+    "calib3": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
+                   tbo=3.0, minlot_tbo=1.0),
+    "calib5": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
+                   tbo=5.0, minlot_tbo=1.0),
 }
 
 
@@ -248,7 +255,40 @@ def solve_highspy(mip, limit, threads, rel_gap=None):
         elif v in ("true", "false"):
             v = v == "true"
         h.setOptionValue(k, v)
-    h.passModel(lp)
+    root_ipm_s = None
+    if os.environ.get("MS_ROOT_IPM") == "1":
+        # Solve the RELAXATION with IPM + crossover, then hand its basis
+        # to the real MIP run (integrality restored, simplex, presolve
+        # off so the basis is used). The MIP stays a MIP: status, nodes
+        # and gap come from the MIP run. (solver=ipm directly on the MIP
+        # makes HiGHS 1.9 ignore integrality: found 2026-11-26.)
+        relax = highspy.HighsLp()
+        relax.num_col_, relax.num_row_ = lp.num_col_, lp.num_row_
+        relax.col_cost_, relax.col_lower_ = lp.col_cost_, lp.col_lower_
+        relax.col_upper_ = lp.col_upper_
+        relax.row_lower_, relax.row_upper_ = lp.row_lower_, lp.row_upper_
+        relax.a_matrix_.format_ = lp.a_matrix_.format_
+        relax.a_matrix_.start_ = lp.a_matrix_.start_
+        relax.a_matrix_.index_ = lp.a_matrix_.index_
+        relax.a_matrix_.value_ = lp.a_matrix_.value_
+        h0 = highspy.Highs()
+        h0.setOptionValue("output_flag", False)
+        h0.setOptionValue("threads", int(threads))
+        h0.setOptionValue("solver", "ipm")
+        h0.setOptionValue("run_crossover", "on")
+        h0.setOptionValue("time_limit", float(limit))
+        h0.passModel(relax)
+        tr = time.perf_counter()
+        h0.run()
+        root_ipm_s = round(time.perf_counter() - tr, 1)
+        basis = h0.getBasis()
+        h.setOptionValue("presolve", "off")
+        h.passModel(lp)
+        h.setBasis(basis)
+        limit_left = max(1.0, float(limit) - root_ipm_s)
+        h.setOptionValue("time_limit", limit_left)
+    else:
+        h.passModel(lp)
     first = {}
     t0 = time.perf_counter()
 
@@ -275,7 +315,13 @@ def solve_highspy(mip, limit, threads, rel_gap=None):
     x = np.array(sol.col_value) if len(sol.col_value) else None
     ms = h.modelStatusToString(h.getModelStatus())
     ok = x is not None and info.primal_solution_status == 2
-    return {"status": ms, "x": x if ok else None,
+    int_viol = None
+    if ok:
+        m = np.array(mip.integrality) > 0
+        int_viol = float(np.max(np.abs(x[m] - np.round(x[m])))) \
+            if m.any() else 0.0
+    return {"status": ms, "int_violation": int_viol,
+            "root_ipm_s": root_ipm_s, "x": x if ok else None,
             "objective": float(mip.c @ x) if ok else None,
             "gap": info.mip_gap, "node_count": info.mip_node_count,
             "dual_bound": info.mip_dual_bound,
@@ -310,7 +356,15 @@ def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
     Cached per (class, n) in /tmp; solo solves run in a process pool
     (deterministic: results are combined in plant order) when no other
     probe is running."""
-    cache = Path(f"/tmp/caps-{cls}-{n}-{cap_solve:g}.json")
+    import hashlib
+    # calib classes were re-parameterised once: key their caps on the
+    # class parameters so a stale cache can never be served (hard/easy
+    # keep their original names, their parameters are frozen)
+    ptag = ("-p" + hashlib.sha1(repr(sorted(CLASSES[cls].items()))
+                                .encode()).hexdigest()[:6]
+            if cls.startswith("calib") else "")
+    cache = Path(f"/tmp/caps-{cls}-{n}-{cap_solve:g}{ptag}"
+                 f"{'-s%d' % SEED_OFF if SEED_OFF else ''}.json")
     if cache.exists():
         d = json.loads(cache.read_text())
         sup = {(k.split("|")[0], int(k.split("|")[1])): v
@@ -375,6 +429,9 @@ def cpu_wall(fn):
     return r, w, cpu / w if w > 0 else None
 
 
+SEED_OFF = int(os.environ.get("MS_SEED", "0"))
+
+
 def main():
     n = int(os.environ["MS_N"])
     limit = float(os.environ.get("MS_LIMIT", "600"))
@@ -386,15 +443,23 @@ def main():
            "solve_limit_s": limit, "first_plan_time_available": False,
            "stages": {}}
 
+    last_t = [0.0]
+
     def save(stage):
-        out["stages"][stage] = {"t_s": round(time.perf_counter() - T0, 1),
+        now = time.perf_counter() - T0
+        # t_s is cumulative; dt_s is this stage ALONE (review: caps time
+        # and MIP time are separate numbers; caps are cached per
+        # class/size and are not part of the monolith's solve time)
+        out["stages"][stage] = {"t_s": round(now, 1),
+                                "dt_s": round(now - last_t[0], 1),
                                 "peak_rss_mb": rss_mb()}
+        last_t[0] = now
         Path(out_path).write_text(json.dumps(out, indent=1))
         print(stage, out["stages"][stage], flush=True)
 
     T0 = time.perf_counter()
     ps = [generate_fnb_factory(FnbParams(
-        seed=101 * (i + 1), n_lines=3, n_skus=c["n_skus"], days=c["days"],
+        seed=101 * (i + 1) + SEED_OFF, n_lines=3, n_skus=c["n_skus"], days=c["days"],
         active_fraction=0.9, utilization=c["util"], n_raw_materials=6,
         families=("DAIRY", "BAKERY"))) for i in range(n)]
     hs = ps[0].params.horizon_start
@@ -467,6 +532,9 @@ def main():
                "status": str(r["status"]),
                "optimal_proven": "ptimal" in str(r["status"]),
                "has_incumbent": r["x"] is not None,
+               "int_violation": r.get("int_violation"),
+               "root_ipm_s": r.get("root_ipm_s"),
+               "node_count": r.get("node_count"),
                "first_incumbent_s": r.get("first_incumbent_s"),
                "time_to_gap_s": r.get("time_to_gap_s"),
                "other_probes_at_solve_start": others_start,
@@ -476,6 +544,19 @@ def main():
                "trajectory": r.get("trajectory"),
                "mip_rel_gap_setting": (0.0 if name == "scipy" else float(
                    os.environ.get("MS_REL_GAP", "1e-4")))}
+        if r["x"] is not None and name != "scipy":
+            bad = (r.get("int_violation") or 0.0) > 1e-6 \
+                or (r.get("node_count") is not None
+                    and r["node_count"] < 0)
+            rec["mip_valid"] = not bad
+            if bad:
+                # loud: a fractional y or a non-MIP run is never a result
+                rec["status"] = "INVALID-NOT-A-MIP"
+                rec["optimal_proven"] = False
+                rec["has_incumbent"] = False
+                print("INVALID: fractional integer var or non-MIP run",
+                      r.get("int_violation"), r.get("node_count"),
+                      flush=True)
         if r["x"] is not None:
             rec["incumbent"] = r["objective"]
             rec["mip_gap"] = r.get("gap")
