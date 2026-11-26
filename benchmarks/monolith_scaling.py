@@ -55,13 +55,19 @@ CLASSES = {
     # pools are loose (sup/lab 1.5x the uncoupled usage) and util 0.7, so
     # the plan is lateness-free and the objective is setup + holding;
     # setup is calibrated by EOQ vs holding (TBO 1/3/5 days), min lot =
-    # one TBO of that SKU's demand.
+    # minlot_days days of that SKU's demand. v2 (10:10 PM): v1 used a min
+    # lot of one TBO (3-5 days of demand), which by itself forced 10-25k
+    # late unit-days at n=1 (objective 2.5e7 vs 1.8e3 without it), so the
+    # class again tested lateness only. Measured at n=1 (calib3 setup):
+    # lot 1.5 d: 0 late, obj 1795; lot 2.25 d: late 9.8k; lot 3 d (tbo 3
+    # x1.0): late 24.9k; tbo 5 with 2.5 d: late 18.8k. So min lot is
+    # capped at 1.5 days of demand (0.75 d for TBO 1).
     "calib1": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
-                   tbo=1.0, minlot_tbo=1.0),
+                   tbo=1.0, minlot_days=0.75),
     "calib3": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
-                   tbo=3.0, minlot_tbo=1.0),
+                   tbo=3.0, minlot_days=1.5),
     "calib5": dict(days=14, n_skus=16, util=0.7, sup=1.5, lab=1.5,
-                   tbo=5.0, minlot_tbo=1.0),
+                   tbo=5.0, minlot_days=1.5),
 }
 
 
@@ -438,7 +444,8 @@ def main():
     cls = os.environ.get("MS_CLASS", "easy")
     cap_solve = float(os.environ.get("MS_CAP_SOLVE_S", "10"))
     out_path = os.environ.get("MS_OUT", "/tmp/monolith-scaling.json")
-    c = CLASSES[cls]
+    c = dict(CLASSES[cls])
+    c.update(json.loads(os.environ.get("MS_CLASS_JSON", "{}")))
     out = {"measured": True, "plants": n, "class": cls, "params": c,
            "solve_limit_s": limit, "first_plan_time_available": False,
            "stages": {}}
@@ -498,7 +505,7 @@ def main():
 
         def lot_fn(p_i, sk, M):
             d = dd.get((p_i, sk), d_med)
-            return min(0.9 * M, c["minlot_tbo"] * c["tbo"] * d)
+            return min(0.9 * M, c["minlot_days"] * d)
     if c.get("setup_scale"):
         from brain_core.rolling.two_level import (ObjectiveWeights,
                                                   SETUP_W)
