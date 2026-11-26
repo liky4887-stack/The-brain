@@ -1,0 +1,101 @@
+{
+ "measured": true,
+ "plants": 128,
+ "class": "hard",
+ "params": {
+  "days": 14,
+  "n_skus": 16,
+  "util": 0.85,
+  "sup": 0.55,
+  "lab": 0.65
+ },
+ "solve_limit_s": 600.0,
+ "first_plan_time_available": false,
+ "stages": {
+  "generate": {
+   "t_s": 0.3,
+   "peak_rss_mb": 141.1
+  },
+  "caps": {
+   "t_s": 0.3,
+   "peak_rss_mb": 141.1
+  },
+  "build": {
+   "t_s": 2.0,
+   "peak_rss_mb": 238.4
+  },
+  "solve:highspy:1": {
+   "t_s": 43.0,
+   "peak_rss_mb": 436.3
+  },
+  "solve": {
+   "t_s": 43.0,
+   "peak_rss_mb": 436.3
+  },
+  "validate": {
+   "t_s": 43.0,
+   "peak_rss_mb": 436.3
+  }
+ },
+ "runner": {
+  "cpu_count": 4,
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.41",
+  "mem_total_mb": 15994,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor"
+ },
+ "code_sha": "f4f3f246b7f5c4a2c516dc390e6a115e4d8d715e",
+ "versions": {
+  "scipy": "1.15.3",
+  "highspy": "1.9.0"
+ },
+ "plants_solo_unsolved": 0,
+ "caps_note": "cache hit caps-hard-128-2.json",
+ "mip": {
+  "rows": 83426,
+  "cols": 155904,
+  "nnz": 1637958,
+  "binaries": 25984
+ },
+ "solves": {
+  "highspy:1": {
+   "solve_wall_s": 41.0,
+   "avg_cores_used": 0.95,
+   "status": "Unknown",
+   "optimal_proven": false,
+   "has_incumbent": false,
+   "first_incumbent_s": null,
+   "time_to_gap_s": {
+    "1%": null,
+    "0.1%": null,
+    "0.01%": null,
+    "0.001%": null
+   },
+   "other_probes_at_solve_start": 2,
+   "other_probes_at_solve_end": 2,
+   "threads": 1,
+   "highs_opts": "solver=ipm,run_crossover=off",
+   "trajectory": [],
+   "mip_rel_gap_setting": 0.0001
+  }
+ },
+ "solve_wall_s": 41.0,
+ "avg_cores_used": 0.95,
+ "status": "Unknown",
+ "optimal_proven": false,
+ "has_incumbent": false,
+ "first_incumbent_s": null,
+ "time_to_gap_s": {
+  "1%": null,
+  "0.1%": null,
+  "0.01%": null,
+  "0.001%": null
+ },
+ "other_probes_at_solve_start": 2,
+ "other_probes_at_solve_end": 2,
+ "threads": 1,
+ "highs_opts": "solver=ipm,run_crossover=off",
+ "trajectory": [],
+ "mip_rel_gap_setting": 0.0001,
+ "total_wall_s": 43.0,
+ "peak_rss_mb": 436.3
+}
