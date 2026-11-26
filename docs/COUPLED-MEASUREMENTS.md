@@ -272,13 +272,29 @@ Reading: on these generated instances up to 64 plants, the plain monolith is sol
 
 ## Crossover rerun after the UB heal (run 45863417715, SHA 2bc3e6bdb)
 
-Actions runners, sizes 2, 4, 8, 16 plants, 5 replicas each. Every replica has `ub_validation_problems == []` (0 invalid UB replicas). plan_vs_monolith = distributed plan objective / monolith incumbent (above 1.0 means the distributed plan is worse). The monolith was not proven optimal in any size, so its incumbent is an upper reference, not the optimum.
+Class: crossover (cap factors supplier 0.75, labor 0.8, 7-day horizon, synthetic data). Not comparable with the calib classes. Actions runners, 5 replicas per size. Every replica has `ub_validation_problems == []`. Ratio = distributed upper bound / monolith incumbent. M = monolith proven optimal, U = unproven (600 s limit; its bound is derived from mip_gap, not solver-reported). Regime: L = lateness-dominated (backlog at end > 0, objective 1e8 to 1e9), S = setup/holding-dominated (backlog 0, objective 3e3 to 1.3e4).
 
-| plants | plan_vs_monolith mean | worst | combined certified gap mean | worst | official gap vs monolith incumbent (per replica) |
+| plants | seed_base | regime | monolith | ratio | distributed certified gap |
 |---|---|---|---|---|---|
-| 2 | 1.0670 | 1.3348 | 6.25% | 31.3% | 0, 0, 0, 6.79%, 0 |
-| 4 | 1.0685 | 1.3425 | 6.00% | 29.9% | 0, 0, 0, 6.67%, 0 |
-| 8 | 1.0888 | 1.4432 | 6.69% | 33.1% | 0, 0, 0, 7.43%, 0 |
-| 16 | 1.0020 | 1.0046 | 0.71% | 1.57% | 0, 0, 0, 0, 0 |
+| 2 | 0 | L | M | 1.0000 | 0.0% |
+| 2 | 100003 | L | M | 1.0000 | 0.0% |
+| 2 | 200006 | L | M | 1.0000 | 0.0% |
+| 2 | 300009 | S | U | 1.3348 | 31.3% |
+| 2 | 400012 | L | M | 1.0000 | 0.0% |
+| 4 | 0 | L | M | 1.0000 | 0.0% |
+| 4 | 100003 | L | M | 1.0000 | 0.0% |
+| 4 | 200006 | L | M | 1.0000 | 0.0% |
+| 4 | 300009 | S | U | 1.3425 | 29.9% |
+| 4 | 400012 | L | M | 1.0001 | 0.05% |
+| 8 | 0 | L | M | 1.0002 | 0.12% |
+| 8 | 100003 | L | M | 1.0000 | 0.0% |
+| 8 | 200006 | L | M | 1.0005 | 0.28% |
+| 8 | 300009 | S | U | 1.4432 | 33.1% |
+| 8 | 400012 | L | M | 1.0000 | 0.0% |
+| 16 | 0 | L | U | 1.0000 | 0.01% |
+| 16 | 100003 | L | M | 1.0004 | 0.27% |
+| 16 | 200006 | L | M | 1.0020 | 0.74% |
+| 16 | 300009 | L | M | 1.0046 | 1.57% |
+| 16 | 400012 | L | M | 1.0027 | 0.94% |
 
-Source: artifacts crossover-n2/n4/n8/n16 of the run. Synthetic data only.
+Worst ratio per size: 1.3348 (n=2), 1.3425 (n=4), 1.4432 (n=8), 1.0046 (n=16). Seed 300009 is the outlier at n=2, 4 and 8 (same seed, instance-specific) and is the only setup/holding-dominated replica; it is not an outlier at n=16, where it is lateness-dominated. In lateness-dominated replicas the lateness weight swamps the objective, so a ratio near 1.0 only shows that both methods find the same lateness. No mean is reported across regimes. Source: artifacts crossover-n2/n4/n8/n16 of the run.
