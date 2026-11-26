@@ -80,7 +80,7 @@
    "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded",
    "status": "fixed",
    "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
-   "avoidance": "wall guard raised to 5400s with the job timeout at 100 min (guard fires first, partial records upload, merge completeness check owns the verdict); jobs are NEVER rerun. If a future shard still overruns, the next heal is a hard per-plant wall bound inside run_plant_safe",
+   "avoidance": "wave hard bound: each wave is submitted with timeout = job budget (6000s, matches the 100-min job timeout) - upload margin (300s) - elapsed; on expiry the pool is terminated (SIGTERM) and unfinished plants are recorded not-attempted, so the solve step always exits and the upload step always runs. Soft wall guard 5400s remains the first line. Jobs are NEVER rerun.",
    "last_seen": {
     "run_id": "45786313189",
     "sha": "1e8ef94",

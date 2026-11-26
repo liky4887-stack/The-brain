@@ -63,26 +63,64 @@ def not_attempted_record(i: int, guard: str) -> dict:
 
 def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
             runner=run_plant_safe, clock=time.monotonic,
-            child_rss=child_rss_mb, checkpoint=None):
+            child_rss=child_rss_mb, checkpoint=None,
+            job_budget_s=None, upload_margin_s=300.0):
     """Wave-based submission with overload guards. Never let a shard be
     killed mid-plant by the job timeout or the OOM killer: stop
     STARTING new plants past the wall guard or when the children peak
-    past the memory guard, and record unstarted plants honestly."""
+    past the memory guard, and record unstarted plants honestly.
+
+    job_budget_s: HARD backstop aligned with the CI job timeout. Each
+    wave is submitted with timeout = budget - upload_margin - elapsed;
+    on expiry the worker pool is TERMINATED (real SIGTERM, unlike
+    concurrent.futures) and the unfinished wave plants are recorded
+    as not-attempted. The solve step then exits normally, so the
+    upload step (if: always()) always runs and no finished plant's
+    record is lost (review: a wave started near the limit used to
+    carry the whole job past the timeout and lose the shard)."""
     records: dict[int, dict] = {}
     pending = list(idx)
     stopped_by = None
-    if workers > 1 and len(pending) > 1:
+    hard = job_budget_s is not None
+    pool = None
+    mp = None
+    if hard:
+        import multiprocessing as mp
+        pool = mp.Pool(max(1, workers))
+    elif workers > 1 and len(pending) > 1:
         from concurrent.futures import ProcessPoolExecutor
         pool = ProcessPoolExecutor(max_workers=workers)
-    else:
-        pool = None
     try:
         while pending:
             if clock() - t0 > wall_guard_s:
                 stopped_by = f"wall guard ({wall_guard_s:.0f}s)"
                 break
+            remaining = None
+            if hard:
+                remaining = job_budget_s - upload_margin_s - \
+                    (clock() - t0)
+                if remaining <= 0:
+                    stopped_by = (f"job budget guard "
+                                  f"({job_budget_s:.0f}s budget - "
+                                  f"{upload_margin_s:.0f}s upload "
+                                  "margin)")
+                    break
             wave, pending = pending[:max(1, workers)], pending[max(1, workers):]
-            if pool is not None:
+            if hard:
+                async_res = pool.map_async(runner, wave)
+                try:
+                    got = async_res.get(timeout=max(1.0, remaining))
+                except mp.TimeoutError:
+                    stopped_by = ("wave hard bound: wave exceeded the "
+                                  "remaining job budget; pool "
+                                  "terminated, unfinished plants "
+                                  "recorded as not attempted")
+                    for i in wave:
+                        records[i] = not_attempted_record(
+                            i, stopped_by)
+                    break   # remaining pending plants are filled by
+                            # the stopped_by loop below
+            elif pool is not None:
                 got = list(pool.map(runner, wave))
             else:
                 got = [runner(i) for i in wave]
@@ -96,7 +134,11 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
                 break
     finally:
         if pool is not None:
-            pool.shutdown()
+            if hard:
+                pool.terminate()   # no orphan workers, no join wait
+                pool.join()
+            else:
+                pool.shutdown()
     if stopped_by:
         for i in pending:
             records[i] = not_attempted_record(i, stopped_by)
@@ -152,6 +194,14 @@ def main() -> None:
     ap.add_argument("--seq-workers", type=int, default=None,
                     help="CP-SAT workers per day-sequencing solve; set 1 "
                          "when --workers already saturates the cores")
+    ap.add_argument("--job-budget-s", type=float, default=6000.0,
+                    help="HARD backstop matching the CI job timeout "
+                         "(100 min): waves are killed at budget minus "
+                         "--upload-margin-s so the upload step always "
+                         "runs")
+    ap.add_argument("--upload-margin-s", type=float, default=300.0,
+                    help="reserved upload/merge margin inside the job "
+                         "budget")
     ap.add_argument("--wall-guard-s", type=float, default=5400.0,
                     help="stop STARTING new plants past this wall "
                          "(job timeout is 100 min; the 90-min default "
@@ -187,7 +237,10 @@ def main() -> None:
         os.replace(tmp, path)
 
     records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
-                                  a.mem_guard_mb, checkpoint=_checkpoint)
+                                  a.mem_guard_mb,
+                                  job_budget_s=a.job_budget_s,
+                                  upload_margin_s=a.upload_margin_s,
+                                  checkpoint=_checkpoint)
     wall = time.monotonic() - t0
     payload = {"shard": a.shard, "shards": a.shards,
                "plant_offset": a.plant_offset, "indices": idx,

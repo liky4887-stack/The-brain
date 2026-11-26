@@ -173,3 +173,44 @@ def test_checkpoint_called_each_wave():
 class _FrozenClock:
     def __call__(self):
         return 0.0
+
+
+def fake_slow_rec(i):
+    import time
+    time.sleep(30.0)   # would blow any sub-second budget
+    return fake_rec(i)
+
+
+def test_wave_hard_bound_terminates_and_records_honestly():
+    """A wave that overruns the remaining job budget is TERMINATED;
+    its plants are recorded not-attempted, the step returns in time
+    for the upload step to run (the shard-194 lesson)."""
+    import time
+    t0 = time.monotonic()
+    records, stopped = execute([0, 1], workers=1, t0=t0,
+                               wall_guard_s=1e9, mem_guard_mb=1e9,
+                               runner=fake_slow_rec,
+                               job_budget_s=2.0, upload_margin_s=1.5)
+    elapsed = time.monotonic() - t0
+    assert stopped is not None and "hard bound" in stopped
+    assert elapsed < 15.0   # killed, not the runner's 30s
+    assert all("not attempted" in r["problems"][0]
+               for r in records)
+    assert [r["plant"] for r in records] == [0, 1]
+
+
+def test_job_budget_guard_stops_starting_before_budget():
+    clock_t = [0.0]
+
+    def clock():
+        clock_t[0] += 100.0
+        return clock_t[0]
+
+    records, stopped = execute([0, 1, 2, 3], workers=1, t0=0.0,
+                               wall_guard_s=1e9, mem_guard_mb=1e9,
+                               runner=fake_rec, clock=clock,
+                               child_rss=lambda: 0.0,
+                               job_budget_s=350.0, upload_margin_s=100.0)
+    assert stopped is not None and "job budget guard" in stopped
+    assert any(r["problems"] and "not attempted" in r["problems"][0]
+               for r in records)
