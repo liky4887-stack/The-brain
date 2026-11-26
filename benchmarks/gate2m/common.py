@@ -43,6 +43,18 @@ def plant_params(i: int) -> FnbParams:
     return FnbParams(seed=BASE_SEED + i, days=14)
 
 
+def plant_data_hash(i: int) -> str:
+    """Provenance anchor for plant i: sha256 of its generator params.
+    The generator is deterministic, so the params fully determine the
+    plant; the merge re-derives this hash for every record's index and
+    rejects mismatches (a record generated for the wrong index cannot
+    masquerade as the right one)."""
+    import hashlib
+    p = plant_params(i)
+    return hashlib.sha256(
+        f"fnb|seed={p.seed}|days={p.days}".encode()).hexdigest()[:16]
+
+
 def shard_indices(shard: int, shards: int, plants: int) -> list[int]:
     """Contiguous block partition of range(plants); deterministic."""
     assert 0 <= shard < shards

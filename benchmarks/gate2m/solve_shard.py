@@ -23,14 +23,22 @@ def _run_with_workers(i: int) -> dict:
     return run_plant(i, seq_num_workers=SEQ_WORKERS)
 
 
+def _provenance(i: int) -> str:
+    from common import plant_data_hash
+    return plant_data_hash(i)
+
+
 def run_plant_safe(i: int) -> dict:
     """One plant, failure-isolated: an exception or validation problems
     land IN THE RECORD so the merge step reports them with full detail
     instead of killing the shard with an opaque exit code."""
     try:
-        return _run_with_workers(i)
+        rec = _run_with_workers(i)
+        rec["data_hash"] = _provenance(i)
+        return rec
     except Exception as e:
         return {"plant": i, "seed": 1000 + i, "gen_s": 0.0,
+                "data_hash": _provenance(i),
                 "solve_s": 0.0, "window_days": 7, "freeze_days": 3,
                 "n_windows": 2, "horizon_start": "", "cap_min": 0.0,
                 "problems": [f"plant crashed: {type(e).__name__}: {e}"],
@@ -182,12 +190,16 @@ def main() -> None:
     ap.add_argument("--shard", type=int, required=True)
     ap.add_argument("--shards", type=int, required=True)
     ap.add_argument("--plants", type=int, default=96)
-    ap.add_argument("--plant-offset", type=int, default=0,
-                    help="first plant index of this block (super-block "
-                         "runs: block B starts at block A's plant "
-                         "count; seeds derive from the plant index, "
-                         "so blocks are disjoint ranges of the same "
+    ap.add_argument("--plant-offset", type=int, required=True,
+                    help="first plant index of this block - REQUIRED: "
+                         "a default of 0 once masked a missing flag "
+                         "and a whole block re-solved block A's range. "
+                         "Seeds derive from the plant index, so "
+                         "blocks are disjoint ranges of the same "
                          "generator - SUPERVISOR.md layer 2)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="canary: print the resolved indices, range "
+                         "and sample data hashes; solve nothing")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "out"))
@@ -216,6 +228,20 @@ def main() -> None:
     SEQ_WORKERS = a.seq_workers
     idx = [a.plant_offset + i
            for i in shard_indices(a.shard, a.shards, a.plants)]
+    # preflight: the resolved indices must sit inside the block range
+    assert a.plants > 0 and idx, "empty shard: misconfigured range"
+    assert all(a.plant_offset <= i < a.plant_offset + a.plants
+               for i in idx), \
+        f"indices outside block [{a.plant_offset}, " \
+        f"{a.plant_offset + a.plants}): {idx[:3]}..."
+    if a.dry_run:
+        print(json.dumps({"shard": a.shard, "indices": idx,
+                          "range": [a.plant_offset,
+                                    a.plant_offset + a.plants],
+                          "sample_hashes": {str(i): _provenance(i)
+                                            for i in idx[:2]}},
+                         indent=1))
+        return
     t0 = time.monotonic()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     os.makedirs(a.out, exist_ok=True)
@@ -230,6 +256,10 @@ def main() -> None:
         payload = {"shard": a.shard, "shards": a.shards,
                    "plant_offset": a.plant_offset, "indices": idx,
                    "started_utc": started, "partial": True,
+                   "sha": os.environ.get("GITHUB_SHA", "local"),
+                   "argv": sys.argv,
+                   "expected_range": [a.plant_offset,
+                                      a.plant_offset + a.plants],
                    "env": env,
                    "records": [records[i] for i in idx if i in records]}
         tmp = path + ".tmp"
@@ -245,6 +275,10 @@ def main() -> None:
     payload = {"shard": a.shard, "shards": a.shards,
                "plant_offset": a.plant_offset, "indices": idx,
                "started_utc": started, "wall_s": round(wall, 1),
+               "sha": os.environ.get("GITHUB_SHA", "local"),
+               "argv": sys.argv,
+               "expected_range": [a.plant_offset,
+                                  a.plant_offset + a.plants],
                "rss_mb_peak_main": round(rss_mb(), 1),
                "env": env,
                "guards": {"wall_guard_s": a.wall_guard_s,

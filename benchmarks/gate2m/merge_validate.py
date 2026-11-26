@@ -92,8 +92,12 @@ def main() -> None:
     n = 0
     seen: dict[int, int] = {}   # plant -> shard (disjointness check)
     envs: dict[str, int] = {}   # env stamp -> shard (drift check)
+    shas = set()
     for shard in shard_iter:
         shard_walls.append(shard["wall_s"])
+        sha = shard.get("sha")
+        if sha:
+            shas.add(sha)
         env = json.dumps(shard.get("env", {}), sort_keys=True)
         if envs and env not in envs:
             problems.append(
@@ -110,6 +114,16 @@ def main() -> None:
                     f"assignment de-duplication violated")
             else:
                 seen[r["plant"]] = shard["shard"]
+            if shard.get("sha"):
+                # provenance enforcement (new-format shards): every
+                # record must carry the generator hash of ITS index
+                from common import plant_data_hash
+                want = plant_data_hash(r["plant"])
+                if r.get("data_hash") != want:
+                    problems.append(
+                        f"plant {r['plant']}: data hash mismatch "
+                        f"(record {r.get('data_hash')!r} != generator "
+                        f"{want!r}) - record not from this index")
             _accumulate(r, problems, tot, solve_times)
         del shard["records"]   # free before the next shard loads
 
@@ -128,6 +142,10 @@ def main() -> None:
                             f"block [{a.plant_offset}, "
                             f"{a.plant_offset + a.plants})")
 
+    if len(shas) > 1:
+        problems.append(
+            f"MIXED SHAs across shards ({sorted(shas)}): a block must "
+            "come from ONE commit - rerun the diverging shards' block")
     merge_s = time.monotonic() - t0
     # Single-32-core-box estimate (EXTRAPOLATION, not measured): plants
     # are independent single-threaded solves; 32 workers => ceil(n/32)

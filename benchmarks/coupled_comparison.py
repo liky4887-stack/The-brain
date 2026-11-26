@@ -99,7 +99,10 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
     ps, hs, cap = build_cluster(n, seed_base=seed_base)
     factories = [p.factory for p in ps]
     sup, lab, solo = binding_caps(ps, hs, cap)
-    out = {"plants": n, "days": DAYS, "cap_factors": {
+    out = {"plants": n, "days": DAYS, "sha": _sha(),
+           "seed_base": seed_base,
+           "time_limits": {"monolith_s": monolith_limit_s},
+           "cap_factors": {
         "supplier": SUPPLIER_FACTOR, "labor": LABOR_FACTOR},
         "uncoupled_objective_sum": solo,
         "uncoupled_note": "throughput reference only - NOT a coupled bound"}

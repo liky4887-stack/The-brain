@@ -41,8 +41,42 @@ jobs:
               fh.write(f"step={c.get('step', 0)}\n")
           PY
 
-  solve:
+  canary:
+    # One dry-run shard before the matrix: resolves indices and data
+    # hashes from the generator and asserts they sit inside the
+    # configured block range. Catches a misconfigured range/plumbing
+    # in seconds instead of after a full block of wrong-plant solves.
     needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"  # pinned: solver version drift between runs breaks determinism claims
+      - name: canary shard 0 + last shard
+        env:
+          PYTHONPATH: packages/brain-core
+        run: |
+          cd benchmarks/gate2m
+          LAST=$(( ${{ needs.setup.outputs.shards }} - 1 ))
+          python solve_shard.py --shard 0 --shards ${{ needs.setup.outputs.shards }} --plants ${{ needs.setup.outputs.plants }} --plant-offset ${{ needs.setup.outputs.plant_offset }} --dry-run > canary0.json
+          python solve_shard.py --shard $LAST --shards ${{ needs.setup.outputs.shards }} --plants ${{ needs.setup.outputs.plants }} --plant-offset ${{ needs.setup.outputs.plant_offset }} --dry-run > canaryN.json
+          python - << 'PY'
+          import json
+          off = ${{ needs.setup.outputs.plant_offset }}
+          plants = ${{ needs.setup.outputs.plants }}
+          for f in ("canary0.json", "canaryN.json"):
+              c = json.load(open(f))
+              assert c["range"] == [off, off + plants], c
+              assert all(off <= i < off + plants
+                         for i in c["indices"]), c["indices"]
+              print(f, "indices", c["indices"], "IN RANGE")
+          PY
+
+  solve:
+    needs: [setup, canary]
     runs-on: ubuntu-latest   # free tier on public repos: 4 vCPU / 16 GB
     timeout-minutes: 100  # above the 90-min shard wall guard: the
                           # guard fires first and uploads partials;

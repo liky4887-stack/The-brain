@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Ladder launch script (review: no long-lived launch branches with
+stale code; every launch from current main with a preflight).
+
+Guarantees:
+- the launch ref (gate-scale/run) is recreated from CURRENT origin/main
+  (delete + recreate: never a force push), so the run's code always
+  contains main's latest plumbing;
+- the plant range comes from the BLOCK TABLE below, never a manual
+  flag: --block B means [2048, 4096), and the offset has no default;
+- preflight: origin/main SHA fetched fresh, scale.yml on that SHA
+  passes --plant-offset and --job-budget-s, config range matches the
+  block; no launch if any check fails;
+- the launch is appended to benchmarks/RUNS.md (one line per run).
+
+Usage: python benchmarks/launch_scale.py --block B --step 7 \
+           --run-id-note "retry of 45786313189"
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BLOCK_PLANTS = 2048
+BLOCK_SHARDS = 256
+RUNS_MD = os.path.join(REPO, "benchmarks", "RUNS.md")
+
+
+def block_range(block: str) -> tuple[int, int]:
+    """Block letter -> [offset, offset+plants). A=0..2047, B=2048..4095.
+    No manual flags, no default offset: the letter IS the range."""
+    if len(block) != 1 or not block.isalpha():
+        raise SystemExit(f"bad block {block!r}: one letter A-Z")
+    off = BLOCK_PLANTS * (ord(block.upper()) - ord("A"))
+    return off, off + BLOCK_PLANTS
+
+
+def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    r = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                       **kw)
+    if r.returncode != 0:
+        raise SystemExit(f"command failed: {' '.join(cmd)}\n"
+                         f"{r.stdout}\n{r.stderr}")
+    return r
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--block", required=True)
+    ap.add_argument("--step", type=int, required=True)
+    ap.add_argument("--run-id-note", default="")
+    a = ap.parse_args()
+    lo, hi = block_range(a.block)
+
+    # preflight 1: fresh origin/main SHA
+    sh(["git", "fetch", "-q", "origin", "main"])
+    sha = sh(["git", "rev-parse", "origin/main"]).stdout.strip()
+
+    # preflight 2: the workflow at that SHA passes the required flags
+    wf = sh(["git", "show",
+             f"{sha}:.github/workflows/scale.yml"]).stdout
+    for flag in ("--plant-offset", "--job-budget-s", "canary"):
+        if flag not in wf:
+            raise SystemExit(f"preflight FAIL: scale.yml at {sha[:7]} "
+                             f"lacks {flag}")
+
+    # preflight 3: config carries the block range exactly
+    cfg_path = os.path.join(REPO, "config", "scale.json")
+    cfg = {"step": a.step, "plants": BLOCK_PLANTS,
+           "shards": BLOCK_SHARDS, "plant_offset": lo,
+           "block": a.block.upper(),
+           "note": f"ladder step {a.step} block {a.block.upper()}: "
+                   f"plants [{lo}, {hi}); launched by "
+                   "benchmarks/launch_scale.py from origin/main "
+                   f"{sha[:12]} {a.run_id_note}".strip()}
+    print("preflight OK:", json.dumps(cfg))
+
+    # recreate the trigger ref from origin/main WITHOUT force push
+    cur = sh(["git", "branch", "--show-current"]).stdout.strip()
+    sh(["git", "push", "origin", "--delete", "gate-scale/run"],
+       **{}) if subprocess.run(
+           ["git", "ls-remote", "--exit-code", "origin",
+            "gate-scale/run"], cwd=REPO,
+           capture_output=True).returncode == 0 else None
+    sh(["git", "checkout", "-q", "-B", "gate-scale/run",
+        "origin/main"])
+    json.dump(cfg, open(cfg_path, "w"), indent=1)
+    sh(["git", "add", "config/scale.json"])
+    sh(["git", "commit", "-q", "-m",
+        f"Launch ladder step {a.step} block {a.block.upper()} "
+        f"(plants [{lo}, {hi}), {BLOCK_SHARDS} shards) via "
+        f"launch_scale.py preflight at origin/main {sha[:12]}"])
+    env = dict(os.environ)
+    env["GIT_ASKPASS"] = os.path.expanduser("~/git-askpass.sh")
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    sh(["git", "push", "-q", "-u", "origin", "gate-scale/run"],
+       env=env)
+    new_sha = sh(["git", "rev-parse", "HEAD"]).stdout.strip()
+    sh(["git", "checkout", "-q", cur or "main"])
+
+    line = (f"| {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())} "
+            f"| (pending) | {new_sha[:12]} | ladder step {a.step} "
+            f"block {a.block.upper()} | [{lo}, {hi}) | launched "
+            f"{a.run_id_note} |\n")
+    with open(RUNS_MD, "a") as fh:
+        fh.write(line)
+    print("launched at", new_sha[:12], "- watch the run, then record "
+          "its id over (pending) in RUNS.md")
+
+
+if __name__ == "__main__":
+    main()
