@@ -405,6 +405,59 @@ def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
     return sup, lab, unsolved, f"computed with {workers} workers"
 
 
+def make_caps_v2(ps, hs, days, cap, c, cap_solve, cls, n, sup1, lab1):
+    """caps-v2: pools = factor x usage of solo plans that obey the SAME
+    model as the monolith (calibrated weights + min-lot rows), so a
+    min-lot class cannot be starved by caps built from a min-lot-free
+    plan (the seed-2 lateness found 2026-11-27). Needs the v1 caps only
+    as a pool-key template (scaled x1000 = effectively uncapped)."""
+    import hashlib
+    import statistics
+    from brain_core.rolling.two_level import ObjectiveWeights, EARLY_W
+    tag = hashlib.sha1(repr(sorted(c.items())).encode()).hexdigest()[:6]
+    cache = Path(f"/tmp/caps2-{cls}-{n}-{cap_solve:g}-p{tag}"
+                 f"{'-s%d' % SEED_OFF if SEED_OFF else ''}.json")
+    if cache.exists():
+        d = json.loads(cache.read_text())
+        sup = {(k.split("|")[0], int(k.split("|")[1])): v
+               for k, v in d["sup"].items()}
+        return sup, {int(k): v for k, v in d["lab"].items()}, \
+            d["unsolved"], "cache hit " + cache.name
+    fs = [p.factory for p in ps]
+    dd = sku_daily_demand(fs, hs, days)
+    d_med = statistics.median(dd.values())
+    w = ObjectiveWeights(
+        setup=c["tbo"] ** 2 * EARLY_W * d_med / 2.0)
+    big_s = {k: 1e3 * v for k, v in sup1.items()}
+    big_l = {k: 1e3 * v for k, v in lab1.items()}
+    mat_tot, lab_tot, unsolved = {}, {}, 0
+    for i, f in enumerate(fs):
+        mip, meta = build_coupled_mip([f], hs, days, cap, big_s, big_l,
+                                      weights=w)
+        if c.get("minlot_days"):
+            def lot_fn(p_i, sk, M, i=i):
+                return min(0.9 * M, c["minlot_days"]
+                           * dd.get((i, sk), d_med))
+            mip, _ = add_min_lot(mip, meta, None, lot_fn)
+        r = solve_highspy(mip, cap_solve, 1, rel_gap=1e-4)
+        if r["x"] is None:
+            unsolved += 1
+            continue
+        q = qty_from_mip_x(r["x"], meta["maps"], meta["offsets"])[0]
+        m_p, l_p = _plant_usage(f, q)
+        for k, v in m_p.items():
+            mat_tot[k] = mat_tot.get(k, 0.0) + v
+        for k, v in l_p.items():
+            lab_tot[k] = lab_tot.get(k, 0.0) + v
+    sup = {k: c["sup"] * v for k, v in mat_tot.items()}
+    lab = {k: c["lab"] * v for k, v in lab_tot.items()}
+    cache.write_text(json.dumps({
+        "sup": {f"{k[0]}|{k[1]}": v for k, v in sup.items()},
+        "lab": {str(k): v for k, v in lab.items()},
+        "unsolved": unsolved}))
+    return sup, lab, unsolved, "caps-v2 computed"
+
+
 def other_probes():
     """Number of OTHER monolith_scaling processes running right now
     (parallel runs can slow each other through memory/cache)."""
@@ -485,6 +538,12 @@ def main():
     save("generate")
     sup, lab, unsolved, caps_note = make_caps(ps, hs, days, cap, c,
                                               cap_solve, cls, n)
+    if os.environ.get("MS_CAPS_V") == "2" and c.get("tbo"):
+        sup, lab, unsolved, caps_note = make_caps_v2(
+            ps, hs, days, cap, c, cap_solve, cls, n, sup, lab)
+        out["caps_version"] = 2
+    else:
+        out["caps_version"] = 1
     out["plants_solo_unsolved"] = unsolved
     out["caps_note"] = caps_note
     save("caps")
