@@ -66,7 +66,7 @@ def runner_specs():
     return spec
 
 
-def solve_highspy(mip, limit, threads):
+def solve_highspy(mip, limit, threads, rel_gap=None):
     """Same MIP through highspy (HiGHS pinned to scipy's bundled
     version) with an explicit threads option and an improving-solution
     callback, which gives the time of the first incumbent."""
@@ -90,17 +90,33 @@ def solve_highspy(mip, limit, threads):
                        highspy.HighsVarType.kContinuous
                        for v in mip.integrality]
     h = highspy.Highs()
-    h.setOptionValue("output_flag", False)
+    h.setOptionValue("output_flag", True)   # callbacks need logging on
     h.setOptionValue("threads", int(threads))
     h.setOptionValue("time_limit", float(limit))
-    h.setOptionValue("mip_rel_gap", 0.0)
+    h.setOptionValue("mip_rel_gap", float(
+        os.environ.get("MS_REL_GAP", "1e-4") if rel_gap is None
+        else rel_gap))
     h.passModel(lp)
     first = {}
     t0 = time.perf_counter()
 
+    traj = []
+
     def cb(*a):
         first.setdefault("t", round(time.perf_counter() - t0, 2))
+
+    def cblog(e):
+        try:
+            data_out = e.data_out
+            g = data_out.mip_gap
+            traj.append((round(time.perf_counter() - t0, 2),
+                         data_out.mip_primal_bound,
+                         data_out.mip_dual_bound, g))
+        except Exception:
+            pass
     h.cbMipImprovingSolution.subscribe(cb)
+    h.cbMipLogging.subscribe(cblog)
+    h.setOptionValue("log_to_console", False)
     h.run()
     info = h.getInfo()
     sol = h.getSolution()
@@ -111,7 +127,22 @@ def solve_highspy(mip, limit, threads):
             "objective": float(mip.c @ x) if ok else None,
             "gap": info.mip_gap, "node_count": info.mip_node_count,
             "dual_bound": info.mip_dual_bound,
-            "first_incumbent_s": first.get("t")}
+            "first_incumbent_s": first.get("t"),
+            "time_to_gap_s": time_to_gap(traj),
+            "trajectory_points": len(traj),
+            "trajectory": traj[::max(1, len(traj) // 200)]}
+
+
+def time_to_gap(traj):
+    """First time the relative gap (HiGHS callback, |primal-dual| /
+    |primal|) is at or below each threshold; None if never seen."""
+    out = {}
+    for name, thr in (("1%", 1e-2), ("0.1%", 1e-3), ("0.01%", 1e-4),
+                      ("0.001%", 1e-5)):
+        out[name] = next((t for t, pb, db, g in traj
+                          if g is not None and g == g and g <= thr),
+                         None)
+    return out
 
 
 def cpu_wall(fn):
@@ -201,7 +232,11 @@ def main():
                "status": str(r["status"]),
                "optimal_proven": "ptimal" in str(r["status"]),
                "has_incumbent": r["x"] is not None,
-               "first_incumbent_s": r.get("first_incumbent_s")}
+               "first_incumbent_s": r.get("first_incumbent_s"),
+               "time_to_gap_s": r.get("time_to_gap_s"),
+               "trajectory": r.get("trajectory"),
+               "mip_rel_gap_setting": (0.0 if name == "scipy" else float(
+                   os.environ.get("MS_REL_GAP", "1e-4")))}
         if r["x"] is not None:
             rec["incumbent"] = r["objective"]
             rec["mip_gap"] = r.get("gap")
