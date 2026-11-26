@@ -19,12 +19,12 @@ else
 fi
 cd "$RES" && git config user.name "monolith-probe" && git config user.email "probe@users.noreply.github.com"
 cd "$REPO_DIR"
-for spec in "easy 128" "easy 256" "hard 128" "hard 256" "easy 512" "hard 512" "easy 1024" "hard 1024"; do
+for spec in "hard 128" "hard 256" "easy 256" "hard 512" "easy 512" "hard 1024" "easy 1024" "easy 128"; do
   set -- $spec; cls=$1; n=$2
   f="cs-$cls-$n.json"
   [ -f "$RES/$f" ] && { echo "skip $f"; continue; }
   out=/tmp/$f; rm -f "$out"
-  MS_N=$n MS_CLASS=$cls MS_LIMIT=600 MS_CAP_SOLVE_S=2 MS_SOLVERS="scipy,highspy:4" MS_OUT=$out PYTHONPATH=packages/brain-core \
+  MS_N=$n MS_CLASS=$cls MS_LIMIT=600 MS_CAP_SOLVE_S=2 MS_SOLVERS="highspy:4" MS_OUT=$out PYTHONPATH=packages/brain-core \
     timeout 10800 python benchmarks/monolith_scaling.py > /tmp/cs-$cls-$n.log 2>&1
   rc=$?
   python - "$out" "$rc" "$(tail -c 600 /tmp/cs-$cls-$n.log | tr '\n' ' ')" <<'PY'
