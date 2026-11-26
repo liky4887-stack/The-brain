@@ -50,13 +50,17 @@ def main():
     days = c["days"]
     sup, lab, unsolved, note = ms.make_caps(ps, hs, days, cap, c,
                                             cap_solve, cls, n)
+    if os.environ.get("MS_CAPS_V") == "2" and c.get("tbo"):
+        sup, lab, unsolved, note = ms.make_caps_v2(
+            ps, hs, days, cap, c, cap_solve, cls, n, sup, lab)
     dd = ms.sku_daily_demand(fs, hs, days)
     d_med = statistics.median(dd.values())
     S = c["tbo"] ** 2 * EARLY_W * d_med / 2.0
     w = ObjectiveWeights(setup=S)
     out = {"class": cls, "plants": n, "seed": seed_off, "params": c,
            "setup_weight": S, "sha": ms._sha(), "runner": ms.runner_specs(),
-           "per_plant": [], "caps_note": note}
+           "per_plant": [], "caps_note": note,
+           "caps_version": 2 if os.environ.get("MS_CAPS_V") == "2" else 1}
     big_sup = {k: 1e3 * v for k, v in sup.items()}
     big_lab = {k: 1e3 * v for k, v in lab.items()}
     qtys, total, all_opt = [], 0.0, True
