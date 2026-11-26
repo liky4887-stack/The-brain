@@ -269,3 +269,16 @@ These are monolith-side and bound-side numbers, valid independent of the UB defe
 
 
 Reading: on these generated instances up to 64 plants, the plain monolith is solved to (near) optimality inside 600 s, so the distributed method adds no bound and no quality here. The earlier "23.8% gap at n=64" was a CG-bound artifact (40 iterations, not converged); against the monolith bound the gap is about 6e-8. Whether the distributed method wins is only testable at sizes where the monolith fails to prove optimality or produce a plan, and that has not been reached.
+
+## Crossover rerun after the UB heal (run 45863417715, SHA 2bc3e6bdb)
+
+Actions runners, sizes 2, 4, 8, 16 plants, 5 replicas each. Every replica has `ub_validation_problems == []` (0 invalid UB replicas). plan_vs_monolith = distributed plan objective / monolith incumbent (above 1.0 means the distributed plan is worse). The monolith was not proven optimal in any size, so its incumbent is an upper reference, not the optimum.
+
+| plants | plan_vs_monolith mean | worst | combined certified gap mean | worst | official gap vs monolith incumbent (per replica) |
+|---|---|---|---|---|---|
+| 2 | 1.0670 | 1.3348 | 6.25% | 31.3% | 0, 0, 0, 6.79%, 0 |
+| 4 | 1.0685 | 1.3425 | 6.00% | 29.9% | 0, 0, 0, 6.67%, 0 |
+| 8 | 1.0888 | 1.4432 | 6.69% | 33.1% | 0, 0, 0, 7.43%, 0 |
+| 16 | 1.0020 | 1.0046 | 0.71% | 1.57% | 0, 0, 0, 0, 0 |
+
+Source: artifacts crossover-n2/n4/n8/n16 of the run. Synthetic data only.
