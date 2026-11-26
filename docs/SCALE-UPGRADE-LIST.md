@@ -303,3 +303,51 @@ Sources:
 - https://docs.github.com/en/actions/reference/limits
 - https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - https://docs.github.com/en/billing/reference/product-usage-included
+
+### Can GitHub be the production server for customers? (2026-11-26, user question) - NO, terms prohibit it
+
+Live-terms answer (GitHub Terms for Additional Products and Features,
+Actions and Pages sections, fetched 2026-11-26):
+
+- Actions may NOT be used for "the provision of a stand-alone or
+  integrated application or service offering the Actions product or
+  service, or any elements of the Actions product or service, for
+  commercial purposes"; nor for "any activity that places a burden on
+  our servers ... disproportionate to the benefits provided to users
+  (for example, don't use Actions as a content delivery network or as
+  part of a serverless application)"; and, on GitHub-hosted runners,
+  not for "any other activity unrelated to the production, testing,
+  deployment, or publication of the software project associated with
+  the repository". It also says plainly: "You may only access and use
+  GitHub Actions to develop and test your application(s)."
+- Pages is "not intended for or allowed to be used as a free web
+  hosting service to run your online business, e-commerce site, or any
+  other website that is primarily directed at either facilitating
+  commercial transactions or providing commercial software as a
+  service (SaaS)".
+- Enforcement named in the terms: GitHub may monitor usage; misuse can
+  mean terminated jobs, disabled repos, account suspension.
+
+Consequence for The-brain: the ladder and every benchmark run are
+legitimate - they ARE testing the software project of this repository,
+which is what Actions is for. Serving customers (a planner-facing
+service that runs plans for factories) from Actions runners or Pages is
+prohibited by the terms. Production serving needs real hosting when the
+product ships (its own decision later); Actions stays the CI/benchmark
+fabric. The engine being proven on Actions is exactly what makes it
+portable to any host.
+
+Hard limits for long chains of runs (docs.github.com/en/actions/
+reference/limits + billing pages, fetched 2026-11-26):
+- 6 h per job (our shard jobs measured <= ~45-50 min - far inside).
+- 35 days per workflow run (our blocks are fresh runs of ~7-10 h).
+- 256 jobs per matrix (respected: block = 256 shards max).
+- 50 re-runs per run (we never re-run; fresh run per block).
+- 20 concurrent jobs on Free (queueing absorbs the rest - measured).
+- 500 MB artifact storage included on Free; GB-hours accrual; delete
+  after validation (5.0 MB/block measured) keeps us far inside.
+- GITHUB_TOKEN 1000 req/h/repo; PAT 5000 req/h (our runs use a handful).
+- Run count itself: no documented cap for public repos - the ceiling is
+  wall-clock and reliability, not quota.
+
+Source: https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features
