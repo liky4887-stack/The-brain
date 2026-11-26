@@ -63,7 +63,7 @@ def not_attempted_record(i: int, guard: str) -> dict:
 
 def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
             runner=run_plant_safe, clock=time.monotonic,
-            child_rss=child_rss_mb):
+            child_rss=child_rss_mb, checkpoint=None):
     """Wave-based submission with overload guards. Never let a shard be
     killed mid-plant by the job timeout or the OOM killer: stop
     STARTING new plants past the wall guard or when the children peak
@@ -88,6 +88,8 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
                 got = [runner(i) for i in wave]
             for rec in got:
                 records[rec["plant"]] = rec
+            if checkpoint is not None:
+                checkpoint(records)   # resumable: latest state on disk
             if pending and child_rss() > mem_guard_mb:
                 stopped_by = (f"memory guard (children peak "
                               f"{child_rss():.0f} MB > {mem_guard_mb:.0f} MB)")
@@ -98,6 +100,21 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
     if stopped_by:
         for i in pending:
             records[i] = not_attempted_record(i, stopped_by)
+    # Bounded retry (review item): a plant that CRASHED gets exactly
+    # one retry before its failure is recorded. Retried plants are
+    # stamped so the merge can see what was healed vs clean first
+    # try. Not-attempted (guard-stopped) plants are NOT retried -
+    # the guard's reason still holds.
+    if clock() - t0 <= wall_guard_s:
+        crashed = [i for i in idx
+                   if records[i].get("crash_traceback")]
+        for i in crashed:
+            rec2 = runner(i)
+            if not rec2.get("crash_traceback"):
+                rec2["retried"] = 1
+                records[i] = rec2
+            else:
+                records[i]["retry_also_crashed"] = True
     return [records[i] for i in idx], stopped_by
 
 
@@ -149,20 +166,36 @@ def main() -> None:
            for i in shard_indices(a.shard, a.shards, a.plants)]
     t0 = time.monotonic()
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
-                                  a.mem_guard_mb)
-    wall = time.monotonic() - t0
     os.makedirs(a.out, exist_ok=True)
+    path = os.path.join(a.out, f"shard-{a.shard}.json")
+
+    env = env_stamp(a.workers, a.seq_workers)
+
+    def _checkpoint(records):
+        # compact separators (artifact quota); atomic-ish via tmp+rename
+        # env included so a partial upload does not fake "drift" in the
+        # merge's cross-shard stamp check
+        payload = {"shard": a.shard, "shards": a.shards,
+                   "plant_offset": a.plant_offset, "indices": idx,
+                   "started_utc": started, "partial": True,
+                   "env": env,
+                   "records": [records[i] for i in idx if i in records]}
+        tmp = path + ".tmp"
+        json.dump(payload, open(tmp, "w"), separators=(",", ":"))
+        os.replace(tmp, path)
+
+    records, stopped_by = execute(idx, a.workers, t0, a.wall_guard_s,
+                                  a.mem_guard_mb, checkpoint=_checkpoint)
+    wall = time.monotonic() - t0
     payload = {"shard": a.shard, "shards": a.shards,
                "plant_offset": a.plant_offset, "indices": idx,
                "started_utc": started, "wall_s": round(wall, 1),
                "rss_mb_peak_main": round(rss_mb(), 1),
-               "env": env_stamp(a.workers, a.seq_workers),
+               "env": env,
                "guards": {"wall_guard_s": a.wall_guard_s,
                           "mem_guard_mb": a.mem_guard_mb,
                           "stopped_by": stopped_by},
                "records": records}
-    path = os.path.join(a.out, f"shard-{a.shard}.json")
     # compact separators: shard artifacts accumulate against the
     # account's 500 MB artifact-storage quota (free tier) across runs
     # and shards; whitespace is pure overhead here

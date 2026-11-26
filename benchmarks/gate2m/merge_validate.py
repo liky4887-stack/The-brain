@@ -53,6 +53,13 @@ def _accumulate(r: dict, problems: list, tot: dict,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shards", type=int, required=True)
+    ap.add_argument("--plants", type=int, default=None,
+                    help="expected plant count for this block; with "
+                         "--plant-offset, the merge requires EXACT "
+                         "coverage of [offset, offset+plants) - a "
+                         "partial shard can no longer silently shrink "
+                         "the plant count (review item)")
+    ap.add_argument("--plant-offset", type=int, default=0)
     ap.add_argument("--artifacts", default=os.path.join(
         os.path.dirname(__file__), "artifacts"))
     ap.add_argument("--out", default=os.path.dirname(__file__))
@@ -105,6 +112,21 @@ def main() -> None:
                 seen[r["plant"]] = shard["shard"]
             _accumulate(r, problems, tot, solve_times)
         del shard["records"]   # free before the next shard loads
+
+    # Final completeness check (review item): every expected plant
+    # exactly once. Runs after all shards stream in; `seen` maps
+    # plant -> shard for every record encountered.
+    if a.plants is not None:
+        expected = set(range(a.plant_offset, a.plant_offset + a.plants))
+        missing_plants = sorted(expected - set(seen))
+        extra_plants = sorted(set(seen) - expected)
+        for i in missing_plants:
+            problems.append(f"plant {i}: NO RECORD in any shard "
+                            "(completeness check)")
+        for i in extra_plants:
+            problems.append(f"plant {i}: record OUTSIDE the expected "
+                            f"block [{a.plant_offset}, "
+                            f"{a.plant_offset + a.plants})")
 
     merge_s = time.monotonic() - t0
     # Single-32-core-box estimate (EXTRAPOLATION, not measured): plants

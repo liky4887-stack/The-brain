@@ -65,6 +65,9 @@ jobs:
             --workers 4 --seq-workers 1 \
             --out "$GITHUB_WORKSPACE/benchmarks/scale/out"
       - uses: actions/upload-artifact@v4
+        if: always()   # a shard that exits nonzero after its wall guard
+                       # still uploads its checkpointed partial records;
+                       # the merge's completeness check owns the verdict
         with:
           name: shard-${{ matrix.shard }}
           path: benchmarks/scale/out/shard-${{ matrix.shard }}.json
@@ -91,6 +94,8 @@ jobs:
           cd benchmarks/gate2m
           python merge_validate.py \
             --shards ${{ needs.setup.outputs.shards }} \
+            --plants ${{ needs.setup.outputs.plants }} \
+            --plant-offset ${{ needs.setup.outputs.plant_offset }} \
             --artifacts "$GITHUB_WORKSPACE/benchmarks/scale/artifacts" \
             --out "$GITHUB_WORKSPACE/benchmarks/scale"
       - name: stamp ladder metadata
