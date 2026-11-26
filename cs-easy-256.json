@@ -1,0 +1,156 @@
+{
+ "measured": true,
+ "plants": 256,
+ "class": "easy",
+ "params": {
+  "days": 7,
+  "n_skus": 12,
+  "util": 0.6,
+  "sup": 0.75,
+  "lab": 0.8
+ },
+ "solve_limit_s": 600.0,
+ "first_plan_time_available": false,
+ "stages": {
+  "generate": {
+   "t_s": 0.4,
+   "peak_rss_mb": 153.7
+  },
+  "caps": {
+   "t_s": 444.6,
+   "peak_rss_mb": 186.7
+  },
+  "build": {
+   "t_s": 445.3,
+   "peak_rss_mb": 235.4
+  },
+  "solve:highspy:1": {
+   "t_s": 502.0,
+   "peak_rss_mb": 474.2
+  },
+  "solve": {
+   "t_s": 502.0,
+   "peak_rss_mb": 474.2
+  },
+  "validate": {
+   "t_s": 502.2,
+   "peak_rss_mb": 474.2
+  }
+ },
+ "runner": {
+  "cpu_count": 4,
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.41",
+  "mem_total_mb": 15994,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor"
+ },
+ "code_sha": "831de635d289c7355f16e61ad05bc9ff6e2f07cd",
+ "versions": {
+  "scipy": "1.15.3",
+  "highspy": "1.9.0"
+ },
+ "plants_solo_unsolved": 0,
+ "mip": {
+  "rows": 63721,
+  "cols": 116592,
+  "nnz": 817971,
+  "binaries": 19432
+ },
+ "solves": {
+  "highspy:1": {
+   "solve_wall_s": 56.8,
+   "avg_cores_used": 1.0,
+   "status": "Optimal",
+   "optimal_proven": true,
+   "has_incumbent": true,
+   "first_incumbent_s": 56.54,
+   "time_to_gap_s": {
+    "1%": 56.55,
+    "0.1%": 56.55,
+    "0.01%": 56.55,
+    "0.001%": 56.55
+   },
+   "other_probes_at_solve_start": 1,
+   "other_probes_at_solve_end": 1,
+   "threads": 1,
+   "trajectory": [
+    [
+     0.68,
+     Infinity,
+     0.0,
+     Infinity
+    ],
+    [
+     56.54,
+     35470807689.383156,
+     0.0,
+     1.0
+    ],
+    [
+     56.55,
+     35470807689.383156,
+     35470714252.6287,
+     2.6341873935826155e-06
+    ]
+   ],
+   "mip_rel_gap_setting": 0.0001,
+   "incumbent": 35470807689.383156,
+   "mip_gap": 2.6341873935826155e-06,
+   "nodes": 1
+  }
+ },
+ "solve_wall_s": 56.8,
+ "avg_cores_used": 1.0,
+ "status": "Optimal",
+ "optimal_proven": true,
+ "has_incumbent": true,
+ "first_incumbent_s": 56.54,
+ "time_to_gap_s": {
+  "1%": 56.55,
+  "0.1%": 56.55,
+  "0.01%": 56.55,
+  "0.001%": 56.55
+ },
+ "other_probes_at_solve_start": 1,
+ "other_probes_at_solve_end": 1,
+ "threads": 1,
+ "trajectory": [
+  [
+   0.68,
+   Infinity,
+   0.0,
+   Infinity
+  ],
+  [
+   56.54,
+   35470807689.383156,
+   0.0,
+   1.0
+  ],
+  [
+   56.55,
+   35470807689.383156,
+   35470714252.6287,
+   2.6341873935826155e-06
+  ]
+ ],
+ "mip_rel_gap_setting": 0.0001,
+ "incumbent": 35470807689.383156,
+ "mip_gap": 2.6341873935826155e-06,
+ "nodes": 1,
+ "derived_bound": 35470714252.6287,
+ "validation_problems": [],
+ "validation_problem_count": 0,
+ "kpis": {
+  "plants": 256,
+  "backlog_units_end": 21955658.97364131,
+  "changeover_allowance_note": "bucket level: allowance netting only; sequencing validated separately",
+  "setups": 5163,
+  "late_unit_days": 24763628.499,
+  "early_unit_days": 16594995.62
+ },
+ "total_wall_s": 502.2,
+ "peak_rss_mb": 474.2,
+ "process_exit_code": 0,
+ "outcome": "completed",
+ "where": "GitHub Codespace (4 cores, 16 GB), outside the Actions queue"
+}
