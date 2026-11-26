@@ -18,6 +18,12 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 - "calib3 2.0x" first attempt (10:47 to 11:15 EET) | INVALID | caps cache served the 1.5x caps (cache key ignored MS_CLASS_JSON); really 1.5x data. Fixed on main baa1233
 - calib3 pools 2.0x n=4 seeds 0, 1, 2 (restart 11:15 EET) | RUNNING
 
+## caps-v1 vs caps-v2 (2026-11-27)
+- caps-v1 = pools from solo plans of the core bucket solver WITHOUT min-lot rows. On min-lot classes (calib*) this starved plant 204 (seed 2): late unit-days 6,715.082 at 1.5x, 2.0x and any single pool tightness in [1.5, 2.0]. All calib results before 2026-11-27 00:20 EET are caps-v1: valid as measured data, never compared with caps-v2 numbers.
+- caps-v2 (MS_CAPS_V=2, main 8e51239) = pools from solo plans with the same weights and min-lot rows as the monolith. Test: calib3 1.5x seed 2 n=2 -> late 0.0.
+- calib sweep (runner C) stopped at calib1 n=8; all its files are caps-v1. calib3 n=4 seeds 0-2 at 1.5x and 2.0x are caps-v1.
+- Rerun plan: seeds 0-4, 1.5x and 2.0x, caps-v2.
+
 ## Rules
 - Class name carries pool tightness (1.5x and 2.0x are never compared).
 - A combined plan counts as valid only if it passes validate_coupled_plan; otherwise the sum is a lower bound only.
