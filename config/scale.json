@@ -1,6 +1,7 @@
 {
- "step": 6,
+ "step": 7,
  "plants": 2048,
  "shards": 256,
- "note": "ladder step 6: 8 plants/shard (measured-safe memory); 256 = matrix cap, next step needs super-block"
+ "note": "ladder step 6: 8 plants/shard (measured-safe memory); 256 = matrix cap, next step needs super-block",
+ "plant_offset": 2048
 }
