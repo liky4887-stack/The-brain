@@ -221,3 +221,24 @@ problems (completeness + de-duplication at merge time). The coupled
 UB figures reported while the bug existed (n=2 UB 2,594,680,000)
 were CONSERVATIVE (a better UB could be displaced by a worse one,
 never the reverse); certified bounds were untouched.
+
+
+## 2026-11-26 crossover sweep, run 45842450508 (SHA 7142397): UB PLANS INVALID
+
+Protocol: n = 2,4,8,16,32,64 plants, 5 replicas each, 7-day instances, 600 s limits for both methods, CG without monolith seed, integer master only (no allocate-then-solve), 40 CG iterations. All numbers MEASURED from the six artifacts.
+
+**Headline: the distributed upper-bound plans in this run are NOT valid coupled plans.** The independent validator (validate_coupled_plan) reports shared supplier-pool cap violations in 30 of 30 replicas (3 to 49 violations each). In 27 of 30 replicas the reported UB is below the certified LB, which a feasible plan cannot be. The "plan_vs_monolith" ratios in the artifacts' per_size field (0.61 to 0.99) are therefore meaningless as plan quality and must not be quoted. Registered as known failure (see benchmarks/registry/known-failures.json, root cause OPEN). The harness now counts a UB only if its plan validates (invalid ones reported as invalid_ub_replicas).
+
+What the run does support (monolith side and the certified bound):
+
+| n | monolith status (5 reps) | monolith mip_gap mean/worst | CG certified LB vs monolith incumbent gap mean/worst | CG UB plans valid | CG UB violations (min-max) | first UB s (mean) |
+|---|---|---|---|---|---|---|
+| 2 | OPT,time-limit | 1.52e-02 / 7.59e-02 | 0.0189 / 0.0945 | 0/5 | 3-9 | 7 |
+| 4 | OPT,time-limit | 1.33e-02 / 6.67e-02 | 0.0145 / 0.0717 | 0/5 | 4-16 | 16 |
+| 8 | OPT,time-limit | 1.49e-02 / 7.43e-02 | 0.0169 / 0.0415 | 0/5 | 10-19 | 45 |
+| 16 | OPT,time-limit | 3.17e-08 / 1.58e-07 | 0.0376 / 0.0879 | 0/5 | 18-29 | 69 |
+| 32 | OPT,time-limit | 3.48e-09 / 1.74e-08 | 0.0642 / 0.1095 | 0/5 | 21-35 | 92 |
+| 64 | OPT,time-limit | 6.39e-08 / 3.20e-07 | 0.2383 / 0.2891 | 0/5 | 28-49 | 215 |
+certified-LB flags per size: {2: [True, False, False, False, True], 4: [False, False, False, False, False], 8: [False, False, False, False, False], 16: [False, False, False, False, False], 32: [False, False, False, False, False], 64: [False, False, False, False, False]}
+
+The monolith plans all validate (0 problems in 30/30). The certified-LB gap column compares the monolith incumbent with the CG Farley bound; the bound was marked certified in only 2 of 30 replicas (n=2), so most of that column is "best certified Farley value at iteration 40, not converged". At n=64 the CG bound is 24% below the monolith incumbent after 40 iterations.

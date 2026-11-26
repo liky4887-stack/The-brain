@@ -272,7 +272,15 @@ def main():
             mo = r["monolithic"].get("incumbent")
             lb = r["distributed"].get("lower_bound")
             a = agg.setdefault(n, {"ratios": [], "gaps": [],
-                                   "mono_proven": []})
+                                   "mono_proven": [], "invalid_ub": 0})
+            # a UB counts ONLY if its plan passed the independent coupled
+            # validator (found 2026-11-26: run 45842450508 reported UBs
+            # that violated the shared supplier caps)
+            valid = not r["distributed"].get("ub_validation_problems", [])
+            r["distributed"]["ub_valid"] = valid
+            if ub and not valid:
+                a["invalid_ub"] += 1
+                ub = None
             if ub and mo:
                 a["ratios"].append(ub / mo)
             if lb is not None and ub:
@@ -281,6 +289,7 @@ def main():
                 r["monolithic"].get("optimal_proven"))
         out["per_size"] = {
             str(n): {"replicas": len(a["ratios"]),
+                     "invalid_ub_replicas": a["invalid_ub"],
                      "plan_vs_monolith_mean":
                      (sum(a["ratios"]) / len(a["ratios"]))
                      if a["ratios"] else None,
