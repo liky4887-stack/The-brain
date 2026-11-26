@@ -31,8 +31,13 @@ Spot re-validation (2% sample re-downloaded from artifacts, per the
 design) is an orchestrator duty at run time, not part of this
 arithmetic; the super-block result says so plainly.
 
-Usage: python benchmarks/superblock.py RESULT_A.json RESULT_B.json ...
-Writes SUPERBLOCK_RESULT.json next to the first input.
+Usage:
+  python benchmarks/superblock.py RESULT_A.json RESULT_B.json ...
+      Unordered aggregation -> SUPERBLOCK_RESULT.json next to first input.
+  python benchmarks/superblock.py --chain CHAIN.json BLOCK.json
+      Ordered linear chain (track 1): append BLOCK to CHAIN tail-to-head
+      -> CHAIN_RESULT.json next to BLOCK. Pass "-" as CHAIN to start a
+      new chain; the first block must start at plant offset 0.
 """
 
 from __future__ import annotations
@@ -186,10 +191,19 @@ def main() -> None:
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)
-    blocks = [json.load(open(p)) for p in sys.argv[1:]]
-    out = aggregate(blocks)
-    path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])),
-                        "SUPERBLOCK_RESULT.json")
+    if sys.argv[1] == "--chain":
+        # Ordered linear chain: --chain CHAIN.json BLOCK.json; pass
+        # CHAIN.json as "-" to start a new chain from BLOCK.json.
+        chain = None if sys.argv[2] == "-" else json.load(open(sys.argv[2]))
+        block = json.load(open(sys.argv[3]))
+        out = extend_chain(chain, block)
+        path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[3])),
+                            "CHAIN_RESULT.json")
+    else:
+        blocks = [json.load(open(p)) for p in sys.argv[1:]]
+        out = aggregate(blocks)
+        path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])),
+                            "SUPERBLOCK_RESULT.json")
     json.dump(out, open(path, "w"), indent=1)
     m = out["measured"]
     print(f"super-block verdict {out['verdict']}: plants {m['plants']:,} "
