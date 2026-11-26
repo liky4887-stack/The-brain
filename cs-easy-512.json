@@ -1,0 +1,159 @@
+{
+ "measured": true,
+ "plants": 512,
+ "class": "easy",
+ "params": {
+  "days": 7,
+  "n_skus": 12,
+  "util": 0.6,
+  "sup": 0.75,
+  "lab": 0.8
+ },
+ "solve_limit_s": 600.0,
+ "first_plan_time_available": false,
+ "stages": {
+  "generate": {
+   "t_s": 0.8,
+   "peak_rss_mb": 188.7
+  },
+  "caps": {
+   "t_s": 805.4,
+   "peak_rss_mb": 224.4
+  },
+  "build": {
+   "t_s": 806.7,
+   "peak_rss_mb": 329.4
+  },
+  "solve:highspy:1": {
+   "t_s": 1084.8,
+   "peak_rss_mb": 809.7
+  },
+  "solve": {
+   "t_s": 1084.8,
+   "peak_rss_mb": 809.7
+  },
+  "validate": {
+   "t_s": 1085.1,
+   "peak_rss_mb": 809.7
+  }
+ },
+ "runner": {
+  "cpu_count": 4,
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.41",
+  "mem_total_mb": 15994,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor"
+ },
+ "code_sha": "f4f3f246b7f5c4a2c516dc390e6a115e4d8d715e",
+ "versions": {
+  "scipy": "1.15.3",
+  "highspy": "1.9.0"
+ },
+ "plants_solo_unsolved": 0,
+ "caps_note": "computed with 1 workers",
+ "mip": {
+  "rows": 127057,
+  "cols": 232512,
+  "nnz": 1630797,
+  "binaries": 38752
+ },
+ "solves": {
+  "highspy:1": {
+   "solve_wall_s": 278.2,
+   "avg_cores_used": 1.0,
+   "status": "Optimal",
+   "optimal_proven": true,
+   "has_incumbent": true,
+   "first_incumbent_s": 277.74,
+   "time_to_gap_s": {
+    "1%": 277.75,
+    "0.1%": 277.75,
+    "0.01%": 277.75,
+    "0.001%": 277.75
+   },
+   "other_probes_at_solve_start": 1,
+   "other_probes_at_solve_end": 1,
+   "threads": 1,
+   "highs_opts": "",
+   "trajectory": [
+    [
+     1.45,
+     Infinity,
+     0.0,
+     Infinity
+    ],
+    [
+     277.74,
+     70589476450.39069,
+     0.0,
+     1.0
+    ],
+    [
+     277.75,
+     70589476450.39069,
+     70589290282.58897,
+     2.6373308186082424e-06
+    ]
+   ],
+   "mip_rel_gap_setting": 0.0001,
+   "incumbent": 70589476450.39069,
+   "mip_gap": 2.6373308186082424e-06,
+   "nodes": 1
+  }
+ },
+ "solve_wall_s": 278.2,
+ "avg_cores_used": 1.0,
+ "status": "Optimal",
+ "optimal_proven": true,
+ "has_incumbent": true,
+ "first_incumbent_s": 277.74,
+ "time_to_gap_s": {
+  "1%": 277.75,
+  "0.1%": 277.75,
+  "0.01%": 277.75,
+  "0.001%": 277.75
+ },
+ "other_probes_at_solve_start": 1,
+ "other_probes_at_solve_end": 1,
+ "threads": 1,
+ "highs_opts": "",
+ "trajectory": [
+  [
+   1.45,
+   Infinity,
+   0.0,
+   Infinity
+  ],
+  [
+   277.74,
+   70589476450.39069,
+   0.0,
+   1.0
+  ],
+  [
+   277.75,
+   70589476450.39069,
+   70589290282.58897,
+   2.6373308186082424e-06
+  ]
+ ],
+ "mip_rel_gap_setting": 0.0001,
+ "incumbent": 70589476450.39069,
+ "mip_gap": 2.6373308186082424e-06,
+ "nodes": 1,
+ "derived_bound": 70589290282.58897,
+ "validation_problems": [],
+ "validation_problem_count": 0,
+ "kpis": {
+  "plants": 512,
+  "backlog_units_end": 43572578.6058928,
+  "changeover_allowance_note": "bucket level: allowance netting only; sequencing validated separately",
+  "setups": 10296,
+  "late_unit_days": 48751913.673,
+  "early_unit_days": 32768889.315
+ },
+ "total_wall_s": 1085.1,
+ "peak_rss_mb": 809.7,
+ "process_exit_code": 0,
+ "outcome": "completed",
+ "where": "GitHub Codespace (4 cores, 16 GB), outside the Actions queue"
+}
