@@ -7,26 +7,12 @@ name: coupled-crossover
 # via workflow_dispatch; results land as artifacts and are recorded
 # on main by the supervising agent. Free tier only.
 on:
-  workflow_dispatch:
-    inputs:
-      sizes:
-        description: "comma-separated plant counts"
-        default: "2,4,8,16,32,64"
-      cg_wall_s:
-        description: "distributed CG wall budget per size (seconds)"
-        default: "600"
-      monolith_limit_s:
-        description: "monolith solver time limit (seconds)"
-        default: "600"
-      alloc_every:
-        default: "5"
-      im_every:
-        default: "25"
-      stab_alpha:
-        default: "0.3"
-      iters:
-        description: "CG iteration cap (wall guard binds first)"
-        default: "1000"
+  push:
+    branches: [coupled-crossover/run]
+
+concurrency:
+  group: crossover-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -36,15 +22,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sizes_json: ${{ steps.cfg.outputs.sizes_json }}
+      cg_wall_s: ${{ steps.cfg.outputs.cg_wall_s }}
+      monolith_limit_s: ${{ steps.cfg.outputs.monolith_limit_s }}
+      alloc_every: ${{ steps.cfg.outputs.alloc_every }}
+      im_every: ${{ steps.cfg.outputs.im_every }}
+      stab_alpha: ${{ steps.cfg.outputs.stab_alpha }}
+      iters: ${{ steps.cfg.outputs.iters }}
     steps:
+      - uses: actions/checkout@v4
       - id: cfg
         run: |
           python - << 'PY'
           import json, os
-          sizes = [int(x) for x in "${{ inputs.sizes }}".split(",")
-                   if x.strip()]
+          c = json.load(open("config/crossover.json"))
+          out = {}
+          out["sizes_json"] = json.dumps(c.get("sizes", [2, 4, 8]))
+          for k in ("cg_wall_s", "monolith_limit_s", "alloc_every",
+                    "im_every", "stab_alpha", "iters"):
+              out[k] = str(c.get(k, {"cg_wall_s": 600,
+                                     "monolith_limit_s": 600,
+                                     "alloc_every": 5, "im_every": 25,
+                                     "stab_alpha": 0.3,
+                                     "iters": 1000}[k]))
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-              fh.write(f"sizes_json={json.dumps(sizes)}\n")
+              for k, v in out.items():
+                  fh.write(f"{k}={v}\n")
           PY
 
   compare:
@@ -67,13 +69,13 @@ jobs:
           CMP_SIZES: ${{ matrix.size }}
           CMP_PHASE: base
           CMP_NO_SEED: "1"           # heuristic-only seed: never the monolith
-          CMP_STAB_ALPHA: ${{ inputs.stab_alpha }}
-          CMP_CG_ITERS: ${{ inputs.iters }}
-          CMP_CG_WALL_S: ${{ inputs.cg_wall_s }}
-          CMP_ALLOC_EVERY: ${{ inputs.alloc_every }}
-          CMP_IM_EVERY: ${{ inputs.im_every }}
+          CMP_STAB_ALPHA: ${{ needs.setup.outputs.stab_alpha }}
+          CMP_CG_ITERS: ${{ needs.setup.outputs.iters }}
+          CMP_CG_WALL_S: ${{ needs.setup.outputs.cg_wall_s }}
+          CMP_ALLOC_EVERY: ${{ needs.setup.outputs.alloc_every }}
+          CMP_IM_EVERY: ${{ needs.setup.outputs.im_every }}
           CMP_LR_ROUNDS: "0"
-          CMP_MONOLITH_LIMIT: ${{ inputs.monolith_limit_s }}
+          CMP_MONOLITH_LIMIT: ${{ needs.setup.outputs.monolith_limit_s }}
         run: |
           python benchmarks/coupled_comparison.py
           cp /tmp/coupled-comparison.json crossover-n${{ matrix.size }}.json
