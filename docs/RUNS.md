@@ -23,6 +23,10 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 - caps-v2 (MS_CAPS_V=2, main 8e51239) = pools from solo plans with the same weights and min-lot rows as the monolith. Test: calib3 1.5x seed 2 n=2 -> late 0.0.
 - calib sweep (runner C) stopped at calib1 n=8; all its files are caps-v1. calib3 n=4 seeds 0-2 at 1.5x and 2.0x are caps-v1.
 - Rerun plan: seeds 0-4, 1.5x and 2.0x, caps-v2.
+- caps-v2 rerun, calib3 v2 pools 1.5x n=4 seeds 0-4: DONE 2026-11-27 01:37 EET. Combined plans valid vs real pools on all 5 seeds; late unit-days 0, 0, 0, 2,823, 9,275; min_lot_independent 0 violations on all; monolith (600 s) plan above the sum of optima by 0.32%, 0.93%, 0.72%, 0.002%, 0.004%.
+- caps-v2 rerun, calib3 v2 pools 2.0x n=4 seeds 0-4: RUNNING.
+- crossover class supplier 1.1x / labor 1.1x (separate class from 0.75x / 0.8x), 10 replicas, sizes 2, 4, 8, monolith limit 300 s: RUNNING (started 01:13 EET).
+- dedupe full suite on codespace (fix/dedupe-lines-r2 at 19994c6): RUNNING (started 00:53 EET); the workspace run was killed (shell pauses between calls).
 
 ## Rules
 - Class name carries pool tightness (1.5x and 2.0x are never compared).
