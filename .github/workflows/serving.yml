@@ -37,7 +37,7 @@ jobs:
           DATABASE_URL="postgresql://serving:serving@localhost:5432/serving" \
             python - <<'PY'
           import os, sys
-          sys.path.insert(0, "serving")
+          sys.path.insert(0, "packages/brain-core"); sys.path.insert(0, "serving")
           from job_queue import JobQueue
           from worker import serve
           q = JobQueue("postgres", {"host": "localhost", "port": 5432,
