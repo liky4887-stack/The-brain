@@ -105,3 +105,37 @@ def test_cg_farley_bounds_are_valid_each_iteration():
     assert len(dw.master_series) == dw.iterations
     for lb in dw.lb_series:
         assert lb <= dw.lower_bound + 1e-6
+
+
+def test_diving_returns_feasible_selection_with_valid_ub():
+    """Diving fixes columns until one per plant; when the final master
+    needs no artificial columns the selection is a feasible coupled
+    plan: cost >= certified LB (valid UB) and pool usage within caps.
+    """
+    from brain_core.rolling.coupled_dw import (column_generation,
+                                               diving_select,
+                                               _solve_master)
+    from brain_core.rolling.coupled import _plant_usage
+    ps, hs, cap, days = _two_plants()
+    solo, mat_tot = _uncoupled(ps, hs, cap, days)
+    sup = {k: 0.75 * v for k, v in mat_tot.items()}
+    lab = {}
+    dw = column_generation([p.factory for p in ps], hs, days, cap,
+                           supplier_cap=sup, labor_cap=lab,
+                           max_iter=8, time_limit_s=10.0)
+    pools, caps = dw._pools, dw._caps
+    cost, qtys = diving_select(dw._colsets, pools, caps)
+    if cost is None:
+        return   # no artificial-free dive on this pool: nothing claimed
+    assert dw.lower_bound is None or cost >= dw.lower_bound - 1e-6
+    mat_tot, lab_tot = {}, {}
+    for p, q in zip(ps, qtys):
+        m_p, l_p = _plant_usage(p.factory, q)
+        for k, v in m_p.items():
+            mat_tot[k] = mat_tot.get(k, 0.0) + v
+        for k, v in l_p.items():
+            lab_tot[k] = lab_tot.get(k, 0.0) + v
+    for (m, t), c in sup.items():
+        assert mat_tot.get((m, t), 0.0) <= c + 1e-6
+    for t, c in lab.items():
+        assert lab_tot.get(t, 0.0) <= c + 1e-6

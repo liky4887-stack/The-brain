@@ -144,7 +144,8 @@ def column_generation(factories: list, horizon_start, days: int,
                       exact_every: int = 5,
                       wall_s: float | None = None,
                       im_every: int = 0,
-                      alloc_every: int = 0) -> DWResult:
+                      alloc_every: int = 0,
+                      dive: bool = True) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
     plant: warm start with an already-feasible coupled solution);
@@ -244,6 +245,17 @@ def column_generation(factories: list, horizon_start, days: int,
                     res.first_ub_s = round(
                         _time.monotonic() - t_start, 2)
             next_alloc_it = it + alloc_every
+            if dive:
+                dv_cost, dv_qtys = diving_select(colsets, pools, caps)
+                if dv_cost is not None and (
+                        res.upper_bound is None
+                        or dv_cost < res.upper_bound - 1e-9):
+                    res.upper_bound = dv_cost
+                    res.selected_qtys = dv_qtys
+                    res.ub_series.append(dv_cost)
+                    if res.first_ub_s is None:
+                        res.first_ub_s = round(
+                            _time.monotonic() - t_start, 2)
         # price every plant (the worker step)
         new_cols = 0
         farley = obj
@@ -373,6 +385,44 @@ def column_generation(factories: list, horizon_start, days: int,
     res._colsets = colsets          # internal: for the integer master
     res._pools, res._caps = pools, caps
     return res
+
+
+def diving_select(colsets, pools, caps, max_rounds: int = 200):
+    """Diving: restricted master LP; fix the plant column whose LP
+    weight is closest to 1; re-solve; repeat until every plant is
+    fixed to one column. A fixed plant is represented by a singleton
+    colset (convexity forces lambda=1). Returns (total_cost,
+    selected_per_plant) when the final master needs NO artificial
+    columns (a feasible coupled plan => valid UB), else (None, None).
+    LP solves only - no per-plant MIP re-solves."""
+    cur = [list(cs) for cs in colsets]
+    for _ in range(min(max_rounds, len(cur))):
+        obj, u, sigma, art, st, lam = _solve_master(cur, pools, caps)
+        if obj is None:
+            return None, None
+        # all plants already fixed?
+        if all(len(cs) == 1 for cs in cur):
+            if art <= 1e-6:
+                total = sum(cs[0]["cost"] for cs in cur)
+                return total, [cs[0]["qty"] for cs in cur]
+            return None, None
+        # dive on the non-fixed plant column with lambda closest to 1
+        best = None   # (1 - lam, plant, column_index)
+        idx = 0
+        for p_i, cs in enumerate(cur):
+            for j, c in enumerate(cs):
+                w = float(lam[idx])
+                idx += 1
+                if len(cs) <= 1:
+                    continue
+                score = abs(1.0 - w)
+                if best is None or score < best[0]:
+                    best = (score, p_i, j)
+        if best is None:
+            return None, None
+        _sc, p_i, j = best
+        cur[p_i] = [cur[p_i][j]]
+    return None, None
 
 
 def allocate_solve(colsets, lam, factories, horizon_start, days,
