@@ -1,0 +1,85 @@
+name: coupled-crossover
+# Crossover study (docs/COUPLED-MEASUREMENTS.md): monolith vs
+# distributed CG on the SAME coupled instances, SAME time limit,
+# heuristic-only seed. Per size: plan cost vs optimum (or vs best
+# known), certified bound gap, time to first plan, monolith
+# optimality-proven flag + gap at its time limit. Triggered manually
+# via workflow_dispatch; results land as artifacts and are recorded
+# on main by the supervising agent. Free tier only.
+on:
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: "comma-separated plant counts"
+        default: "2,4,8,16,32,64"
+      cg_wall_s:
+        description: "distributed CG wall budget per size (seconds)"
+        default: "600"
+      monolith_limit_s:
+        description: "monolith solver time limit (seconds)"
+        default: "600"
+      alloc_every:
+        default: "5"
+      im_every:
+        default: "25"
+      stab_alpha:
+        default: "0.3"
+      iters:
+        description: "CG iteration cap (wall guard binds first)"
+        default: "1000"
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      sizes_json: ${{ steps.cfg.outputs.sizes_json }}
+    steps:
+      - id: cfg
+        run: |
+          python - << 'PY'
+          import json, os
+          sizes = [int(x) for x in "${{ inputs.sizes }}".split(",")
+                   if x.strip()]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"sizes_json={json.dumps(sizes)}\n")
+          PY
+
+  compare:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        size: ${{ fromJSON(needs.setup.outputs.sizes_json) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"  # pinned: solver version drift between runs breaks determinism claims
+      - name: crossover run
+        env:
+          PYTHONPATH: packages/brain-core
+          CMP_SIZES: ${{ matrix.size }}
+          CMP_PHASE: base
+          CMP_NO_SEED: "1"           # heuristic-only seed: never the monolith
+          CMP_STAB_ALPHA: ${{ inputs.stab_alpha }}
+          CMP_CG_ITERS: ${{ inputs.iters }}
+          CMP_CG_WALL_S: ${{ inputs.cg_wall_s }}
+          CMP_ALLOC_EVERY: ${{ inputs.alloc_every }}
+          CMP_IM_EVERY: ${{ inputs.im_every }}
+          CMP_LR_ROUNDS: "0"
+          CMP_MONOLITH_LIMIT: ${{ inputs.monolith_limit_s }}
+        run: |
+          python benchmarks/coupled_comparison.py
+          cp /tmp/coupled-comparison.json crossover-n${{ matrix.size }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crossover-n${{ matrix.size }}
+          path: crossover-n${{ matrix.size }}.json
+          retention-days: 30
