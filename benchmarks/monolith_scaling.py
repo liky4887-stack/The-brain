@@ -40,6 +40,22 @@ def rss_mb():
                  / 1024.0, 1)
 
 
+def runner_specs():
+    """Measured machine spec: the failure point depends on it."""
+    import platform
+    spec = {"cpu_count": os.cpu_count(), "platform": platform.platform()}
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemTotal"):
+                spec["mem_total_mb"] = round(int(line.split()[1]) / 1024)
+        spec["cpu_model"] = next(
+            (l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo")
+             if l.startswith("model name")), None)
+    except OSError:
+        pass
+    return spec
+
+
 def main():
     n = int(os.environ["MS_N"])
     limit = float(os.environ.get("MS_LIMIT", "600"))
@@ -66,6 +82,7 @@ def main():
     cap = ps[0].day_capacity_minutes
     factories = [p.factory for p in ps]
     days = c["days"]
+    out["runner"] = runner_specs()
     save("generate")
     mat_tot, lab_tot = {}, {}
     unsolved = 0

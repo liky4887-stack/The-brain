@@ -54,3 +54,8 @@ jobs:
           path: ms-${{ matrix.cls }}-${{ matrix.n }}.json
           if-no-files-found: warn
           retention-days: 30
+      - name: record outcome (OOM/killed is a RESULT)
+        if: always()
+        run: |
+          echo "job status: ${{ job.status }}"
+          ls -la ms-*.json || echo "no result json (killed before first stage)"
