@@ -37,27 +37,46 @@ class _CoupledImportSentinel(importlib.abc.MetaPathFinder):
         return None
 
 
+_CHILD = r"""
+import importlib.abc, os, sys
+GATE2M, BRAIN_CORE = sys.argv[1], sys.argv[2]
+for p in (GATE2M, BRAIN_CORE):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+
+class Sentinel(importlib.abc.MetaPathFinder):
+    def find_module(self, fullname, path=None):
+        if fullname == "brain_core.coupled" or fullname.startswith(
+                "brain_core.coupled.") or ".coupled" in fullname:
+            raise AssertionError("ladder path attempted to import coupled "
+                                 "code: " + fullname)
+        return None
+
+
+sys.meta_path.insert(0, Sentinel())
+from common import BASE_SEED, run_plant
+from brain_core.synthetic import FnbParams
+rec = run_plant(0, params=FnbParams(seed=BASE_SEED, days=14), n_windows=1,
+                bucket_time_s=15.0, seq_time_s=15.0)
+assert rec["plant"] == 0
+bad = [m for m in sys.modules
+       if m.startswith("brain_core") and "coupled" in m]
+assert not bad, "ladder path loaded coupled modules: %s" % bad
+print("OK")
+"""
+
+
 @pytest.mark.timeout(180)
 def test_ladder_path_never_imports_coupled():
-    for p in (os.path.abspath(GATE2M), os.path.abspath(BRAIN_CORE)):
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    sentinel = _CoupledImportSentinel()
-    sys.meta_path.insert(0, sentinel)
-    try:
-        from common import BASE_SEED, run_plant  # the CI shard entry
-        from brain_core.synthetic import FnbParams
-
-        rec = run_plant(
-            0,
-            params=FnbParams(seed=BASE_SEED, days=14),
-            n_windows=1,
-            bucket_time_s=15.0,
-            seq_time_s=15.0,
-        )
-        assert rec["plant"] == 0
-    finally:
-        sys.meta_path.remove(sentinel)
-    loaded = [m for m in sys.modules if m.startswith("brain_core")]
-    bad = [m for m in loaded if "coupled" in m]
-    assert not bad, f"ladder path loaded coupled modules: {bad}"
+    """Runs in a FRESH interpreter: in a full-suite run other test modules
+    (test_coupled*.py) import the coupled code at collection time, so a
+    sys.modules check inside the pytest process cannot tell what the
+    ladder path itself loads (the in-process version failed in every
+    full-suite run, found 2026-11-26)."""
+    import subprocess
+    r = subprocess.run(
+        [sys.executable, "-c", _CHILD, os.path.abspath(GATE2M),
+         os.path.abspath(BRAIN_CORE)],
+        capture_output=True, text=True, timeout=170)
+    assert r.returncode == 0 and "OK" in r.stdout, (r.stdout + r.stderr)[-2000:]
