@@ -101,6 +101,10 @@ def main():
             fs, qtys, hs, days, cap, supplier_cap=sup, labor_cap=lab)
         out["combined_plan_validation_problems"] = problems[:10]
         out["combined_plan_valid_vs_real_pools"] = (len(problems) == 0)
+        if c.get("minlot_days"):
+            from minlot_check import independent_min_lot
+            out["min_lot_independent"] = independent_min_lot(
+                qtys, dd, d_med, c["minlot_days"])
     out["reading"] = ("combined plan valid against the real pools => the "
                       "pools do not bind; the sum of per-plant optima IS "
                       "the exact coupled optimum, and a CG bound on this "

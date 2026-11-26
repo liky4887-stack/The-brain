@@ -649,6 +649,10 @@ def main():
             ml = min_lot_violations(qtys, lots)
             problems = problems + ml
             out["min_lot_violations"] = len(ml)
+            from minlot_check import independent_min_lot
+            out["min_lot_independent"] = independent_min_lot(
+                qtys, dd, d_med, c["minlot_days"])
+            out["min_lot_independent"]["validator"] = "minlot_check.py"
         if n <= 4:  # small runs: keep the decision (which sku-days run)
             out["plan_keys"] = sorted(
                 f"{pi}|" + "|".join(str(v) for v in k)
