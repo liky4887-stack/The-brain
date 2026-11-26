@@ -69,10 +69,46 @@ def main() -> None:
     # preflight 2: the workflow at that SHA passes the required flags
     wf = sh(["git", "show",
              f"{sha}:.github/workflows/scale.yml"]).stdout
-    for flag in ("--plant-offset", "--job-budget-s", "canary"):
+    for flag in ("--plant-offset", "--job-budget-s", "canary",
+                 "canary_real.py", "fail-fast: true"):
         if flag not in wf:
             raise SystemExit(f"preflight FAIL: scale.yml at {sha[:7]} "
                              f"lacks {flag}")
+
+    # preflight 2b (review #12 pt1): F-rule lint of the exact SHA's tree
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        arc = subprocess.run(["git", "archive", sha], cwd=REPO,
+                             capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-x", "-C", tmp], input=arc, check=True)
+        lint = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", "--select",
+             "F821,F822,F823,F632,F811,F402,F502,F504,F507,F509,F521,"
+             "F522,F523,F524,F525,F701,F702,F704,F706,F707",
+             "benchmarks", "packages", "tests"],
+            cwd=tmp, capture_output=True, text=True)
+        if lint.returncode != 0:
+            raise SystemExit(f"preflight FAIL: lint errors at {sha[:7]}:\n"
+                             f"{lint.stdout[-1500:]}{lint.stderr[-500:]}")
+
+    # preflight 2c (review #12 pt5): CI (tests + lint, incl. the
+    # checkpoint regression test) must be GREEN on this exact SHA
+    import glob
+    import urllib.request
+    tok = glob.glob(os.path.expanduser("~/.vault/github-token-*/password"))
+    if not tok:
+        raise SystemExit("preflight FAIL: no token to verify CI status")
+    token = open(tok[0]).read().strip()
+    req = urllib.request.Request(
+        "https://api.github.com/repos/liky4887-stack/The-brain/actions/"
+        f"workflows/ci.yml/runs?head_sha={sha}",
+        headers={"Authorization": f"Bearer {token}"})
+    runs = json.load(urllib.request.urlopen(req)).get("workflow_runs", [])
+    if not runs or runs[0].get("conclusion") != "success":
+        state = (runs[0].get("status"), runs[0].get("conclusion")) \
+            if runs else "no ci run"
+        raise SystemExit(f"preflight FAIL: ci.yml not green on "
+                         f"{sha[:7]} ({state}); wait for CI or fix")
 
     # preflight 3: config carries the block range exactly
     cfg_path = os.path.join(REPO, "config", "scale.json")

@@ -77,7 +77,7 @@ jobs:
     # in seconds instead of after a full block of wrong-plant solves.
     needs: setup
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -110,6 +110,33 @@ jobs:
               print(f, "indices", c["indices"], "IN RANGE, hashes match manifest")
           PY
 
+      - name: lint gate (undefined names / missing imports block launch)
+        run: |
+          python -m pip install --quiet ruff
+          ruff check --select F821,F822,F823,F632,F811,F402,F502,F504,F507,F509,F521,F522,F523,F524,F525,F701,F702,F704,F706,F707 benchmarks packages tests
+      - name: REAL-PATH canary (one plant, real checkpoint + merge check)
+        env:
+          PYTHONPATH: packages/brain-core
+        run: |
+          python benchmarks/scale/canary_real.py --plant-offset ${{ needs.setup.outputs.plant_offset }} --out canary-real
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canary-real
+          path: canary-real/shard-0.json
+          retention-days: 3
+      - uses: actions/download-artifact@v4
+        with:
+          name: canary-real
+          path: canary-roundtrip
+      - name: uploaded canary artifact round-trips intact
+        run: |
+          python - << 'PY'
+          import json
+          d = json.load(open("canary-roundtrip/shard-0.json"))
+          assert d["records"] and d["guards_actual"]["job_budget_s"] == 5700.0
+          print("artifact round-trip OK, records:", len(d["records"]))
+          PY
+
   solve:
     needs: [setup, canary]
     runs-on: ubuntu-latest   # free tier on public repos: 4 vCPU / 16 GB
@@ -118,7 +145,10 @@ jobs:
                           # the merge completeness check owns the
                           # verdict; jobs are NEVER rerun
     strategy:
-      fail-fast: false
+      # review #12 pt4: a CRASH (failed job) cancels the whole run. Guard
+      # stops exit 0 (partials uploaded) and job-timeouts conclude as
+      # cancelled, so only genuine crashes trip this.
+      fail-fast: true
       matrix:
         shard: ${{ fromJSON(needs.setup.outputs.shards_json) }}
     steps:

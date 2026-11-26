@@ -94,6 +94,20 @@ def qty_from_mip_x(res_x, maps, offsets):
     return qtys
 
 
+def _sha() -> str:
+    """Commit the harness ran at (CI: GITHUB_SHA; local: git HEAD)."""
+    import subprocess
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"], text=True,
+                              capture_output=True, check=True,
+                              cwd=os.path.dirname(__file__)).stdout.strip()
+    except Exception:
+        return "unknown"
+
+
 def run(n, monolith_limit_s=90.0, crash_inject=False,
         seed_base=0):
     ps, hs, cap = build_cluster(n, seed_base=seed_base)
