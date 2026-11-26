@@ -1,0 +1,111 @@
+{
+ "measured": true,
+ "plants": 128,
+ "class": "easy",
+ "params": {
+  "days": 7,
+  "n_skus": 12,
+  "util": 0.6,
+  "sup": 0.75,
+  "lab": 0.8
+ },
+ "solve_limit_s": 600.0,
+ "first_plan_time_available": false,
+ "stages": {
+  "generate": {
+   "t_s": 0.2,
+   "peak_rss_mb": 137.0
+  },
+  "caps": {
+   "t_s": 179.3,
+   "peak_rss_mb": 170.0
+  },
+  "build": {
+   "t_s": 179.6,
+   "peak_rss_mb": 188.1
+  },
+  "solve:scipy": {
+   "t_s": 779.9,
+   "peak_rss_mb": 1383.0
+  },
+  "solve:highspy:4": {
+   "t_s": 1388.5,
+   "peak_rss_mb": 1398.4
+  },
+  "solve": {
+   "t_s": 1388.5,
+   "peak_rss_mb": 1398.4
+  },
+  "validate": {
+   "t_s": 1388.5,
+   "peak_rss_mb": 1398.4
+  }
+ },
+ "runner": {
+  "cpu_count": 4,
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.41",
+  "mem_total_mb": 15994,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor"
+ },
+ "code_sha": "f7f42cf028b5c954c426b50e777e0a454893efa0",
+ "versions": {
+  "scipy": "1.15.3",
+  "highspy": "1.9.0"
+ },
+ "plants_solo_unsolved": 0,
+ "mip": {
+  "rows": 32074,
+  "cols": 58674,
+  "nnz": 411537,
+  "binaries": 9779
+ },
+ "solves": {
+  "scipy": {
+   "solve_wall_s": 600.3,
+   "avg_cores_used": 1.02,
+   "status": "Time limit reached. (HiGHS Status 13: Time limit reached)",
+   "optimal_proven": false,
+   "has_incumbent": true,
+   "first_incumbent_s": null,
+   "incumbent": 17013563427.449434,
+   "mip_gap": 1.4073810110013583e-06,
+   "nodes": 0
+  },
+  "highspy:4": {
+   "solve_wall_s": 608.6,
+   "avg_cores_used": 1.0,
+   "status": "Time limit reached",
+   "optimal_proven": false,
+   "has_incumbent": true,
+   "first_incumbent_s": 19.41,
+   "incumbent": 17013563477.449432,
+   "mip_gap": 1.4370077976300322e-06,
+   "nodes": 0
+  }
+ },
+ "solve_wall_s": 600.3,
+ "avg_cores_used": 1.02,
+ "status": "Time limit reached. (HiGHS Status 13: Time limit reached)",
+ "optimal_proven": false,
+ "has_incumbent": true,
+ "first_incumbent_s": null,
+ "incumbent": 17013563427.449434,
+ "mip_gap": 1.4073810110013583e-06,
+ "nodes": 0,
+ "derived_bound": 17013539482.883337,
+ "validation_problems": [],
+ "validation_problem_count": 0,
+ "kpis": {
+  "plants": 128,
+  "backlog_units_end": 10703044.596036997,
+  "changeover_allowance_note": "bucket level: allowance netting only; sequencing validated separately",
+  "setups": 2636,
+  "late_unit_days": 12079760.952,
+  "early_unit_days": 9449480.726
+ },
+ "total_wall_s": 1388.5,
+ "peak_rss_mb": 1398.4,
+ "process_exit_code": 0,
+ "outcome": "completed",
+ "where": "GitHub Codespace, outside the Actions queue"
+}
