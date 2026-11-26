@@ -12,3 +12,4 @@ crossover claim; RESULT.json files carry sha/argv/range per shard.
 | 2026-11-26 14:46 | 45842450508 | main | coupled crossover (5 replicas) | n=2,4,8,16,32,64 | RUNNING |
 | 2026-11-26 15:13 | 45846995824 | 3f98ab6 | ladder step 7 block B RETRY | [2048, 4096) | RUNNING; offset flag verified in workflow |
 | 2026-11-26 15:47 UTC | 45852637645 | 366983699cd6 | ladder step 7 block B | [2048, 4096) | launched via workflow_dispatch on main relaunch at main for canary+manifest+closure hardening, replaces 45846995824 (sha 3f98ab6, predates canary AND the wave hard bound 7421b66) |
+| 2026-11-26 16:23 UTC | 45858321122 | 2e4b75e81a64 | ladder step 7 block B | [2048, 4096) | launched via workflow_dispatch on main heal e1945e36a495 (import sys), replaces 45852637645; carries budget recording + merge enforcement |
