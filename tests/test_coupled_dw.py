@@ -180,3 +180,52 @@ def test_ub_gate_rejects_pool_violating_plan():
                          [p.factory for p in ps], hs, days, cap,
                          [key], [mat_tot[key] * 2.0], "test")
     assert ok2 is True
+
+
+def test_master_pool_usage_matches_validator_on_random_plans():
+    """Consistency (review 15): for random (not optimal, not even
+    coverage-feasible) plans, the usage the master uses per pool
+    (column mat/lab) must agree with the independent validator: a cap
+    1% above the master usage is never flagged, a cap 1% below is
+    always flagged, for every supplier and labor pool."""
+    import random
+    from brain_core.rolling.two_level import (_sku_data,
+                                              DEFAULT_WEIGHTS)
+    from brain_core.rolling.coupled import validate_coupled_plan
+    from brain_core.rolling.coupled_dw import _column
+    ps, hs, cap, days = _two_plants()
+    fs = [p.factory for p in ps]
+    skus = [_sku_data(f) for f in fs]
+    for seed in range(6):
+        rng = random.Random(seed)
+        qtys = []
+        for sk in skus:
+            q = {}
+            for s, (rate, lines, _x) in sk.items():
+                if rng.random() < 0.5:
+                    t = rng.randrange(days)
+                    q[(s, t, rng.choice(lines))] = rng.uniform(
+                        1.0, 0.2 * cap * rate)
+            qtys.append(q)
+        use = {}
+        for f, q in zip(fs, qtys):
+            c = _column(f, hs, days, q, None, DEFAULT_WEIGHTS)
+            for k, v in list(c["mat"].items()) + list(c["lab"].items()):
+                use[k] = use.get(k, 0.0) + v
+        assert use
+        big = {k: v for k, v in use.items() if v > 20.0}
+        assert big
+
+        def run(scale):
+            sup = {k: scale * v for k, v in big.items()
+                   if isinstance(k, tuple)}
+            lab = {k: scale * v for k, v in big.items()
+                   if not isinstance(k, tuple)}
+            probs, _k = validate_coupled_plan(
+                fs, qtys, hs, days, cap, supplier_cap=sup,
+                labor_cap=lab)
+            return [p for p in probs if "pool" in p]
+
+        assert run(1.01) == [], run(1.01)
+        flagged = run(0.99)
+        assert len(flagged) == len(big), (len(flagged), len(big))

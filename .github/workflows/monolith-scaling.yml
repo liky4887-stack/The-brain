@@ -1,0 +1,56 @@
+name: monolith-scaling
+# Monolith-only scaling probe (review 15). Runs on push to
+# monolith-scaling/run. max-parallel 2 so it cannot starve the scale
+# ladder on the shared free-tier job cap. Free tier only.
+on:
+  push:
+    branches: [monolith-scaling/run]
+
+concurrency:
+  group: monolith-scaling-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - {cls: hard, n: 16, cap: 5}
+          - {cls: hard, n: 64, cap: 3}
+          - {cls: easy, n: 128, cap: 2}
+          - {cls: hard, n: 128, cap: 2}
+          - {cls: easy, n: 256, cap: 2}
+          - {cls: hard, n: 256, cap: 2}
+          - {cls: easy, n: 512, cap: 2}
+          - {cls: hard, n: 512, cap: 2}
+          - {cls: easy, n: 1024, cap: 2}
+          - {cls: hard, n: 1024, cap: 2}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"
+      - name: monolith probe
+        env:
+          PYTHONPATH: packages/brain-core
+          MS_N: ${{ matrix.n }}
+          MS_CLASS: ${{ matrix.cls }}
+          MS_LIMIT: "600"
+          MS_CAP_SOLVE_S: ${{ matrix.cap }}
+          MS_OUT: ms-${{ matrix.cls }}-${{ matrix.n }}.json
+        run: python benchmarks/monolith_scaling.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ms-${{ matrix.cls }}-${{ matrix.n }}
+          path: ms-${{ matrix.cls }}-${{ matrix.n }}.json
+          if-no-files-found: warn
+          retention-days: 30
