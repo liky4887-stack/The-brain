@@ -68,6 +68,24 @@
    "signature": "fc9f56ec5ce7",
    "status": "fixed",
    "summary": "day-model CP-SAT UNKNOWN after 120s at 53M-var scale (window 1 day 5 plant 594, window 1 day 4 plant 766) WITH the 3b7e07ee1b2f heal chain already in place (hint + x4 escalation + fix-and-optimize fallback all ran): same class, deeper density. 2 of 249,179 assignments; verdict OPEN, everything else PASS-clean."
+  },
+  "43c2596bdee8": {
+   "attempts": 0,
+   "first_seen": {
+    "run_id": "45786313189",
+    "sha": "1e8ef94",
+    "step": 7
+   },
+   "signature": "43c2596bdee8",
+   "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded",
+   "status": "fixed",
+   "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
+   "avoidance": "wall guard raised to 5400s with the job timeout at 100 min (guard fires first, partial records upload, merge completeness check owns the verdict); jobs are NEVER rerun. If a future shard still overruns, the next heal is a hard per-plant wall bound inside run_plant_safe",
+   "last_seen": {
+    "run_id": "45786313189",
+    "sha": "1e8ef94",
+    "step": 7
+   }
   }
  },
  "version": 1
