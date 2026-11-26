@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
 from brain_core.synthetic import FnbParams, generate_fnb_factory
 from brain_core.rolling import coupled_dw
 from brain_core.rolling.coupled import (build_coupled_mip,
+                                        coupled_dual,
                                         validate_coupled_plan,
                                         _plant_usage)
 from brain_core.rolling.coupled_dw import (column_generation,
@@ -127,7 +128,26 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
         mono["validation_kpis"] = kpis
     out["monolithic"] = mono
 
-    # B. distributed (optionally with one injected worker crash)
+    # B2. Lagrangian relaxation on the same links (review item 5):
+    # same theoretical bound as CG, attained by subgradient ascent -
+    # measured here as the alongside-comparison, never mixed into the
+    # CG certificate.
+    t0 = time.perf_counter()
+    lr = coupled_dual(factories, hs, DAYS, cap, sup, lab,
+                      rounds=int(os.environ.get("CMP_LR_ROUNDS", "40")),
+                      time_limit_s=30.0)
+    t_lr = time.perf_counter() - t0
+    out["lagrangian"] = {"wall_s": round(t_lr, 2),
+                         "lower_bound": lr.lower_bound,
+                         "note_status": None,
+                         "rounds": lr.rounds_run,
+                         "note": "same convexification bound as CG in "
+                                 "theory; subgradient attainment "
+                                 "measured here"}
+
+    # B. distributed (optionally with one injected worker crash).
+    # Warm start: seed columns from the monolith plan when it produced
+    # one (review item 4) + Wentges stabilization (CMP_STAB_ALPHA).
     real_solve_buckets = coupled_dw.solve_buckets
     crashed_once = {"done": False}
 
@@ -144,10 +164,19 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
     if crash_inject:
         coupled_dw.solve_buckets = maybe_crash
     try:
+        seed = None if os.environ.get("CMP_NO_SEED") == "1" \
+            else (qtys if res["x"] is not None else None)
         t0 = time.perf_counter()
         dw = column_generation(factories, hs, DAYS, cap,
                                supplier_cap=sup, labor_cap=lab,
-                               max_iter=60, time_limit_s=30.0)
+                               max_iter=int(os.environ.get(
+                                   "CMP_CG_ITERS", "60")),
+                               time_limit_s=30.0,
+                               seed_qtys=seed,
+                               stab_alpha=float(os.environ.get(
+                                   "CMP_STAB_ALPHA", "0.0")),
+                               exact_every=int(os.environ.get(
+                                   "CMP_EXACT_EVERY", "5")))
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
         dw = integer_master(dw, factories, hs, DAYS,
@@ -155,7 +184,11 @@ def run(n, monolith_limit_s=90.0, crash_inject=False):
         t_im = time.perf_counter() - t0
     finally:
         coupled_dw.solve_buckets = real_solve_buckets
-    dist = {"cg_wall_s": round(t_cg, 2), "im_wall_s": round(t_im, 2),
+    dist = {"seed": ("none" if os.environ.get("CMP_NO_SEED") == "1"
+            else ("monolith-plan" if res["x"] is not None
+                  else "uncoupled")),
+            "stab_alpha": float(os.environ.get("CMP_STAB_ALPHA", "0.0")),
+            "cg_wall_s": round(t_cg, 2), "im_wall_s": round(t_im, 2),
             "iterations": dw.iterations, "converged": dw.converged,
             "bound_certified": dw.bound_certified,
             "status": dw.status, "lower_bound": dw.lower_bound,

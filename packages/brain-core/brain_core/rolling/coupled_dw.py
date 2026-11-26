@@ -133,12 +133,27 @@ def column_generation(factories: list, horizon_start, days: int,
                       labor_cap: dict[int, float] | None = None,
                       max_iter: int = 60, time_limit_s: float = 30.0,
                       inv0s: list | None = None, weights=None,
-                      tol: float = TOL) -> DWResult:
-    """Full CG loop: seed columns = uncoupled optima; each iteration
-    solves the restricted master LP, prices every plant (the parallel
-    worker step; sequential HERE, so wall = sum of plant solves per
-    round - see docs/COUPLED-DESIGN.md), adds every negative
-    reduced-cost column, stops when none price below -tol."""
+                      tol: float = TOL,
+                      seed_qtys: list | None = None,
+                      stab_alpha: float = 0.0,
+                      exact_every: int = 5) -> DWResult:
+    """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
+    e.g. a heuristic or monolithic coupled plan, one qty map per
+    plant: warm start with an already-feasible coupled solution);
+    each iteration solves the restricted master LP, prices every
+    plant (the parallel worker step; sequential HERE, so wall = sum
+    of plant solves per round - see docs/COUPLED-DESIGN.md), adds
+    every negative reduced-cost column, stops when none price below
+    -tol.
+
+    Dual stabilization (Wentges smoothing): with stab_alpha in (0,1),
+    pricing uses u_price = alpha*u_master + (1-alpha)*u_center; the
+    center moves to u_master whenever the master objective improves.
+    Columns from smoothed rounds are valid columns, but convergence
+    and bounds are judged ONLY on exact rounds (priced at u_master):
+    every exact_every-th round and the candidate-final round are
+    priced exactly. The certificate rule is unchanged: an exact
+    round certifies only if every subproblem is proven optimal."""
     from .two_level import DEFAULT_WEIGHTS
     weights = weights or DEFAULT_WEIGHTS
     labor_cap = labor_cap or {}
@@ -150,9 +165,15 @@ def column_generation(factories: list, horizon_start, days: int,
     pools = sorted(set(supplier_cap) | set(labor_cap), key=repr)
     caps = [supplier_cap.get(k, labor_cap.get(k)) for k in pools]
     res = DWResult(lower_bound=None)
-    # seed: uncoupled optima (u = 0)
+    # seed: warm-start columns if given (one feasible coupled plan),
+    # else uncoupled optima (u = 0)
     colsets: list[list[dict]] = []
     for p_i, f in enumerate(factories):
+        if seed_qtys is not None and seed_qtys[p_i]:
+            colsets.append([_column(f, horizon_start, days,
+                                    seed_qtys[p_i], inv0s[p_i],
+                                    weights)])
+            continue
         b = solve_buckets(f, horizon_start, days, cap_min,
                           time_limit_s=time_limit_s,
                           inv0=inv0s[p_i])
@@ -163,6 +184,9 @@ def column_generation(factories: list, horizon_start, days: int,
             continue
         colsets.append([_column(f, horizon_start, days, b.qty,
                                 inv0s[p_i], weights)])
+    u_center = None
+    best_master = None
+    force_exact_next = False
     for it in range(max_iter):
         obj, u, sigma, art, st = _solve_master(colsets, pools, caps)
         if obj is None:
@@ -174,6 +198,18 @@ def column_generation(factories: list, horizon_start, days: int,
                                 f"columns ({art:.3g}); column pool "
                                 "does not yet span a feasible plan")
         res.master_series.append(obj)
+        # Wentges stabilization: price at smoothed duals except on
+        # exact rounds; move the center when the master improves.
+        if u_center is None:
+            u_center = u.copy()
+        if best_master is None or obj > best_master + 1e-9:
+            best_master = obj
+            u_center = u.copy()
+        at_master = (stab_alpha <= 0.0 or force_exact_next
+                     or it % exact_every == 0)
+        force_exact_next = False
+        u_price = u if at_master else stab_alpha * u + \
+            (1.0 - stab_alpha) * u_center
         # price every plant (the worker step)
         new_cols = 0
         farley = obj
@@ -190,13 +226,13 @@ def column_generation(factories: list, horizon_start, days: int,
                         per = recipes[p_i].get(s, {}).get(mat, 0.0)
                         if per:
                             per_day.setdefault(d0, []).append(
-                                (s, -u[r_i] * per))
+                                (s, -u_price[r_i] * per))
                 else:
                     for s in skus[p_i]:
                         rate = skus[p_i][s][0]
                         if rate:
                             per_day.setdefault(k, []).append(
-                                (s, -u[r_i] / rate))
+                                (s, -u_price[r_i] / rate))
             extra: dict[tuple[str, int], float] = {}
             for t, entries in per_day.items():
                 if not (0 <= t < days):
@@ -240,11 +276,18 @@ def column_generation(factories: list, horizon_start, days: int,
                                             b.qty, inv0s[p_i],
                                             weights))
                 new_cols += 1
-        # Farley bound is valid ONLY under exact pricing: rc from an
-        # incumbent upper-estimates the true min reduced cost, which
-        # would overstate the bound.
-        res.lb_series.append(farley if round_exact else None)
+        # Farley bound is valid ONLY under exact pricing at the TRUE
+        # master duals: rc from an incumbent upper-estimates the true
+        # min reduced cost, which would overstate the bound; a
+        # smoothed round's rc is not at u_master at all.
+        res.lb_series.append(
+            farley if (round_exact and at_master) else None)
         res.iterations = it + 1
+        if new_cols == 0 and not at_master:
+            # candidate convergence under smoothed pricing: re-price
+            # at the true master duals before deciding
+            force_exact_next = True
+            continue
         if new_cols == 0:
             if round_exact:
                 res.converged = True

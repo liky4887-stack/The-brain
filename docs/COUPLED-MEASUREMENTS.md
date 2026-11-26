@@ -67,3 +67,39 @@ carried over from the run above, labeled as such.)
 5. Sequential wall = iters x sum of plant solves (measured). Parallel
    fabric wall = iters x slowest plant (EXTRAPOLATED, dispatch
    overhead excluded) - recorded per run in the RESULT JSON.
+
+## Convergence work (2026-11-26, n=2, days=7, supplier 0.75x + labor 0.8x binding)
+
+All measured on the same instance; monolith optimum 321,859,494.66
+(HiGHS, OPTIMAL, ~3s); uncoupled reference sum 4,457,322.67 (labeled
+throughput reference, not a coupled bound). Costs are minimized; LB <=
+optimum <= UB.
+
+| config | iters | converged | certified LB | best plan (UB) | CG wall |
+|---|---|---|---|---|---|
+| baseline (no seed, no stab) | 60 | no | 258,263,743.67 | 2,594,680,000 | 57.9s |
+| monolith-seeded | 60 | no | 251,249,173.92 | 321,859,494.66 | 77.0s |
+| seeded + Wentges a=0.3, exact 1/5 | 60 | no | 4,457,322.67 | 321,859,494.66 | 70.2s |
+| seeded, 90 iters | 90 | no | 300,791,511.58 | 321,859,494.66 | 106.6s |
+
+Findings (measured, this instance only):
+- Warm start from the monolith plan makes the integer master's best
+  plan EQUAL the monolith optimum from iteration 0 (UB 321,859,494.66,
+  validated clean). Plan quality is solved when a monolith seed is
+  available; at 60 iters the certified LB slightly worsens (251.2M vs
+  258.3M) because the seed shifts the master dual path.
+- Wentges dual smoothing as implemented (alpha 0.3, exact pricing 1
+  round in 5) HURTS certification: only 12 exact rounds, and none
+  beat the uncoupled reference LB (4,457,322.67). Smoothed rounds are
+  correctly excluded from the Farley certificate. Not adopted as a
+  default; knob retained (stab_alpha, exact_every).
+- Raising the iteration cap 60 -> 90 improves the certified LB
+  monotonically: 251.2M -> 300.8M (gap vs optimum 21.9% -> 6.5%).
+  Convergence is iteration-limited here, not pricing-limited; the
+  bound keeps tightening with iterations.
+- Lagrangian relaxation (coupled_dual, subgradient, 40 rounds,
+  31.6s): best LB 4,457,322.67 = the round-0 uncoupled bound, never
+  improved. Measured: the bounded geometric step (no primal UB yet)
+  does not attain the CG bound on this instance. CG's Farley bound is
+  far stronger; LR stays as the alongside reference, never mixed into
+  the CG certificate.
