@@ -37,3 +37,18 @@ def test_a_step_over_its_timeout_is_a_recorded_failure_not_a_crash(tmp_path):
     assert d["complete"] is True
     assert row["measured"] is False and row["status"] != "ok"
     assert row["guard_findings"][0][0] == "step_failed"
+
+
+def test_default_primal_is_sound_on_size_2(tmp_path):
+    """Fail-before: alloc_every=0 gave UB 118,373,179 vs LB 60,940,576 (proven
+    gap 0.485) on size 2; with alloc_every=5 the gap was 8.7e-6 locally.
+    Real size-2 run, so this is a measurement on one instance, not a general
+    proof. The cause of the weak columns-only primal is a hypothesis."""
+    row = _run(tmp_path)["rows"][0]
+    assert row["alloc_every"] == 5 and row["primal_note"] == "ok"
+    assert row["proven_gap"] < 0.01, row["proven_gap"]
+
+
+def test_alloc_every_zero_row_is_labelled_primal_not_meaningful(tmp_path):
+    row = _run(tmp_path, CG_ALLOC_EVERY="0")["rows"][0]
+    assert row["primal_note"].startswith("primal not meaningful")

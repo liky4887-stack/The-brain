@@ -24,6 +24,11 @@ from brain_core.rolling.coupled_dw import (column_generation,
 
 DAYS = 7
 CAP_FACTOR = 0.75
+# Primal: alloc_every=0 leaves only the columns-only integer master, which
+# measured UB 118,373,179 vs LB 60,940,576 (proven gap 0.485) on size 2
+# while alloc_every=5 gave UB 60,941,104 (gap ~8.7e-6), same LB. A row with
+# alloc_every=0 is 'primal not meaningful'.
+ALLOC_EVERY = int(__import__('os').environ.get('CG_ALLOC_EVERY', '5'))
 SEEDS = [101 * (i + 1) for i in range(16)]
 
 
@@ -61,13 +66,14 @@ def run_one(n, mode):
         t0 = time.perf_counter()
         dw = column_generation([p.factory for p in ps], hs, DAYS, cap,
                                supplier_cap=caps, max_iter=60,
-                               time_limit_s=30.0)
+                               time_limit_s=30.0, alloc_every=ALLOC_EVERY)
         t_cg = time.perf_counter() - t0
     if mode in ("im", "both"):
         if dw is None:
             dw = column_generation([p.factory for p in ps], hs, DAYS,
                                    cap, supplier_cap=caps, max_iter=60,
-                                   time_limit_s=30.0)
+                                   time_limit_s=30.0,
+                                   alloc_every=ALLOC_EVERY)
         t0 = time.perf_counter()
         dw = integer_master(dw, [p.factory for p in ps], hs, DAYS,
                             time_limit_s=240.0)
@@ -82,6 +88,9 @@ def measure_row(n, mode):
     dw, t_cg, t_im, slowest = run_one(n, mode)
     return {
         "plants": n, "seeds": SEEDS[:n], "cap_factor": CAP_FACTOR,
+        "alloc_every": ALLOC_EVERY,
+        "primal_note": ("primal not meaningful (alloc_every=0: columns-only "
+                        "integer master)" if not ALLOC_EVERY else "ok"),
         "cg": {"wall_s": round(t_cg, 3) if t_cg is not None else None,
                "iterations": dw.iterations,
                "columns_per_plant": dw.columns_per_plant,
