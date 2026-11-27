@@ -28,6 +28,7 @@ from brain_core.rolling.coupled import (build_coupled_mip,
                                         _plant_usage)
 from brain_core.rolling.two_level import solve_buckets
 from brain_core.solvers.highs_mip import solve_mip
+from brain_core.guards.durable import atomic_write_text, write_run_json
 
 CLASSES = {
     "easy": dict(days=7, n_skus=12, util=0.6, sup=0.75, lab=0.8),
@@ -366,9 +367,11 @@ def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
     # calib classes were re-parameterised once: key their caps on the
     # class parameters so a stale cache can never be served (hard/easy
     # keep their original names, their parameters are frozen)
-    ptag = ("-p" + hashlib.sha1(repr(sorted(c.items()))
-                                .encode()).hexdigest()[:6]
-            if cls.startswith("calib") else "")
+    # every class: an MS_CLASS_JSON override on hard/easy changes c
+    # too, and the old calib-only tag served stale caps for it (same
+    # failure class as the 2.0x-served-1.5x incident)
+    ptag = "-p" + hashlib.sha1(repr(sorted(c.items()))
+                               .encode()).hexdigest()[:6]
     cache = Path(f"/tmp/caps-{cls}-{n}-{cap_solve:g}{ptag}"
                  f"{'-s%d' % SEED_OFF if SEED_OFF else ''}.json")
     if cache.exists():
@@ -398,7 +401,7 @@ def make_caps(ps, hs, days, cap, c, cap_solve, cls, n):
             lab_tot[k] = lab_tot.get(k, 0.0) + v
     sup = {k: c["sup"] * v for k, v in mat_tot.items()}
     lab = {k: c["lab"] * v for k, v in lab_tot.items()}
-    cache.write_text(json.dumps({
+    atomic_write_text(cache, json.dumps({
         "sup": {f"{k[0]}|{k[1]}": v for k, v in sup.items()},
         "lab": {str(k): v for k, v in lab.items()},
         "unsolved": unsolved}))
@@ -451,7 +454,7 @@ def make_caps_v2(ps, hs, days, cap, c, cap_solve, cls, n, sup1, lab1):
             lab_tot[k] = lab_tot.get(k, 0.0) + v
     sup = {k: c["sup"] * v for k, v in mat_tot.items()}
     lab = {k: c["lab"] * v for k, v in lab_tot.items()}
-    cache.write_text(json.dumps({
+    atomic_write_text(cache, json.dumps({
         "sup": {f"{k[0]}|{k[1]}": v for k, v in sup.items()},
         "lab": {str(k): v for k, v in lab.items()},
         "unsolved": unsolved}))
@@ -514,7 +517,7 @@ def main():
                                 "dt_s": round(now - last_t[0], 1),
                                 "peak_rss_mb": rss_mb()}
         last_t[0] = now
-        Path(out_path).write_text(json.dumps(out, indent=1))
+        write_run_json(out_path, out)
         print(stage, out["stages"][stage], flush=True)
 
     T0 = time.perf_counter()
@@ -528,6 +531,21 @@ def main():
     days = c["days"]
     out["runner"] = runner_specs()
     out["code_sha"] = _sha()
+    # manifest: what this run declares it is (class, size, knobs, code,
+    # libraries). Re-checked at every solve below; drift is a finding
+    # in the record (a mid-run pull or pip upgrade can no longer mix
+    # two code versions into one row)
+    from brain_core.guards.manifest import (Manifest, check_manifest,
+                                            observed_environment)
+    _knobs = {k: os.environ.get(k) for k in sorted(os.environ)
+              if k.startswith("MS_") and k != "MS_OUT"}
+
+    def _actual():
+        return {"cls": cls, "n": n, "code_sha": _sha(), **_knobs,
+                **observed_environment()}
+    manifest = Manifest(_actual())
+    out["manifest_hash"] = manifest.hash()
+    out["manifest"] = dict(manifest.declared)
     try:
         import scipy
         out["versions"] = {"scipy": scipy.__version__}
@@ -632,9 +650,15 @@ def main():
         from brain_core.guards.anomaly import check_record
         _f = check_record(
             {k: v for k, v in rec.items() if k != "trajectory"})
+        # only the honest "no incumbent" of an unsolved run is
+        # expected; a NaN anywhere else is still a finding (before,
+        # every nan_or_missing was dropped when x was None)
         rec["guard_findings"] = [(x.rule, x.detail) for x in _f
-                                 if x.rule != "nan_or_missing"
-                                 or r["x"] is not None]
+                                 if not (r["x"] is None
+                                         and x.detail == "incumbent missing")]
+        rec["guard_findings"] += [("manifest_drift", x) for x in
+                                  check_manifest(manifest, _actual())]
+        rec["manifest_hash"] = manifest.hash()
         if rec["guard_findings"]:
             print("GUARD FINDINGS:", rec["guard_findings"], flush=True)
         out["solves"][spec] = rec
@@ -648,7 +672,7 @@ def main():
             if rec.get("incumbent") and rec.get("mip_gap") is not None:
                 out["derived_bound"] = rec["incumbent"] * (
                     1 - rec["mip_gap"])
-        Path(out_path).write_text(json.dumps(out, indent=1))
+        write_run_json(out_path, out)
     save("solve")
     if res["x"] is not None:
         qtys = qty_from_mip_x(res["x"], meta["maps"], meta["offsets"])
@@ -674,7 +698,7 @@ def main():
     save("validate")
     out["total_wall_s"] = round(time.perf_counter() - T0, 1)
     out["peak_rss_mb"] = rss_mb()
-    Path(out_path).write_text(json.dumps(out, indent=1))
+    write_run_json(out_path, out)
     print("DONE", out["status"], out.get("mip_gap"), out["peak_rss_mb"])
 
 
