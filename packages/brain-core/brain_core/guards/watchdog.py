@@ -48,16 +48,36 @@ def run_step(name, fn, args=(), timeout_s=60.0, heartbeat_path=None,
     q = ctx.Queue()
     p = ctx.Process(target=_child, args=(fn, args, q, heartbeat_path))
     p.start()
-    p.join(timeout_s)
-    wall = time.monotonic() - t0
+    # Read the result WHILE waiting. Joining first deadlocks a child
+    # whose result exceeds the pipe buffer (~64 KB): it blocks in
+    # q.put, the join times out and a healthy step is mislabelled
+    # "timeout" and lost (measured 2026-11-27 on 100 KB results).
+    import queue as _queue
+    kind = payload = None
+    deadline = t0 + timeout_s
+    while True:
+        try:
+            kind, payload = q.get(timeout=0.2)
+            break
+        except _queue.Empty:
+            pass
+        if not p.is_alive():
+            try:
+                kind, payload = q.get(timeout=2)
+            except _queue.Empty:
+                pass
+            break
+        if time.monotonic() > deadline:
+            p.kill()
+            p.join()
+            return StepResult(name, "timeout", time.monotonic() - t0,
+                              detail=f"killed after {timeout_s}s")
+    p.join(5)
     if p.is_alive():
         p.kill()
         p.join()
-        return StepResult(name, "timeout", wall,
-                          detail=f"killed after {timeout_s}s")
-    try:
-        kind, payload = q.get(timeout=2)
-    except Exception:
+    wall = time.monotonic() - t0
+    if kind is None:
         return StepResult(name, "killed", wall,
                           detail=f"exit code {p.exitcode}, no result")
     if kind == "ok":

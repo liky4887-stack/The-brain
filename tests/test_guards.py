@@ -66,3 +66,11 @@ def test_checkpoint_resume_skips_done(tmp_path):
     c2 = Checkpoint(p)
     r = c2.run("a", h.hang, timeout_s=1)
     assert r.value == 4 and "resumed" in r.detail
+
+
+@pytest.mark.parametrize("n", [1000, 100_000, 5_000_000])
+def test_regression_large_result_is_ok_not_timeout(n):
+    """A healthy step with a result over the pipe buffer used to be
+    labelled timeout and lost (join before read)."""
+    r = run_step("big", h.big, (n,), timeout_s=60)
+    assert r.status == "ok" and len(r.value) == n

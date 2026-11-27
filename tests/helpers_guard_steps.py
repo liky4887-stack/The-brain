@@ -16,3 +16,7 @@ def boom():
 
 def die():
     os._exit(9)
+
+
+def big(n):
+    return "x" * n
