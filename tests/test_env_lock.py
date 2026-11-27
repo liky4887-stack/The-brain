@@ -23,6 +23,12 @@ def test_lock_file_has_the_expected_packages():
             "pyvrp"} <= set(_pins())
 
 
+def test_lock_pins_the_test_runner_too():
+    """An unpinned runner is drift as well (pytest 9.2.0, xdist 3.8.0 and
+    timeout 2.4.0 are the versions CI resolved when this was pinned)."""
+    assert {"pytest", "pytest-xdist", "pytest-timeout"} <= set(_pins())
+
+
 def test_installed_versions_equal_the_lock():
     bad = {}
     for name, want in _pins().items():
