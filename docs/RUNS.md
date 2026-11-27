@@ -60,3 +60,17 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 - Master LP tolerance: with the HiGHS default 1e-7 on the scaled master, the restricted master rose (up to +57.9 on 1e8-scale columns) and a Farley bound sat above a later master on 3 of 6 v2 seeds. With `MASTER_LP_TOL = 1e-10` (code 069dbd0) the same six seeds (pools 0.9/0.9, n=2, 7 days, caps-v2 pools, 900 s, 400 cap, concurrency 3, unseeded) show max master rise 2.9e-6, 2.4e-3, 1.1e-5, 4.6e-5, 1.9e-4, 2.3e-5 (seeds 100003, 200006, 400012, 500015, 700021, 800024). That is float rounding at the stated scale, not "zero". Farley above the same-iteration master: 0 iterations on all six. Five converged (certified, exact pricing at 1e-6 absolute); 200006 stalled with bound = master to 1e-12. The earlier six-seed rows (cgv2) are superseded: noise-affected, not results. Scope: these six seeds only.
 - Pools identity: rows carry `pools_hash`. caps-v1 and caps-v2 pools of the same seed differ per entry (seed 400012: same totals, 35 entries differ), so a seed number is not an instance. A different hash is its own finding (`pools_differ_not_comparable`), never a comparison.
 - Pricing tolerance option `CG_TOL_REL` (`tol_rel` in `column_generation`, default 0 = unchanged absolute tol 1e-6). With it the pricing tolerance is max(tol, tol_rel x |master|) in original cost units. Measured on one seed only: 200006 (cost 1.5e8) without it stalled at 247 it; with 1e-10 and with 1e-9 (identical) it converged in 148 it, same value to about 2e-14 relative (code eb04108, concurrency 2). Status then means "certified up to 0.015 absolute", NOT exact convergence (exact would need pricing with no absolute tolerance). It is an explicit per-run option, not a default. OPEN: needs more seeds of the same class that stall before it could become a default. 1e-9 vs 1e-10 giving identical results points to a scale gap, not a tuning question.
+
+## Rows without a retained plan: reason per group (2026-11-27)
+
+A row with no plan cannot be re-validated by the independent validator. Reason per group:
+
+| Group | Plan retained | Reason | Status |
+|---|---|---|---|
+| rerun/, calib3 | no | `monolith_scaling.py` keeps only `plan_keys` and only for n<=4 (about line 695) | by design |
+| CG rows | no | bounds-only result schema (LB, UB, status), no plan field | by design |
+| opt/ (e.g. `mono-opt-0.9-s300009.json`, added in monolith-results 8c01d6e) | no | no plan field in the JSON. The script that wrote it was not found. Reason it keeps no plan: NOT ESTABLISHED | not established |
+| rows from the 08:12 EET reboot | no | raw JSON lost in the reboot | lost |
+| mono-plan/, mpv2/ (18 plans) | yes | saved on purpose by `mono_plan.py`; 0 validator problems, 0 guard findings (validated with `BRAIN_LINKING_M` set per row) | validated |
+
+Scope of the opt/ check, so it can be repeated: `git grep -l "mono-opt\|mono_opt"` over the whole tree of all 152 remote branches (the only hits are the result and `.guard.json` files on `origin/monolith-results`, no script, none on main); `git log --all -S"mono-opt"` (only the results sync commit 8c01d6e); local `/tmp` and `/downloads` in the working sandbox. Not searched: the codespace filesystem outside its git worktrees, and any machine other than the sandbox and the codespace.
