@@ -17,4 +17,7 @@ if __name__ == "__main__":
         q = JobQueue("postgres", dsn)
     else:
         q = JobQueue("sqlite", os.environ.get("SQLITE_PATH", "serving.db"))
-    serve(q)
+    # hard per-job limit and stale-job sweep (0 disables either)
+    t = float(os.environ.get("JOB_TIMEOUT_S", "3600"))
+    s = float(os.environ.get("STALE_AFTER_S", "7200"))
+    serve(q, job_timeout_s=t or None, stale_after_s=s or None)
