@@ -36,6 +36,12 @@ from .two_level import solve_buckets, _recipe_data, _sku_data
 # pools 0.9 seed 0 iteration 178 all three HiGHS algorithms returned Status
 # 15 'Unknown' unscaled; with scale 1e-4 the master is optimal, artificials 0).
 MASTER_COST_SCALE = None   # None: derive from data = 1 / largest real column cost
+# HiGHS feasibility tolerances for the master LP, on the SCALED problem
+# (costs scaled to <= 1). The HiGHS default 1e-7 acts as an ABSOLUTE cost
+# noise of ~1e-7 x largest column cost in original units (measured ~20-58
+# on 1e8-scale columns: the restricted master, monotone in exact
+# arithmetic, went UP).
+MASTER_LP_TOL = 1e-10
 BIGM_REL = 1e3       # artificial cost relative to the largest real cost
 BIGM = 1e12          # artificial-column cost (real objectives ~1e8)
 TOL = 1e-6
@@ -142,7 +148,11 @@ def _solve_master(colsets, pools, caps):
         res = linprog(c, A_ub=A_ub.tocsr(),
                       b_ub=np.array(caps, dtype=float),
                       A_eq=A_eq.tocsr(), b_eq=np.ones(n_plants),
-                      bounds=(0.0, None), method=method)
+                      bounds=(0.0, None), method=method,
+                      options={"primal_feasibility_tolerance": MASTER_LP_TOL,
+                               "dual_feasibility_tolerance": MASTER_LP_TOL}
+                      if method != "highs-ipm" else
+                      {"ipm_optimality_tolerance": MASTER_LP_TOL})
         attempts.append(f"{method}: status {res.status} "
                         f"({res.message}) {_t.monotonic() - t0:.2f}s")
         if res.status == 0:
