@@ -38,6 +38,15 @@ def compare(cg: dict, mono: dict, caps_path: str | None = None) -> dict:
             f"monolith {mh})")
     m_obj = mono.get("objective")
     lb, ub = cg.get("lower_bound"), cg.get("upper_bound")
+    src = "lower_bound"
+    if lb is None:
+        ms, ls = cg.get("master_series") or [], cg.get("lb_series") or []
+        if str(cg.get("status", "")).startswith("converged") and ms:
+            lb, src = ms[-1], "master_final_converged_lp"
+        elif ls:
+            lb, src = ls[-1], "lb_series_last_valid_bound_not_converged"
+        else:
+            src = "none"
     return {"weights_verdict": wv, "pools_verdict": "pools_same",
             "pools_hash": ch,
             "weights": cg["weights"] if "weights" in cg
@@ -45,6 +54,7 @@ def compare(cg: dict, mono: dict, caps_path: str | None = None) -> dict:
             "cg": {"status": cg.get("status"),
                    "iterations": cg.get("iterations"),
                    "lower_bound": lb, "upper_bound": ub,
+                   "value_source": src,
                    "sha": cg.get("sha")},
             "monolith": {"status": mono.get("status"), "objective": m_obj,
                          "gap": mono.get("gap"), "sha": mono.get("sha"),
@@ -53,6 +63,8 @@ def compare(cg: dict, mono: dict, caps_path: str | None = None) -> dict:
             "monolith_minus_cg_lb": (m_obj - lb) if (m_obj is not None
                                                      and lb is not None)
             else None,
+            "rel_diff": ((m_obj - lb) / abs(m_obj)) if (
+                m_obj and lb is not None) else None,
             "cg_lb_not_above_monolith": (lb <= m_obj * (1 + 1e-9))
             if (m_obj is not None and lb is not None) else None}
 

@@ -100,3 +100,12 @@ def test_the_scan_predicate_catches_an_unguarded_file():
     bad = "from x import column_generation\nsolve_mip(m)\n"
     assert _combines_cg_and_monolith(bad)
     assert "require_comparable" not in bad
+
+
+def test_cg_value_falls_back_to_the_converged_master_and_says_so(tmp_path):
+    cg = {**CG, "lower_bound": None, "status": "converged (certified)",
+          "master_series": [102.0, 100.5]}
+    rc, out = _cmp(tmp_path, cg, MONO)
+    assert rc == 0
+    assert '"value_source": "master_final_converged_lp"' in out
+    assert '"monolith_minus_cg_lb": 0.5' in out
