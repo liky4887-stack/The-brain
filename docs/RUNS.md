@@ -4,8 +4,8 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 
 ## Actions runs
 - 45737026860 | ladder step 6 (2048 plants / 256 shards) | see scale_history | PASS | 0 validation problems
-- 45858321122 | ladder step 7 block B (plants [2048, 4096), 256 shards, 4096 windows) | 2e4b75e81a64 | OPEN, plant 2245 (seed 3245), window 1, day 5: exact assignment+sequencing undecided after 600 s | 256/256 shards, 665,979 assignments validated, 1 problem; run wall 27,916 s; per-plant solve min 125.8 / mean 577.6 / max 2,231.6 s; shard wall 2,370-2,959 s. Not a PASS; UNKNOWN is not infeasible.
-- 45915490926 | ladder step 7 block A (plants [0, 2048), same SHA, pin/block-a-2e4b75e) | 2e4b75e81a64 | OPEN, plant 1868 (runner), window 1, day 3: exact assignment+sequencing UNKNOWN after 120 s, undecided, not disproven | 256/256 shards, 4,096 windows, 666,395 assignments validated, 1 problem; run wall 25,266 s (00:13:39Z to 07:14:45Z); per-plant solve min 123.3 / mean 571.1 / max 1,926.1 s; shard wall 901.7-2,672.4 s; window MIPs optimal 3,801, time-limited 295, max gap 0.0015; distributed_wall 3,244.1 s, merge_validate 571.7 s; extrapolated single 32-core box est. 123,842 s (estimate, not measured). Not a PASS. A and B hit DIFFERENT plants (1868 vs 2245): the dense-day UNKNOWN is not a single-plant accident.
+- 45858321122 | ladder step 7 block B (plants [2048, 4096), 256 shards, 4096 windows) | 2e4b75e81a64 | OPEN, one plant, one window, dense day (plant 2245, seed 3245, window 1, day 5; exact assignment+sequencing undecided after 600 s) | 256/256 shards, 665,979 assignments validated, 1 problem; run wall 27,916 s; per-plant solve min 125.8 / mean 577.6 / max 2,231.6 s; shard wall 2,370-2,959 s. Not a PASS; UNKNOWN is not infeasible.
+- 45915490926 | ladder step 7 block A (plants [0, 2048), same SHA, pin/block-a-2e4b75e) | 2e4b75e81a64 | OPEN, one plant, one window, dense day (plant 1868, window 1, day 3; exact assignment+sequencing UNKNOWN after 120 s, undecided, not disproven) | 256/256 shards, 4,096 windows, 666,395 assignments validated, 1 problem; run wall 25,266 s (00:13:39Z to 07:14:45Z); per-plant solve min 123.3 / mean 571.1 / max 1,926.1 s; shard wall 901.7-2,672.4 s; window MIPs optimal 3,801, time-limited 295, max gap 0.0015; distributed_wall 3,244.1 s, merge_validate 571.7 s; extrapolated single 32-core box est. 123,842 s (estimate, not measured). Not a PASS. A and B hit DIFFERENT plants (1868 vs 2245): the dense-day UNKNOWN is not a single-plant accident.
 - 45863417715 | coupled-crossover rerun | 2bc3e6b | QUEUED | needs ub_validation_problems == [] per replica
 - 45861214473 | fail-fast probe | probe/failfast | INCONCLUSIVE | jobs ran serially; re-run after the queue is free
 
@@ -33,3 +33,8 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 - Class name carries pool tightness (1.5x and 2.0x are never compared).
 - A combined plan counts as valid only if it passes validate_coupled_plan; otherwise the sum is a lower bound only.
 - Every row: SHA, seed, time limit, machine, concurrency, caps time next to MIP time, bound (proven or estimated), plan, gap, validator result.
+
+## Step 7 status (user decision 2026-11-27 12:35 EET)
+- Step 7 is OPEN: one plant, one window, dense day (A: plant 1868, B: plant 2245, SHA 2e4b75e). No third structural attempt without a new idea. scale_ceiling stays at 2048 plants, not 4096, until resolved.
+- Rows rebuilt from reports (raw JSON lost in the 2026-11-27 08:12 EET codespace reboot) are labeled "from report, raw JSON lost". Only rows that carry a claim are re-run. Results are synced to branch monolith-results (codespace-results/) as they finish.
+- Main CI (ci.yml) has been cancelled at its 30 min timeout on every recent push (d1e7c52, a08b488, dc767a4, 8bcaa18, 1d0dd23, a3e1cbc, 9b4534c, c2e43a7): no result on main is called "passed" until CI is green. Pending core merges (dedupe, dense-day, CG master fix) wait.

@@ -132,7 +132,7 @@
       "reopened": {
         "run_id": "45858321122",
         "sha": "2e4b75e81a640def4cdf2ca51b2b7143120cc1b4",
-        "verdict": "undecided after 600 s (block B shard); exact assignment+sequencing UNKNOWN, not disproven, not infeasible",
+        "verdict": "OPEN, one plant, one window, dense day: A plant 1868 (w1 d3), B plant 2245 (w1 d5), SHA 2e4b75e; undecided, not disproven",
         "where": "plant 2245 (seed 3245), window 1, day 5, 137 chunks"
       },
       "root_cause": "measured: needs-more-time. Dense day models onset UNKNOWN at 121-124 chunks (below the 3b7e07ee1b2f ~130-138 saturation theory). Plant 766 w1d4 (121 chunks): UNKNOWN at 120s, DECIDED at 300s. Plant 594 w1d5 (124 chunks): UNKNOWN at 120s and 300s, DECIDED at 600s (validated feasible plan at the cap). Zero UNKNOWNs at <=110 chunks in 249,179 validated assignments.",
