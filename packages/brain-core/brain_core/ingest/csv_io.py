@@ -43,7 +43,7 @@ TABLES: dict[str, tuple[str, list[str], dict[str, str]]] = {
     "calendarbuckets": ("calendarbuckets.csv",
                         ["calendar", "start", "end", "value"], {}),
     "items": ("items.csv", ["name"],
-              {"description": "", "cost": "0"}),
+              {"description": "", "cost": "0", "unit": ""}),
     "resources": ("resources.csv", ["name"],
                   {"location": "", "maximum": "1", "efficiency": "1",
                    "setupmatrix": "", "maximum_calendar": ""}),
@@ -57,11 +57,11 @@ TABLES: dict[str, tuple[str, list[str], dict[str, str]]] = {
     "operationloads": ("operationloads.csv", ["operation", "resource"],
                        {"quantity": "1", "setup": ""}),
     "operationmaterials": ("operationmaterials.csv",
-                           ["operation", "item", "quantity"], {}),
+                           ["operation", "item", "quantity"], {"unit": ""}),
     "buffers": ("buffers.csv", ["item", "location"],
-                {"onhand": "0", "minimum": "0", "maximum": ""}),
+                {"onhand": "0", "minimum": "0", "maximum": "", "unit": ""}),
     "demands": ("demands.csv", ["name", "item", "due", "quantity"],
-                {"location": "", "priority": "1"}),
+                {"location": "", "priority": "1", "unit": ""}),
 }
 
 
@@ -144,6 +144,51 @@ def _read_rows(path: Path, table: str,
         return rows
 
 
+UNIT_TABLES = ("demands", "buffers", "operationmaterials")
+
+
+def _check_units(raw: dict, findings: list) -> None:
+    """Reject rows whose quantity unit disagrees with the item's unit.
+
+    Every quantity of an item (demand, buffer level, material flow) is in
+    ONE unit: the item's declared unit (items.csv `unit`). If the item
+    declares none, the first unit seen on a row of that item defines it
+    and a later row with a different unit is rejected. There is NO silent
+    conversion (kg vs g is a mismatch, not a rescale). Rows without a unit
+    are not checked; items with no unit anywhere stay unchecked and are
+    counted in one info finding (not scored), never silently.
+    """
+    declared = {r.get("name", ""): r.get("unit", "")
+                for r in raw.get("items", []) if r.get("unit", "")}
+    seen: dict[str, str] = {}
+    for table in UNIT_TABLES:
+        for n, row in enumerate(raw.get(table, []), start=1):
+            u = row.get("unit", "")
+            item = row.get("item", "")
+            if not u:
+                continue
+            want = declared.get(item) or seen.get(item)
+            if want is None:
+                seen[item] = u
+            elif u != want:
+                row["__unit_rejected"] = True
+                src = "declared in items.csv" if item in declared else "first seen on an earlier row"
+                findings.append(Finding(
+                    "error", "unit-mismatch", table, n,
+                    f"item {item!r}: row unit {u!r} differs from its unit "
+                    f"{want!r} ({src}); rows are not converted or summed "
+                    "across units; row skipped"))
+    if declared or seen:
+        all_items = {r.get("name", "") for r in raw.get("items", [])}
+        unchecked = sorted(i for i in all_items if i and i not in declared
+                           and i not in seen)
+        if unchecked:
+            findings.append(Finding(
+                "info", "units-not-declared", "items", 0,
+                f"{len(unchecked)} item(s) have no unit anywhere; their "
+                f"quantities are not unit-checked (e.g. {unchecked[0]!r})"))
+
+
 def load_csvs(directory: str | Path) -> IngestReport:
     """Read every known CSV in `directory` into a validated Factory.
 
@@ -161,10 +206,14 @@ def load_csvs(directory: str | Path) -> IngestReport:
         raw[table] = rows
         report.rows_read += len(rows)
 
+    _check_units(raw, findings)
+
     def build(rows, table, maker):
         """maker(row, rowno) -> record | None; counts kept rows."""
         out = []
         for i, row in enumerate(rows, start=1):
+            if row.get("__unit_rejected"):
+                continue
             rec = maker(row, i)
             if rec is not None:
                 out.append(rec)
@@ -221,7 +270,7 @@ def load_csvs(directory: str | Path) -> IngestReport:
             return None
         try:
             return Item(name=r["name"], description=r["description"],
-                        cost=cost)
+                        cost=cost, unit=r["unit"])
         except ValidationError as exc:
             findings.append(Finding("error", "invalid-row", "items", n,
                                     str(exc).splitlines()[0]))
@@ -516,9 +565,14 @@ def dump_csvs(factory: Factory, directory: str | Path) -> None:
             e.isoformat(timespec="seconds"), v]
            for c in sorted(factory.calendars, key=lambda x: x.name)
            for (s, e, v) in c.buckets])
-    write("items.csv", ["name", "description", "cost"],
-          [[i.name, i.description, i.cost] for i in
-           sorted(factory.items, key=lambda x: x.name)])
+    if any(i.unit for i in factory.items):
+        write("items.csv", ["name", "description", "cost", "unit"],
+              [[i.name, i.description, i.cost, i.unit] for i in
+               sorted(factory.items, key=lambda x: x.name)])
+    else:
+        write("items.csv", ["name", "description", "cost"],
+              [[i.name, i.description, i.cost] for i in
+               sorted(factory.items, key=lambda x: x.name)])
     write("resources.csv",
           ["name", "location", "maximum", "efficiency", "setupmatrix",
            "maximum_calendar"],

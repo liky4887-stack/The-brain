@@ -34,6 +34,7 @@ class Item(BaseModel):
     name: str
     description: str = ""
     cost: float = 0.0
+    unit: str = ""   # unit of measure of every quantity of this item ("" = undeclared)
 
 
 class Calendar(BaseModel):
