@@ -100,3 +100,50 @@ def lateness_lower_bound(factories, horizon_start, days, minutes_per_line_day,
     if r.status != 0:
         raise RuntimeError(f"physical bound LP status {r.status}")
     return float(r.fun)
+
+
+def _source_hash() -> str:
+    import hashlib
+    return hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]
+
+
+def _token(lower_bound, inv0_digest, rel_tol) -> str:
+    import hashlib
+    import json
+    blob = json.dumps([repr(float(lower_bound)), inv0_digest,
+                       repr(float(rel_tol)), _source_hash()])
+    return hashlib.sha256(blob.encode()).hexdigest()[:24]
+
+
+def verify_provenance(lt: dict) -> bool:
+    """True only if lt was produced by lateness_check() of THIS source:
+    the token binds lower_bound, the inventory digest, rel_tol and the
+    hash of this file. A hand-written flag, an edited bound or an edited
+    bound function fails. (Tamper-evidence against mistakes and stale
+    records; code that imports this module can still mint a token.)"""
+    try:
+        return lt.get("provenance") == _token(
+            lt["lower_bound"], lt["inv0_digest"], lt["rel_tol"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def lateness_check(factories, horizon_start, days, minutes_per_line_day,
+                   supplier_cap, labor_cap, inv0s, backlog_unit_days,
+                   rel_tol=None) -> dict:
+    """Record fragment for check_record: computes the bound (inv0s
+    required and applied) and stamps the provenance token. Only this
+    function should write the lateness_check record."""
+    import hashlib
+    import json
+    from .anomaly import LATENESS_BOUND_REL_TOL
+    tol = LATENESS_BOUND_REL_TOL if rel_tol is None else rel_tol
+    lb = lateness_lower_bound(factories, horizon_start, days,
+                              minutes_per_line_day, supplier_cap,
+                              labor_cap, inv0s=inv0s)
+    dig = hashlib.sha256(json.dumps(
+        [sorted((inv or {}).items()) for inv in inv0s],
+        default=str).encode()).hexdigest()[:16]
+    return {"backlog_unit_days": backlog_unit_days, "lower_bound": lb,
+            "rel_tol": tol, "inv0_digest": dig,
+            "provenance": _token(lb, dig, tol)}

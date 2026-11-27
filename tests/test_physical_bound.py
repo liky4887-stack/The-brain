@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
 
 from brain_core.guards.anomaly import check_record  # noqa: E402
-from brain_core.guards.physical_bound import lateness_lower_bound  # noqa: E402
+from brain_core.guards.physical_bound import lateness_check, lateness_lower_bound  # noqa: E402
 from brain_core.rolling import two_level as T  # noqa: E402
 from brain_core.rolling.coupled import (build_coupled_mip,  # noqa: E402
                                         validate_coupled_plan)
@@ -29,49 +29,59 @@ def _case():
     _, k = validate_coupled_plan([f], q, hs, 3, cap, labor_cap=lab)
     cap_eff = cap * (1 - T.DEFAULT_CHG_ALLOWANCE)
     lb = lateness_lower_bound([f], hs, 3, cap_eff, labor_cap=lab, inv0s=[None])
-    return k["backlog_unit_days"], lb
+    gen = lambda claim, tol=None: lateness_check(  # noqa: E731
+        [f], hs, 3, cap_eff, {}, lab, [None], claim, tol)
+    return k["backlog_unit_days"], lb, gen
+
+
+def _rec(lt):
+    return {"status": "optimal", "incumbent": 1.0, "nodes": 1,
+            "lateness_check": lt}
+
+
+def _rules(rec):
+    return [x.rule for x in check_record(rec)]
 
 
 def test_optimum_is_at_or_above_bound_and_passes():
-    bud, lb = _case()
+    bud, lb, gen = _case()
     assert lb > 0 and bud >= lb - 1e-6 * lb
-    rec = {"status": "optimal", "incumbent": 1.0, "nodes": 1,
-           "lateness_check": {"inventory_handled": True,
-                                  "backlog_unit_days": bud, "lower_bound": lb}}
-    assert not [x for x in check_record(rec)
-                if x.rule == "below_physical_bound"]
+    r = _rules(_rec(gen(bud)))
+    assert "below_physical_bound" not in r and "bound_not_applicable" not in r
 
 
 def test_equal_within_noise_passes_and_tolerance_is_recorded():
-    bud, lb = _case()
+    bud, lb, gen = _case()
     for claim in (lb, lb * (1 - 1e-8), lb * (1 - 5e-7)):
-        rec = {"status": "optimal", "incumbent": 1.0, "nodes": 1,
-               "lateness_check": {"inventory_handled": True,
-                                  "backlog_unit_days": claim,
-                                  "lower_bound": lb, "rel_tol": 1e-6}}
-        assert not [x for x in check_record(rec)
-                    if x.rule == "below_physical_bound"], claim
-    rec["lateness_check"]["backlog_unit_days"] = lb * (1 - 1e-4)
-    f = [x for x in check_record(rec) if x.rule == "below_physical_bound"]
+        r = _rules(_rec(gen(claim)))
+        assert "below_physical_bound" not in r and \
+            "bound_not_applicable" not in r, claim
+    f = [x for x in check_record(_rec(gen(lb * (1 - 1e-4))))
+         if x.rule == "below_physical_bound"]
     assert f and "1e-06" in f[0].detail
 
 
 def test_claim_below_the_bound_is_refused():
-    bud, lb = _case()
+    bud, lb, gen = _case()
     for claim in (0.0, 0.5 * lb, lb * (1 - 1e-3)):
-        rec = {"status": "optimal", "incumbent": 1.0, "nodes": 1,
-               "lateness_check": {"inventory_handled": True,
-                                  "backlog_unit_days": claim,
-                                  "lower_bound": lb}}
-        assert [x for x in check_record(rec)
-                if x.rule == "below_physical_bound"], claim
+        assert "below_physical_bound" in _rules(_rec(gen(claim))), claim
 
 
-def test_unhandled_assumptions_are_not_judged_silently():
-    rec = {"status": "optimal", "incumbent": 1.0, "nodes": 1,
-           "lateness_check": {"backlog_unit_days": 0.0, "lower_bound": 5.0}}
-    fs = [x.rule for x in check_record(rec)]
-    assert "bound_not_applicable" in fs and "below_physical_bound" not in fs
+def test_runner_written_flag_or_edited_bound_is_not_judged():
+    """Fail-before: a runner-written inventory_handled=True (no function
+    run) was trusted. Now only a record with the function's provenance is
+    judged; forged or edited records are bound_not_applicable."""
+    bud, lb, gen = _case()
+    forged = {"backlog_unit_days": 0.0, "lower_bound": lb,
+              "inventory_handled": True}
+    r = _rules(_rec(forged))
+    assert "bound_not_applicable" in r and "below_physical_bound" not in r
+    edited = dict(gen(bud), lower_bound=lb * 10)      # bound edited later
+    assert "bound_not_applicable" in _rules(_rec(edited))
+    other_inv = dict(gen(bud), inv0_digest="deadbeef")
+    assert "bound_not_applicable" in _rules(_rec(other_inv))
+    wrong_tol = dict(gen(bud), rel_tol=0.5)
+    assert "bound_not_applicable" in _rules(_rec(wrong_tol))
 
 
 def test_inventory_must_be_explicit_and_is_applied():

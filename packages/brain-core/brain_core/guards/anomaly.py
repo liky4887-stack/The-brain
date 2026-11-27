@@ -121,11 +121,15 @@ def check_record(rec: dict, manifest_hash: str | None = None,
         # relative tolerance (numeric noise equals the bound to ~1e-8)
         a, lbd = lt.get("backlog_unit_days"), lt.get("lower_bound")
         tol = lt.get("rel_tol", LATENESS_BOUND_REL_TOL)
-        if lt.get("inventory_handled") is not True:
-            # the bound's assumptions are not covered: never judge silently
+        from .physical_bound import verify_provenance
+        if not verify_provenance(lt):
+            # not produced by physical_bound.lateness_check (which applies
+            # the inventory and stamps a token): a runner-written flag or
+            # an edited bound is not trusted; never judge silently
             f.append(Finding("bound_not_applicable",
-                             "lateness_check lacks inventory_handled=True: "
-                             "bound assumptions do not apply, plan not judged"))
+                             "lateness_check has no valid provenance from "
+                             "physical_bound.lateness_check: bound "
+                             "assumptions not verified, plan not judged"))
         elif not (isinstance(a, (int, float)) and isinstance(lbd, (int, float))
                 and a >= lbd - tol * max(1.0, abs(lbd))):
             f.append(Finding("below_physical_bound",
