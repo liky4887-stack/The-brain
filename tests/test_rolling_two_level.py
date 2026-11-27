@@ -353,3 +353,44 @@ def test_dense_day_budget_wiring(monkeypatch):
     for _, limit, cap in normal:
         assert limit == 5
         assert cap == 120.0
+
+
+def test_very_dense_day_budget_wiring(monkeypatch):
+    """fc9f56ec5ce7 recurrence (plant 2245 w1d5, 139 chunks, undecided at
+    the 600 s cap, decided at 1800 s): days above VERY_DENSE_DAY_CHUNKS
+    get the larger budget and cap; days at 111-130 chunks keep the
+    300/600 s tier; normal days are unchanged."""
+    from brain_core.rolling import two_level as tl
+
+    def run(n_skus):
+        dems = [Demand(name=f"D{i}", item=f"S{i}", location="P",
+                       due=H0 + timedelta(days=1), quantity=1.0)
+                for i in range(n_skus)]
+        f = tiny_factory(dems, rates={f"S{i}": 10.0
+                                      for i in range(n_skus)})
+        seen = []
+
+        def spy(factory, chunks, day, cap_min, window_start_day,
+                time_limit_s, **kw):
+            seen.append((len(chunks), time_limit_s, kw.get("max_limit_s")))
+            return [], [f"day {day}: spy stop"]
+
+        monkeypatch.setattr(tl, "solve_day_exact", spy)
+        solve_window(f, H0, 1, 96 * 15, chg_allowance=0.0,
+                     bucket_time_s=30, seq_time_s=5)
+        return seen
+
+    vd = run(140)
+    assert vd and all(n > tl.VERY_DENSE_DAY_CHUNKS for n, _, _ in vd)
+    for _, limit, cap in vd:
+        assert limit == tl.VERY_DENSE_DAY_BUDGET_S
+        assert cap == tl.VERY_DENSE_DAY_MAX_S
+    mid = run(120)
+    assert mid and all(tl.DENSE_DAY_CHUNKS < n <= tl.VERY_DENSE_DAY_CHUNKS
+                       for n, _, _ in mid)
+    for _, limit, cap in mid:
+        assert limit == tl.DENSE_DAY_BUDGET_S
+        assert cap == tl.DENSE_DAY_MAX_S
+    normal = run(50)
+    for _, limit, cap in normal:
+        assert limit == 5 and cap == 120.0

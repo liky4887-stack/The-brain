@@ -72,6 +72,12 @@ DENSE_DAY_CHUNKS = 110   # measured: UNKNOWNs at 121-124 chunks
 # (fc9f56ec5ce7), none at <=110 in 249,179 assignments
 DENSE_DAY_BUDGET_S = 300.0
 DENSE_DAY_MAX_S = 600.0
+# very dense days (registry fc9f56ec5ce7, recurrence): plant 2245 w1d5 has
+# 139 chunks, UNKNOWN at the 600 s cap, decided at a 1800 s cap
+# (measured in a repro, shared 4-core box: day wall 2,400.7 s)
+VERY_DENSE_DAY_CHUNKS = 130
+VERY_DENSE_DAY_BUDGET_S = 600.0
+VERY_DENSE_DAY_MAX_S = 1800.0
 
 
 def _min_incoming_changeover(factory: Factory) -> dict:
@@ -822,13 +828,16 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
             # 53M vars). Dense days start at a bigger budget and a
             # higher escalation cap; normal days are untouched.
             dense = len(lots) > DENSE_DAY_CHUNKS
+            vdense = len(lots) > VERY_DENSE_DAY_CHUNKS
             day_asg, day_problems = solve_day_exact(
                 factory, lots, t, cap_min, window_start_day,
-                max(seq_time_s, DENSE_DAY_BUDGET_S) if dense
-                else seq_time_s,
+                max(seq_time_s, VERY_DENSE_DAY_BUDGET_S) if vdense
+                else (max(seq_time_s, DENSE_DAY_BUDGET_S) if dense
+                      else seq_time_s),
                 hint=day_hint.get(t), weights=weights,
                 num_workers=seq_num_workers, notes=day_notes,
-                max_limit_s=DENSE_DAY_MAX_S if dense else 120.0)
+                max_limit_s=(VERY_DENSE_DAY_MAX_S if vdense
+                             else (DENSE_DAY_MAX_S if dense else 120.0)))
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):
