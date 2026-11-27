@@ -182,6 +182,7 @@ def column_generation(factories: list, horizon_start, days: int,
                       max_iter: int = 60, time_limit_s: float = 30.0,
                       inv0s: list | None = None, weights=None,
                       tol: float = TOL,
+                      tol_rel: float = 0.0,
                       seed_qtys: list | None = None,
                       stab_alpha: float = 0.0,
                       exact_every: int = 5,
@@ -265,6 +266,13 @@ def column_generation(factories: list, horizon_start, days: int,
                                 f"columns ({art:.3g}); column pool "
                                 "does not yet span a feasible plan")
         res.master_series.append(obj)
+        # pricing tolerance in ORIGINAL cost units (sigma and obj are scaled
+        # back by _solve_master, so the master scaling does not change its
+        # meaning). tol_rel > 0 adds a relative floor: pricing MIP objectives
+        # are only accurate to ~1e-9 relative, so at costs near 1e8 an
+        # absolute 1e-6 is below that noise and keeps admitting columns that
+        # change nothing.
+        tol_eff = max(tol, tol_rel * max(1.0, abs(obj)))
         if _flat is not None and _flat.update(obj):
             res.problems.append(f"iter {it}: {_flat.reason()}")
             res.status = "stalled: bound flat (progress guard)"
@@ -381,7 +389,7 @@ def column_generation(factories: list, horizon_start, days: int,
                 round_exact = False
             rc = b.objective - sigma[p_i]
             farley += min(0.0, rc)
-            if rc < -tol:
+            if rc < -tol_eff:
                 colsets[p_i].append(_column(f, horizon_start, days,
                                             b.qty, inv0s[p_i],
                                             weights))
