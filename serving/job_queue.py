@@ -106,6 +106,35 @@ class JobQueue:
             " WHERE id=%s", (status, json.dumps(result), job_id))
         self._conn.commit()
 
+    def fail_stale(self, older_than_s: float) -> int:
+        """A job left 'running' longer than older_than_s lost its worker
+        (crash, OOM kill, reboot): mark it failed WITH the reason, so it
+        never sits in 'running' forever. Not re-queued on purpose: a
+        job that killed its worker would kill the next one too.
+        Returns how many jobs were closed."""
+        secs = max(0, int(older_than_s))
+        result = json.dumps({
+            "ok": False, "status": "error",
+            "problems": [f"worker lost: job claimed more than {secs} s "
+                         "ago and never finished"]})
+        if self.backend == "sqlite":
+            cur = self._conn.execute(
+                "UPDATE jobs SET status='failed', result=?,"
+                " finished_at=datetime('now') WHERE status='running'"
+                " AND claimed_at <= datetime('now', ?)",
+                (result, f"-{secs} seconds"))
+            self._conn.commit()
+            return int(cur.rowcount)
+        cur = self._conn.cursor()
+        cur.execute(
+            "UPDATE jobs SET status='failed', result=%s,"
+            " finished_at=now() WHERE status='running'"
+            " AND claimed_at <= now() - make_interval(secs => %s)",
+            (result, secs))
+        n = cur.rowcount
+        self._conn.commit()
+        return int(n)
+
     def get(self, job_id: int) -> dict | None:
         if self.backend == "sqlite":
             row = self._conn.execute(

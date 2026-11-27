@@ -54,6 +54,12 @@ def make_handler(queue):
             except ValueError:
                 self._json(400, {"error": "body must be a JSON object"})
                 return
+            from worker import validate_spec
+            bad = validate_spec(spec)
+            if bad:
+                self._json(400, {"error": "invalid spec",
+                                 "problems": bad})
+                return
             self._json(201, {"id": queue.submit(spec)})
 
         def log_message(self, *args) -> None:  # quiet in tests
