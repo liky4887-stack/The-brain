@@ -15,6 +15,8 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" highspy pytest
       - name: full suite as ci.yml defines it (no -x so every failure is named)
+        env:
+          PYTHONPATH: packages/brain-core
         run: |
           echo "SHA $GITHUB_SHA"
           python -m pytest tests -q -m "not benchmark" -p no:cacheprovider
