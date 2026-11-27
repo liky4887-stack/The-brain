@@ -10,6 +10,10 @@ only runs a fix action that was declared safe for that rule. Rules:
                     validator reported problems (or none ran)
  status_incoherent  status says optimal but gap > tol, or nodes < 0
  bound_crossed      lower bound above the incumbent (min problem)
+ below_physical_bound a claimed backlog_unit_days below the raw-record
+                    pool-level LP bound (guards.physical_bound; assumptions
+                    in its docstring) by more than a recorded relative
+                    tolerance (1e-6): physically impossible
  objective_mismatch the objective recomputed from the plan (guards.objective)
                     differs from the solver objective by > recon_tol
                     relative: a hidden or mis-weighted term
@@ -104,12 +108,25 @@ def check_record(rec: dict, manifest_hash: str | None = None,
                 and abs(a - b) <= recon_tol * max(1.0, abs(a))):
             f.append(Finding("objective_mismatch",
                              f"solver {a} vs recomputed from plan {b}"))
+    lt = rec.get("lateness_check")
+    if isinstance(lt, dict):
+        # {"backlog_unit_days": claimed, "lower_bound": guards.physical_bound,
+        #  "rel_tol": recorded tolerance (default 1e-6)}
+        # refuse only when the claim is below the bound by MORE than the
+        # relative tolerance (numeric noise equals the bound to ~1e-8)
+        a, lbd = lt.get("backlog_unit_days"), lt.get("lower_bound")
+        tol = lt.get("rel_tol", 1e-6)
+        if not (isinstance(a, (int, float)) and isinstance(lbd, (int, float))
+                and a >= lbd - tol * max(1.0, abs(lbd))):
+            f.append(Finding("below_physical_bound",
+                             f"backlog_unit_days {a} below the pool-level "
+                             f"lower bound {lbd} by more than rel_tol {tol}"))
     return f
 
 
 RULE_ORDER = ("class_mismatch", "nan_or_missing", "invalid_not_a_mip",
               "status_incoherent", "bound_crossed", "ub_not_validated",
-              "objective_mismatch")
+              "objective_mismatch", "below_physical_bound")
 
 
 class RunPaused(RuntimeError):
