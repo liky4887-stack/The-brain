@@ -1,0 +1,30 @@
+{
+ "weights_verdict": "weights_comparable",
+ "pools_verdict": "pools_same",
+ "pools_hash": "2685b8a64fff8fed",
+ "weights": {
+  "setup": 50.0,
+  "late": 1000.0,
+  "early": 0.001,
+  "energy": 0.0
+ },
+ "cg": {
+  "status": "converged (certified: exact pricing)",
+  "iterations": 116,
+  "lower_bound": 134176888.21701856,
+  "upper_bound": null,
+  "value_source": "master_final_converged_lp",
+  "sha": "96154713095a3434e5125e1817c01516f95d190a"
+ },
+ "monolith": {
+  "status": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+  "objective": 134177450.88266462,
+  "gap": 0.0,
+  "sha": "821b8ed8098b86be9cf05a1895b1c419c02b5574",
+  "limit_s": 300.0,
+  "wall_s": 5.0
+ },
+ "monolith_minus_cg_lb": 562.6656460613012,
+ "rel_diff": 4.193444146985178e-06,
+ "cg_lb_not_above_monolith": true
+}

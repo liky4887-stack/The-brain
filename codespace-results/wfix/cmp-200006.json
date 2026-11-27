@@ -1,0 +1,30 @@
+{
+ "weights_verdict": "weights_comparable",
+ "pools_verdict": "pools_same",
+ "pools_hash": "332af6ee397e109a",
+ "weights": {
+  "setup": 50.0,
+  "late": 1000.0,
+  "early": 0.001,
+  "energy": 0.0
+ },
+ "cg": {
+  "status": "stalled: bound flat (progress guard)",
+  "iterations": 247,
+  "lower_bound": 152746440.31575435,
+  "upper_bound": null,
+  "value_source": "lb_series_last_valid_bound_not_converged",
+  "sha": "96154713095a3434e5125e1817c01516f95d190a"
+ },
+ "monolith": {
+  "status": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+  "objective": 152747200.11745638,
+  "gap": 0.0,
+  "sha": "821b8ed8098b86be9cf05a1895b1c419c02b5574",
+  "limit_s": 300.0,
+  "wall_s": 3.5
+ },
+ "monolith_minus_cg_lb": 759.8017020225525,
+ "rel_diff": 4.97424307246415e-06,
+ "cg_lb_not_above_monolith": true
+}
