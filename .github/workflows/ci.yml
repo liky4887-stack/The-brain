@@ -23,11 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" highspy pytest pytest-xdist pyvrp
+      - run: python -m pip install --quiet -r config/ci-requirements.txt pytest pytest-xdist pytest-timeout
       - name: suite (includes test_checkpoint_payload_end_to_end)
         env:
           PYTHONPATH: packages/brain-core
         run: |
-          git config --global user.email ci@example.com
-          git config --global user.name ci
-          python -m pytest tests -q -m "not benchmark" -n auto --dist loadfile -x
+          python -m pytest tests -q -m "not benchmark" -n auto --dist loadfile --timeout=600 -o timeout_method=thread -x

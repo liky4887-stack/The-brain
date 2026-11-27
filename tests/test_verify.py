@@ -31,9 +31,14 @@ def test_claim_rejects_unaudited_fields(tmp_path):
         Claim.from_json(str(f))
 
 
-def test_remote_state_real_git(tmp_path):
+def test_remote_state_real_git(tmp_path, monkeypatch):
     """End-to-end against a real (local) git remote: matching SHA passes,
     a fabricated SHA fails."""
+    # identity for the test commit comes from the environment, not from
+    # runner or user git config
+    for k in ("GIT_AUTHOR", "GIT_COMMITTER"):
+        monkeypatch.setenv(k + "_NAME", "test")
+        monkeypatch.setenv(k + "_EMAIL", "test@example.com")
     repo = tmp_path / "r"
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty",
