@@ -117,19 +117,34 @@ def _solve_master(colsets, pools, caps):
     for j, (p_i, _cc, _u) in enumerate(cols):
         if p_i is not None:
             A_eq[p_i, j] = 1.0
-    res = linprog(c, A_ub=A_ub.tocsr(),
-                  b_ub=np.array(caps, dtype=float),
-                  A_eq=A_eq.tocsr(), b_eq=np.ones(n_plants),
-                  bounds=(0.0, None), method="highs")
+    first_msg = None
+    res = None
+    # default HiGHS first; a numerical failure (observed: status 4
+    # "model_status Unknown" late in CG with BIGM 1e12 next to costs
+    # near 1e8) is retried with the other HiGHS algorithms and the
+    # retry is RECORDED in the returned status, never silent
+    for method in ("highs", "highs-ipm", "highs-ds"):
+        res = linprog(c, A_ub=A_ub.tocsr(),
+                      b_ub=np.array(caps, dtype=float),
+                      A_eq=A_eq.tocsr(), b_eq=np.ones(n_plants),
+                      bounds=(0.0, None), method=method)
+        if res.status == 0:
+            break
+        if first_msg is None:
+            first_msg = (f"master LP {method} status {res.status}: "
+                         f"{res.message}")
     if res.status != 0:
         return (None, None, None, None,
-                f"master LP status {res.status}: {res.message}",
+                f"{first_msg}; retries highs-ipm/highs-ds also failed "
+                f"(last status {res.status}: {res.message})",
                 None)
     u = np.asarray(res.ineqlin.marginals)      # <= 0 for min / <= rows
     sigma = np.asarray(res.eqlin.marginals)    # free
     art = float(res.x[art0:].sum())
     lam = np.asarray(res.x[:art0])             # column weights
-    return float(res.fun), u, sigma, art, "optimal", lam
+    status = "optimal" if first_msg is None else \
+        f"optimal after retry ({first_msg}; solved with {method})"
+    return float(res.fun), u, sigma, art, status, lam
 
 
 def column_generation(factories: list, horizon_start, days: int,
@@ -208,6 +223,8 @@ def column_generation(factories: list, horizon_start, days: int,
             res.problems.append(f"iter {it}: {st}")
             res.status = "master failed"
             break
+        if st != "optimal":
+            res.problems.append(f"iter {it}: {st}")
         if art > 1e-6:
             res.problems.append(f"iter {it}: master used artificial "
                                 f"columns ({art:.3g}); column pool "

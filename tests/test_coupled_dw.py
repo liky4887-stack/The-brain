@@ -229,3 +229,46 @@ def test_master_pool_usage_matches_validator_on_random_plans():
         assert run(1.01) == [], run(1.01)
         flagged = run(0.99)
         assert len(flagged) == len(big), (len(flagged), len(big))
+
+
+def test_master_lp_retries_after_numerical_failure_and_records_it(
+        monkeypatch):
+    """Measured on 0.9/0.9 n=2 s0: master LP status 4 (model_status
+    Unknown) at CG iteration 182. The master must retry with another
+    HiGHS algorithm and say so in the returned status."""
+    import scipy.optimize as so
+    from brain_core.rolling.coupled_dw import _solve_master
+    real = so.linprog
+    calls = []
+
+    def flaky(*a, **kw):
+        calls.append(kw.get("method"))
+        if len(calls) == 1:
+            class R:
+                status = 4
+                message = "numerical difficulties (mock)"
+            return R()
+        return real(*a, **kw)
+
+    monkeypatch.setattr(so, "linprog", flaky)
+    colsets = [[{"cost": 5.0, "mat": {("m", 0): 1.0}, "lab": {},
+                 "qty": {}}]]
+    obj, u, sigma, art, st, lam = _solve_master(colsets, [("m", 0)],
+                                                [10.0])
+    assert obj == 5.0 and art == 0.0
+    assert calls[0] == "highs" and calls[1] == "highs-ipm"
+    assert st.startswith("optimal after retry") and "status 4" in st
+
+
+def test_master_lp_reports_failure_when_all_methods_fail(monkeypatch):
+    import scipy.optimize as so
+    from brain_core.rolling.coupled_dw import _solve_master
+
+    class R:
+        status = 4
+        message = "mock"
+    monkeypatch.setattr(so, "linprog", lambda *a, **k: R())
+    obj, *_rest, st, lam = _solve_master(
+        [[{"cost": 1.0, "mat": {}, "lab": {}, "qty": {}}]], [("m", 0)],
+        [1.0])
+    assert obj is None and "retries" in st
