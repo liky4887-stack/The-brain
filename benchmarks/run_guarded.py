@@ -12,7 +12,7 @@ python benchmarks/run_guarded.py --name N --timeout S --out FILE
   also when the run failed or was stopped, so a failure is never
   lost with the machine.
 Exit code: 0 ok, 2 timeout/stall, 3 command failed, 4 guard findings,
-5 push failed. Progress (flat bound) is a separate monitor
+5 push failed (also: push preflight failed, command not started). Progress (flat bound) is a separate monitor
 (guards.progress); this runner only sees liveness.
 """
 from __future__ import annotations
@@ -57,6 +57,16 @@ def main(a):
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".",
                 exist_ok=True)
     log = a.out + ".log"
+    if a.push_remote and not a.no_preflight:
+        # stop loudly BEFORE the run if the result cannot be pushed
+        from push_result import PushFailed, preflight_push
+        try:
+            print("PREFLIGHT:", preflight_push(
+                a.push_remote, a.push_branch, a.push_workdir), flush=True)
+        except (PushFailed, OSError, subprocess.SubprocessError) as e:
+            print("PREFLIGHT FAILED, command NOT started:", e,
+                  flush=True)
+            return 5
     status, wall = run(a.cmd, a.timeout, log, a.stall_s)
     report = {"name": a.name, "status": status, "wall_s": round(wall, 2),
               "findings": []}
@@ -106,6 +116,7 @@ if __name__ == "__main__":
     ap.add_argument("--push-branch", default="monolith-results")
     ap.add_argument("--push-dir", default="codespace-results")
     ap.add_argument("--push-workdir", default="/workspaces/mr")
+    ap.add_argument("--no-preflight", action="store_true")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     a = ap.parse_args()
     a.cmd = [c for c in a.cmd if c != "--"] if a.cmd[:1] == ["--"] \
