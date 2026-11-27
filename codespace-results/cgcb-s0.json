@@ -1,0 +1,30 @@
+[
+ {
+  "plant": 0,
+  "seed_base": 0,
+  "status": "Optimization terminated successfully. (H",
+  "bucket_objective": 4456125.321695288,
+  "column_cost_true": 4456125.321695289,
+  "diff": -9.313225746154785e-10,
+  "weights": {
+   "setup": 50.0,
+   "late": 1000.0,
+   "early": 0.001,
+   "energy": 0.0
+  }
+ },
+ {
+  "plant": 1,
+  "seed_base": 0,
+  "status": "Optimization terminated successfully. (H",
+  "bucket_objective": 1197.3508355919914,
+  "column_cost_true": 1197.3508355919914,
+  "diff": 0.0,
+  "weights": {
+   "setup": 50.0,
+   "late": 1000.0,
+   "early": 0.001,
+   "energy": 0.0
+  }
+ }
+]
