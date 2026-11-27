@@ -293,3 +293,23 @@ def test_master_lp_tolerance_keeps_master_monotone_and_converges():
     assert all(m[i] <= m[i - 1] + 1e-9 * abs(m[i - 1])
                for i in range(1, len(m)))
     assert abs(d.lower_bound - 44978346.733) < 0.05
+
+
+def test_tol_rel_floor_is_relative_and_default_is_unchanged():
+    """tol_rel raises the pricing tolerance to tol_rel x |master| (original
+    cost units); default 0 keeps the absolute tol. Measured on real seed
+    200006 (cost 1.5e8): absolute 1e-6 stalled at 247 it with bound = master
+    to 1e-12; tol_rel 1e-10 converged in 148 it, same value to 2e-14."""
+    import pytest
+    from brain_core.rolling.coupled_dw import column_generation
+    ps, hs, cap, days = _two_plants()
+    solo, mat_tot = _uncoupled(ps, hs, cap, days)
+    caps = {k: 0.75 * v for k, v in mat_tot.items()}
+    fs = [p.factory for p in ps]
+    a = column_generation(fs, hs, days, cap, supplier_cap=caps,
+                          max_iter=60, time_limit_s=30.0)
+    b = column_generation(fs, hs, days, cap, supplier_cap=caps,
+                          max_iter=60, time_limit_s=30.0, tol_rel=1e-6)
+    assert a.converged and b.converged
+    assert b.iterations <= a.iterations
+    assert b.lower_bound == pytest.approx(a.lower_bound, rel=1e-5)
