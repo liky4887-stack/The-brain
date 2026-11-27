@@ -1,0 +1,15 @@
+name: failfast-probe
+on:
+  push:
+    branches: [probe/failfast]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.n == 3 && 1 || 5 }}
+    strategy:
+      fail-fast: true
+      matrix:
+        n: [1, 2, 3]
+    steps:
+      - run: |
+          if [ "${{ matrix.n }}" = "3" ]; then sleep 200; else sleep 150; fi
