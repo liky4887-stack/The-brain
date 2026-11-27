@@ -14,11 +14,10 @@ around a record it could not place.
 
 from __future__ import annotations
 
-import multiprocessing
 import time
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 
+from ..guards.watchdog import run_pool
 from ..records.models import Factory
 from ..rolling.two_level import (WindowPlan, solve_window,
                                  validate_window_plan)
@@ -45,12 +44,26 @@ def _solve_cell(args):
     return plan, time.monotonic() - t0
 
 
+def _failed_cell(horizon_start, days, k, detail):
+    msg = f"cell {k} failed: {detail}"
+    return WindowPlan(horizon_start, days, [], None,
+                      "cell failed", problems=[msg]), 0.0
+
+
 def solve_decomposed(factory: Factory, horizon_start, days: int,
                      cap_min: float, max_workers: int | None = None,
+                     wall_budget_s: float | None = None,
                      **solve_kw) -> DecomposedResult:
     """Partition -> solve cells in parallel -> merge -> validate on
     the full factory. Falls back to one cell (still correct, just
-    not split) when the factory is fully coupled."""
+    not split) when the factory is fully coupled.
+
+    Failure isolation: a cell that raises, whose worker dies, or that
+    is still running at wall_budget_s becomes a NAMED problem
+    ("cell k failed: ...") with no assignments; the other cells are
+    kept, the merged bucket is marked cell-failed and the plan is not
+    valid. Before this, one crashed worker raised BrokenProcessPool
+    out of pool.map and every finished cell was lost."""
     t0 = time.monotonic()
     part = partition_plants(factory)
     if part.problems:
@@ -68,12 +81,19 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
         # or server threads can deadlock the child (measured on CI:
         # serial test run stalled here for 20+ min, traceback in
         # concurrent.futures result wait). Cells are picklable.
-        ctx = multiprocessing.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=max_workers,
-                                 mp_context=ctx) as pool:
-            solved = list(pool.map(_solve_cell, jobs))
+        runs = run_pool(_solve_cell, jobs, max_workers=max_workers,
+                        wall_budget_s=wall_budget_s)
+        solved = [r.value if r.status == "ok" else
+                  _failed_cell(horizon_start, days, k,
+                               f"{r.status}: {r.detail}")
+                  for k, r in enumerate(runs)]
     else:
-        solved = [_solve_cell(j) for j in jobs]
+        try:
+            solved = [_solve_cell(j) for j in jobs]
+        except Exception as exc:
+            solved = [_failed_cell(horizon_start, days, 0,
+                                   f"error: {type(exc).__name__}: "
+                                   f"{exc}")]
     assignments = [a for plan, _ in solved for a in plan.assignments]
     cell_problems = [p for plan, _ in solved for p in plan.problems]
     max_cell = max((w for _, w in solved), default=0.0)
