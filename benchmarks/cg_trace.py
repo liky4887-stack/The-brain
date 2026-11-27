@@ -21,6 +21,8 @@ def longest_flat(series, rel_tol, decreasing=True):
     improve by more than rel_tol (relative)."""
     best, cur, worst = None, 0, 0
     for v in series:
+        if v is None:      # iteration without that value (e.g. no Farley bound yet)
+            continue
         if best is None:
             best = v
             continue
@@ -49,6 +51,14 @@ if __name__ == "__main__":
         wall_s=float(os.environ.get("CG_WALL_S", "900")))
     wall = time.perf_counter() - t0
     tols = [1e-12, 1e-9, 1e-6, 1e-4]
+    json.dump({"status": dw.status, "converged": dw.converged,
+               "iterations": dw.iterations, "wall_s": round(wall, 1),
+               "lower_bound": dw.lower_bound, "upper_bound": dw.upper_bound,
+               "bound_certified": dw.bound_certified,
+               "problems_tail": [str(x)[:400] for x in dw.problems[-5:]],
+               "n_problems": len(dw.problems),
+               "master_series": dw.master_series, "lb_series": dw.lb_series},
+              open(out + ".raw", "w"), default=str)
     rec = {"class": {"n": n, "seed_base": seed,
                      "supplier": cc.SUPPLIER_FACTOR,
                      "labor": cc.LABOR_FACTOR, "days": cc.DAYS},
