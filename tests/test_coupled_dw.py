@@ -274,19 +274,21 @@ def test_master_lp_reports_failure_when_all_methods_fail(monkeypatch):
     assert obj is None and "retries" in st
 
 
-def test_tol_rel_floor_keeps_the_bound_and_never_adds_iterations():
+def test_tol_rel_floor_stops_the_tail_without_moving_the_bound():
     """tol_rel is a relative floor on the pricing tolerance (original cost
-    units). On binding caps (0.75x) it must reach the same LP bound as the
-    absolute tolerance and take no more iterations."""
+    units). Measured on this 0.75x binding-caps instance (cost ~4.5e7):
+    absolute tol=1e-6 does not converge in 150 iterations (noise tail),
+    tol_rel=1e-7 converges in 17 with the same master value (1.6e-8 rel
+    from the tail's best Farley bound)."""
     from brain_core.rolling.coupled_dw import column_generation
     ps, hs, cap, days = _two_plants()
     solo, mat_tot = _uncoupled(ps, hs, cap, days)
     caps = {k: 0.75 * v for k, v in mat_tot.items()}
-    a = column_generation([p.factory for p in ps], hs, days, cap,
-                          supplier_cap=caps, max_iter=60, time_limit_s=30.0)
-    b = column_generation([p.factory for p in ps], hs, days, cap,
-                          supplier_cap=caps, max_iter=60, time_limit_s=30.0,
-                          tol_rel=1e-9)
-    assert a.converged and b.converged, (a.status, b.status)
+    fs = [p.factory for p in ps]
+    a = column_generation(fs, hs, days, cap, supplier_cap=caps,
+                          max_iter=40, time_limit_s=30.0)
+    b = column_generation(fs, hs, days, cap, supplier_cap=caps,
+                          max_iter=40, time_limit_s=30.0, tol_rel=1e-7)
+    assert b.converged, b.status
     assert b.iterations <= a.iterations
-    assert abs(b.lower_bound - a.lower_bound) <= 1e-6 * abs(a.lower_bound) + 1
+    assert abs(b.lower_bound - a.lower_bound) <= 1e-6 * abs(a.lower_bound)

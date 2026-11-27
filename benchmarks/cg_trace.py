@@ -46,7 +46,8 @@ if __name__ == "__main__":
         [p.factory for p in ps], hs, cc.DAYS, cap, supplier_cap=sup,
         labor_cap=lab, max_iter=int(os.environ.get("CG_ITERS", "400")),
         time_limit_s=30.0, seed_qtys=None,
-        wall_s=float(os.environ.get("CG_WALL_S", "900")))
+        wall_s=float(os.environ.get("CG_WALL_S", "900")),
+        tol_rel=float(os.environ.get("CG_TOL_REL", "0")))
     wall = time.perf_counter() - t0
     tols = [1e-12, 1e-9, 1e-6, 1e-4]
     rec = {"class": {"n": n, "seed_base": seed,
