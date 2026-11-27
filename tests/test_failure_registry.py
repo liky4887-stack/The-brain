@@ -51,7 +51,7 @@ def test_healing_decision_boundaries():
 
 
 def test_master_status15_failure_is_registered_as_fixed_with_commit():
-    import json, os
+    import os
     reg = json.load(open(os.path.join(os.path.dirname(__file__), "..",
                                       "benchmarks", "registry", "known-failures.json")))
     hits = [e for e in reg["entries"].values() if "Status 15" in e.get("summary", "")]
