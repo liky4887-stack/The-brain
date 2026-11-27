@@ -55,6 +55,7 @@ if __name__ == "__main__":
            "sha": cc._sha(), "seeded": False,
            "progress_window": DEFAULT_CG_PROGRESS_WINDOW,
            "status": dw.status, "converged": dw.converged,
+           "problems_tail": [str(x)[-1500:] for x in dw.problems[-6:]],
            "iterations": dw.iterations, "wall_s": round(wall, 1),
            "master_series": dw.master_series, "lb_series": dw.lb_series,
            "flat_master": {str(t): longest_flat(dw.master_series, t)
