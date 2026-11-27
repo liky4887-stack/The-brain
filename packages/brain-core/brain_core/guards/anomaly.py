@@ -29,14 +29,42 @@ class Finding:
 REQUIRED = ("status", "incumbent")
 
 
+def _walk_numbers(obj, path="", depth=0):
+    """(path, float) for every real number in nested dicts/lists."""
+    if depth > 6:
+        return
+    if isinstance(obj, bool):
+        return
+    if isinstance(obj, (int, float)):
+        yield path or "value", float(obj)
+        return
+    try:                                   # numpy scalars
+        import numbers
+        if isinstance(obj, numbers.Real):
+            yield path or "value", float(obj)
+            return
+    except Exception:
+        pass
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield from _walk_numbers(v, f"{path}.{k}" if path else str(k),
+                                     depth + 1)
+    elif isinstance(obj, (list, tuple)):
+        for i, v in enumerate(obj):
+            yield from _walk_numbers(v, f"{path}[{i}]", depth + 1)
+
+
 def check_record(rec: dict, manifest_hash: str | None = None,
                  int_tol: float = 1e-6, gap_tol: float = 1e-4):
     f = []
     for k in REQUIRED:
         if rec.get(k) is None:
             f.append(Finding("nan_or_missing", f"{k} missing"))
-    for k, v in rec.items():
-        if isinstance(v, float) and not math.isfinite(v):
+    # nested too: a NaN inside a per-plant list or a sub-dict (CG
+    # rows, shard lists) used to pass because only top-level floats
+    # were looked at
+    for k, v in _walk_numbers(rec):
+        if not math.isfinite(v):
             f.append(Finding("nan_or_missing", f"{k}={v}"))
     if manifest_hash is not None \
             and rec.get("manifest_hash") != manifest_hash:
@@ -68,6 +96,10 @@ def check_record(rec: dict, manifest_hash: str | None = None,
     return f
 
 
+RULE_ORDER = ("class_mismatch", "nan_or_missing", "invalid_not_a_mip",
+              "status_incoherent", "bound_crossed", "ub_not_validated")
+
+
 class RunPaused(RuntimeError):
     def __init__(self, findings):
         self.findings = findings
@@ -78,9 +110,14 @@ class RunPaused(RuntimeError):
 def guarded_step(produce, manifest_hash=None, safe_fixes=None,
                  fault_log=None, max_fix_attempts=2):
     """produce() -> record. On findings: log fault, try the declared
-    safe fix for each rule (a callable returning a new produce), at
-    most max_fix_attempts, else raise RunPaused. Never fixes a rule
-    that has no declared safe fix."""
+    safe fix (a zero-arg callable that RETURNS A NEW RECORD) at most
+    max_fix_attempts, else raise RunPaused. Never fixes a rule that has
+    no declared safe fix. With findings of several rules, the fix of
+    the first rule in RULE_ORDER runs; the record is then re-checked,
+    so the next rule's fix gets its turn on the next attempt (before:
+    fixes[0] always, i.e. by finding order, and the doc called the fix
+    'a callable returning a new produce' while the code used it as a
+    produce)."""
     safe_fixes = safe_fixes or {}
     rec = produce()
     for attempt in range(max_fix_attempts + 1):
@@ -94,6 +131,7 @@ def guarded_step(produce, manifest_hash=None, safe_fixes=None,
         fixes = [safe_fixes.get(x.rule) for x in found]
         if attempt == max_fix_attempts or not all(fixes):
             raise RunPaused(found)
-        produce = fixes[0]
-        rec = produce()
+        first = min(found, key=lambda x: RULE_ORDER.index(x.rule)
+                    if x.rule in RULE_ORDER else len(RULE_ORDER))
+        rec = safe_fixes[first.rule]()
     raise RunPaused(found)
