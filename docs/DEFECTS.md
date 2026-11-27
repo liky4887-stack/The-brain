@@ -4,7 +4,7 @@ Status words: MEASURED = a number or a test result I saw; RECORDED = taken from 
 
 | # | Defect | Status | Evidence | Not measured |
 |---|---|---|---|---|
-| 1 | 3b7e07ee1b2f day-model CP-SAT UNKNOWN at 120 s (plants 43/76/155) | fixed, RECORDED | fix 38e229b; registry: capacity-aware hint decides the 3 repro instances at 100 s | NOT MEASURED on current main: the fix was verified when made, and a re-run of the 256-shard step 1 needs about 8 hours of Actions time (step 7 wall measured in row 17), not spent without a reason to doubt the fix |
+| 1 | 3b7e07ee1b2f day-model CP-SAT UNKNOWN at 120 s (plants 43/76/155) | fixed, RECORDED | fix 38e229b; registry: capacity-aware hint decides the 3 repro instances at 100 s | NOT MEASURED on current main: the fix was verified when made, and a re-run needs a full sharded Actions run (the step 7 runs took 7.0 and 7.8 h, row 17; step 1 duration not looked up), not spent without a reason to doubt the fix |
 | 2 | 43c2596bdee8 shard job cancelled at 60-min timeout | fixed, RECORDED | fix c178d77; wave hard bound | NOT MEASURED on current main: a full shard run is the only path that hits the 60-min timeout; not repeated since the fix, same cost reason as row 1 |
 | 3 | 9f1a8959beb4 publish refuses to clobber local RESULT.json | fixed, RECORDED | fix 8658119 | NOT MEASURED: publish path only runs in a full workflow run; no re-run since the fix, cost reason as row 1 |
 | 4 | ec7d0c9923f8 publish branch diverged, RESULT lost | fixed, RECORDED | fix 6ce03f5 | NOT MEASURED: same, publish path needs a full run |
