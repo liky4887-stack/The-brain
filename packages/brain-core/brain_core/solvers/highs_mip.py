@@ -135,7 +135,8 @@ def read_mps(path: str) -> MIP:
 
 
 def solve_mip(mip: MIP, time_limit_s: float = 60.0,
-              mip_rel_gap: float = 0.0) -> dict:
+              mip_rel_gap: float = 0.0,
+              node_limit: int | None = None) -> dict:
     """Solve with HiGHS via scipy.optimize.milp. Honest statuses:
     objective is recomputed from the returned x, never trusted from
     the solver's fun field alone."""
@@ -147,8 +148,10 @@ def solve_mip(mip: MIP, time_limit_s: float = 60.0,
     res = milp(mip.c, integrality=mip.integrality,
                bounds=Bounds(mip.lb, mip.ub),
                constraints=LinearConstraint(mip.A, lo, hi),
-               options={"time_limit": time_limit_s,
-                        "mip_rel_gap": mip_rel_gap})
+               options=({"time_limit": time_limit_s,
+                         "mip_rel_gap": mip_rel_gap}
+                        | ({"node_limit": int(node_limit)}
+                           if node_limit else {})))
     if res.x is None:
         return {"status": res.message, "objective": None, "x": None}
     objective = float(mip.c @ res.x)  # recomputed from the assignment
