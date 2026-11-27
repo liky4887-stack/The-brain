@@ -22,7 +22,11 @@ def test_cg_progress_guard_stops_named_when_flat():
     from brain_core.rolling.coupled_dw import column_generation
     ps, hs, cap, days = _two_plants()
     solo, mat_tot = _uncoupled(ps, hs, cap, days)
-    caps = {k: 2.0 * v for k, v in mat_tot.items()}
+    caps = {k: 0.75 * v for k, v in mat_tot.items()}
+    base = column_generation([p.factory for p in ps], hs, days, cap,
+                             supplier_cap=caps, max_iter=40,
+                             time_limit_s=30.0)
+    assert base.iterations > 2, base.iterations   # fixture needs >2
     dw = column_generation([p.factory for p in ps], hs, days, cap,
                            supplier_cap=caps, max_iter=40,
                            time_limit_s=30.0, progress_window=1,
@@ -30,6 +34,7 @@ def test_cg_progress_guard_stops_named_when_flat():
     assert dw.status == "stalled: bound flat (progress guard)"
     assert any("flat" in p for p in dw.problems)
     assert not dw.converged
+    assert dw.iterations < base.iterations
 
 
 def test_cg_default_unchanged_without_guard():
