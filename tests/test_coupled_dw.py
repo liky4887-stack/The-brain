@@ -272,3 +272,24 @@ def test_master_lp_reports_failure_when_all_methods_fail(monkeypatch):
         [[{"cost": 1.0, "mat": {}, "lab": {}, "qty": {}}]], [("m", 0)],
         [1.0])
     assert obj is None and "retries" in st
+
+
+def test_master_lp_tolerance_keeps_master_monotone_and_converges():
+    """Fail-before: with the HiGHS default 1e-7 feasibility tolerance on the
+    scaled master (absolute noise ~1e-7 x largest column cost) the 0.75x
+    binding-caps instance (cost ~4.5e7) did not converge in 150 iterations
+    (master went UP by up to 1.25), master 44,978,347.26. With 1e-10 it
+    converges in 20 iterations at 44,978,346.733, master never rises."""
+    import brain_core.rolling.coupled_dw as D
+    ps, hs, cap, days = _two_plants()
+    solo, mat_tot = _uncoupled(ps, hs, cap, days)
+    caps = {k: 0.75 * v for k, v in mat_tot.items()}
+    fs = [p.factory for p in ps]
+    assert D.MASTER_LP_TOL <= 1e-9      # the default itself is under test
+    d = D.column_generation(fs, hs, days, cap, supplier_cap=caps,
+                            max_iter=60, time_limit_s=30.0)
+    m = d.master_series
+    assert d.converged, d.status
+    assert all(m[i] <= m[i - 1] + 1e-9 * abs(m[i - 1])
+               for i in range(1, len(m)))
+    assert abs(d.lower_bound - 44978346.733) < 0.05
