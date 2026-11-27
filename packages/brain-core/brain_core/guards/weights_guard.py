@@ -23,6 +23,8 @@ KEYS = ("setup", "late", "early")
 
 def row_weights(row: dict) -> dict | None:
     w = row.get("weights")
+    if w is None and isinstance(row.get("manifest"), dict):
+        w = row["manifest"].get("weights")        # cg_trace rows seal it here
     if isinstance(w, dict) and all(k in w for k in ("setup", "late")):
         return {k: float(w[k]) for k in KEYS if k in w}
     cal = row.get("calibration")
@@ -53,3 +55,26 @@ def compare_weights(a: dict, b: dict) -> list[Finding]:
         out.append(Finding(kind, f"weights differ {diffs}: a comparison "
                                  "would measure the weights"))
     return out
+
+
+class ComparisonRefused(Exception):
+    """A CG-vs-monolith comparison was refused by the weights guard."""
+
+
+def verdict(findings: list) -> str:
+    """The verdict as it appears in every comparison output, by name."""
+    return ("weights_comparable" if not findings
+            else ",".join(sorted({f.rule for f in findings})))
+
+
+def require_comparable(a: dict, b: dict, where: str = "") -> str:
+    """The comparison-path entry point. Returns the verdict string
+    ('weights_comparable') or raises ComparisonRefused naming the findings.
+    Every place that prints or files a CG-vs-monolith comparison calls this
+    BEFORE it prints or files anything (tests/test_comparison_guard_wiring.py
+    fails when such a file does not)."""
+    f = compare_weights(a, b)
+    if f:
+        raise ComparisonRefused(f"{where}: {verdict(f)}: "
+                                + "; ".join(x.detail for x in f))
+    return verdict(f)

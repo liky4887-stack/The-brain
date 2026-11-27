@@ -49,3 +49,9 @@ def test_real_raw_rows_on_the_results_branch_if_present():
     assert rules(CG, plan) == []
     assert rules(CG, json.loads(c.read_text())) == [
         "calibration_weights_not_comparable"]
+
+
+def test_cg_trace_rows_declare_weights_in_the_manifest():
+    row = {"manifest": {"weights": CG["weights"]}}
+    assert row_weights(row)["setup"] == 50.0
+    assert rules(row, CG) == []

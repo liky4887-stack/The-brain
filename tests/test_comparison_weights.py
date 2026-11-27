@@ -34,5 +34,6 @@ def test_same_weights_everywhere_and_recorded(monkeypatch):
     from brain_core.rolling.two_level import DEFAULT_WEIGHTS
     assert cc.WEIGHTS == DEFAULT_WEIGHTS   # the Lagrangian path uses these
     assert "weights_note" in row["lagrangian"]
+    assert row["weights_verdict"] == "weights_comparable"
     assert row["weights"] == {"setup": 50.0, "late": 1000.0,
                               "early": 0.001, "energy": 0.0}

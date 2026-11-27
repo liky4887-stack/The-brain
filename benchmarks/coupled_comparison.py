@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "packages" / "brain-core"))
 
+from brain_core.guards.weights_guard import require_comparable
 from brain_core.synthetic import FnbParams, generate_fnb_factory
 from brain_core.rolling import coupled_dw
 from brain_core.rolling.coupled import (build_coupled_mip,
@@ -115,6 +116,21 @@ def _sha() -> str:
 WEIGHTS = ObjectiveWeights()
 
 
+def _as_row(w):
+    return {"weights": {"setup": w.setup, "late": w.late,
+                        "early": w.early, "energy": w.energy}}
+
+
+def _cg_weights():
+    """The CG side's weights. CMP_CG_SETUP_W exists so an experiment can
+    ask for a different CG setup weight; the guard then refuses the run
+    before any solve (the monolith side stays at WEIGHTS)."""
+    import dataclasses
+    v = os.environ.get("CMP_CG_SETUP_W")
+    return WEIGHTS if v is None else dataclasses.replace(WEIGHTS,
+                                                         setup=float(v))
+
+
 def run(n, monolith_limit_s=90.0, crash_inject=False,
         seed_base=0):
     ps, hs, cap = build_cluster(n, seed_base=seed_base)
@@ -129,6 +145,13 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
         "supplier": SUPPLIER_FACTOR, "labor": LABOR_FACTOR},
         "uncoupled_objective_sum": solo,
         "uncoupled_note": "throughput reference only - NOT a coupled bound"}
+
+    # Weights guard BEFORE any solve: the monolith, the CG and the integer
+    # master must use the same weights, or the run is refused. The verdict
+    # is in the row by name.
+    cg_w = _cg_weights()
+    out["weights_verdict"] = require_comparable(
+        _as_row(WEIGHTS), _as_row(cg_w), "coupled_comparison")
 
     # A. monolithic
     t0 = time.perf_counter()
@@ -209,7 +232,7 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
                                supplier_cap=sup, labor_cap=lab,
                                max_iter=int(os.environ.get(
                                    "CMP_CG_ITERS", "60")),
-                               time_limit_s=30.0, weights=WEIGHTS,
+                               time_limit_s=30.0, weights=cg_w,
                                seed_qtys=seed,
                                stab_alpha=float(os.environ.get(
                                    "CMP_STAB_ALPHA", "0.0")),
@@ -223,7 +246,7 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
                                    "CMP_ALLOC_EVERY", "0")))
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
-        dw = integer_master(dw, factories, hs, DAYS, weights=WEIGHTS,
+        dw = integer_master(dw, factories, hs, DAYS, weights=cg_w,
                             time_limit_s=min(120.0, monolith_limit_s))
         t_im = time.perf_counter() - t0
     finally:
