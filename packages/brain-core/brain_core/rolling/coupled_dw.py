@@ -35,7 +35,8 @@ from .two_level import solve_buckets, _recipe_data, _sku_data
 # mixes artificial costs 1e12 with column costs up to ~1e9 (measured: at
 # pools 0.9 seed 0 iteration 178 all three HiGHS algorithms returned Status
 # 15 'Unknown' unscaled; with scale 1e-4 the master is optimal, artificials 0).
-MASTER_COST_SCALE = 1e-4
+MASTER_COST_SCALE = None   # None: derive from data = 1 / largest real column cost
+BIGM_REL = 1e3       # artificial cost relative to the largest real cost
 BIGM = 1e12          # artificial-column cost (real objectives ~1e8)
 TOL = 1e-6
 
@@ -108,12 +109,15 @@ def _solve_master(colsets, pools, caps):
                                    c["lab"].get(k, 0.0)
                                    for k in pools])))
     art0 = len(cols)
+    maxc = max([abs(cc) for _p, cc, _u in cols] + [1.0])
+    scale = MASTER_COST_SCALE if MASTER_COST_SCALE else 1.0 / maxc
+    big = BIGM if MASTER_COST_SCALE else BIGM_REL * maxc
     for r in range(n_pools):
         e = np.zeros(n_pools)
         e[r] = -1.0     # artificial = cap borrowing: usage - art <= cap
-        cols.append((None, BIGM, e))
+        cols.append((None, big, e))
     n = len(cols)
-    c = np.array([cc for _p, cc, _u in cols]) * MASTER_COST_SCALE
+    c = np.array([cc for _p, cc, _u in cols]) * scale
     A_ub = lil_matrix((n_pools, n))
     for j, (_p, _cc, u) in enumerate(cols):
         for r in range(n_pools):
@@ -149,13 +153,13 @@ def _solve_master(colsets, pools, caps):
         return (None, None, None, None,
                 f"master LP failed; retries highs-ipm/highs-ds also failed; "
                 f"{first_msg}", None)
-    u = np.asarray(res.ineqlin.marginals) / MASTER_COST_SCALE  # <= 0
-    sigma = np.asarray(res.eqlin.marginals) / MASTER_COST_SCALE  # free
+    u = np.asarray(res.ineqlin.marginals) / scale  # <= 0
+    sigma = np.asarray(res.eqlin.marginals) / scale  # free
     art = float(res.x[art0:].sum())
     lam = np.asarray(res.x[:art0])             # column weights
     status = "optimal" if first_msg is None else \
         f"optimal after retry ({first_msg}; solved with {method})"
-    return float(res.fun) / MASTER_COST_SCALE, u, sigma, art, status, lam
+    return float(res.fun) / scale, u, sigma, art, status, lam
 
 
 from ..guards.progress import DEFAULT_CG_PROGRESS_WINDOW  # noqa: E402
