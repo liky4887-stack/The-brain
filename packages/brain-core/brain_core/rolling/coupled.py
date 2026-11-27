@@ -479,8 +479,12 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
     for the coupled bucket model as specified. Tolerances match the
     window validator (0.05 minutes capacity, 1e-6 quantities).
     """
-    from .two_level import (DEFAULT_WEIGHTS, DEFAULT_CHG_ALLOWANCE,
-                            _recipe_data, _sku_data)
+    from .two_level import DEFAULT_WEIGHTS, DEFAULT_CHG_ALLOWANCE
+    # data from the raw records, NOT from the model's helpers: a defect
+    # in _sku_data/_recipe_data/due_day must not pass model and
+    # validator together (guards/independent_data.py)
+    from ..guards.independent_data import (raw_due_day, raw_recipe_data,
+                                           raw_sku_data)
     weights = weights or DEFAULT_WEIGHTS
     chg = DEFAULT_CHG_ALLOWANCE if chg_allowance is None \
         else chg_allowance
@@ -499,12 +503,11 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
     total_early = 0.0
     total_setups = 0
     for p_i, (f, qty) in enumerate(zip(factories, qtys)):
-        sku = _sku_data(f)
-        recipes = _recipe_data(f)
+        sku = raw_sku_data(f)
+        recipes = raw_recipe_data(f)
         dem: dict = {}
-        from .two_level import due_day
         for d in f.demands:
-            day = due_day(d.due, horizon_start)
+            day = raw_due_day(d.due, horizon_start)
             if 0 <= day < days:
                 dem.setdefault(d.item, [0.0] * days)[day] += d.quantity
         per_ld: dict = {}
