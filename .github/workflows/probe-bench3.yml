@@ -1,34 +1,37 @@
 name: probe-bench3
+# TRUE LIMITS (one set of numbers): each test is its own job.
+# Per-test timeout 6000 s (100 min, pytest-timeout, thread method).
+# Per-job timeout 120 min. GitHub's hosted-job cap is 6 h; this probe
+# does not rely on it. The earlier single-job run 45975440101 was
+# cancelled at its own 240 min job limit with no output (quiet mode).
 on:
   push:
     branches: [probe/bench3]
 permissions:
   contents: read
 jobs:
-  tests:
+  bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ["tests/test_backtest.py::test_backtest_twelve_weeks", "tests/test_capstone.py::test_capstone_rolling_decomposed_two_plants", "tests/test_decompose.py::test_decomposed_gate_two_plant_scale", "tests/test_lns.py::test_lns_gate_scale_evidence", "tests/test_local_resolve.py::test_gate_machine_down_under_60s_within_2_percent", "tests/test_rolling_two_level.py::test_gate_scale_window_under_15_minutes", "tests/test_routing.py::test_cvrplib_x_gate_within_1pct_of_bks", "tests/test_shadow_pilot.py::test_shadow_pilot_gate_medium_scale", "tests/test_simtwin.py::test_simtwin_gate_scale_scores", "tests/test_taillard_gate.py::test_taillard_gate[ta01-1231]", "tests/test_taillard_gate.py::test_taillard_gate[ta02-1244]", "tests/test_taillard_gate.py::test_taillard_gate[ta03-1218]", "tests/test_taillard_gate.py::test_taillard_gate[ta04-1175]", "tests/test_taillard_gate.py::test_taillard_gate[ta05-1224]", "tests/test_taillard_gate.py::test_taillard_gate[ta06-1238]", "tests/test_taillard_gate.py::test_taillard_gate[ta07-1227]", "tests/test_taillard_gate.py::test_taillard_gate[ta08-1217]", "tests/test_taillard_gate.py::test_taillard_gate[ta09-1274]", "tests/test_taillard_gate.py::test_taillard_gate[ta10-1241]"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --quiet -r config/ci-requirements.txt pytest pytest-xdist pytest-timeout
-      - name: list benchmark-marked tests
-        env:
-          PYTHONPATH: packages/brain-core
-        run: python -m pytest tests -m benchmark --collect-only -q -p no:cacheprovider | tee collected.txt
-      - name: benchmark-marked tests, verbose, per-test timeout, durations, live per-test lines
+      - run: python -m pip install --quiet -r config/ci-requirements.txt pytest pytest-timeout
+      - name: one benchmark-marked test, verbose, per-test timeout
         env:
           PYTHONPATH: packages/brain-core
           PYTHONUNBUFFERED: "1"
         run: |
           echo "SHA $GITHUB_SHA"
-          python -m pytest tests -m benchmark -v -rA -n 4 --dist loadfile --timeout=3000 -o timeout_method=thread --durations=30 -p no:cacheprovider 2>&1 | tee bench.log
+          python -m pytest "${{ matrix.test }}" -m benchmark -v -rA --timeout=6000 -o timeout_method=thread --durations=5 -p no:cacheprovider 2>&1 | tee bench.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bench-log
-          path: |
-            bench.log
-            collected.txt
+          name: bench-log-${{ strategy.job-index }}
+          path: bench.log

@@ -160,7 +160,9 @@ def column_generation(factories: list, horizon_start, days: int,
                       wall_s: float | None = None,
                       im_every: int = 0,
                       alloc_every: int = 0,
-                      dive: bool = True) -> DWResult:
+                      dive: bool = True,
+                      progress_window: int | None = None,
+                      progress_rel_tol: float = 1e-9) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
     plant: warm start with an already-feasible coupled solution);
@@ -214,6 +216,11 @@ def column_generation(factories: list, horizon_start, days: int,
     best_master = None
     force_exact_next = False
     next_alloc_it = 0
+    _flat = None
+    if progress_window:
+        from ..guards.progress import FlatProgress
+        _flat = FlatProgress(progress_window, progress_rel_tol,
+                             False, "CG restricted-master objective")
     for it in range(max_iter):
         _it_t0 = _time.monotonic()
         obj, u, sigma, art, st, lam = _solve_master(colsets,
@@ -230,6 +237,10 @@ def column_generation(factories: list, horizon_start, days: int,
                                 f"columns ({art:.3g}); column pool "
                                 "does not yet span a feasible plan")
         res.master_series.append(obj)
+        if _flat is not None and _flat.update(obj):
+            res.problems.append(f"iter {it}: {_flat.reason()}")
+            res.status = "stalled: bound flat (progress guard)"
+            break
         # Wentges stabilization: price at smoothed duals except on
         # exact rounds; move the center when the master improves.
         if u_center is None:
