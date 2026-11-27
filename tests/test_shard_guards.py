@@ -240,3 +240,25 @@ def test_checkpoint_payload_end_to_end(tmp_path):
     assert isinstance(d["argv"], list) and d["argv"]
     assert d["expected_range"] == [0, 2]
     assert [r["plant"] for r in d["records"]] == [0, 1]
+
+
+def fake_mixed_rec(i):
+    import time
+    if i == 1:
+        time.sleep(30.0)
+    return fake_rec(i)
+
+
+def test_wave_hard_bound_keeps_plants_that_finished():
+    """Plant 0 finishes in ms, plant 1 overruns: only plant 1 is
+    recorded not-attempted (map_async lost both)."""
+    import time
+    t0 = time.monotonic()
+    records, stopped = execute([0, 1], workers=2, t0=t0,
+                               wall_guard_s=1e9, mem_guard_mb=1e9,
+                               runner=fake_mixed_rec,
+                               job_budget_s=12.0, upload_margin_s=1.0)
+    assert stopped is not None and "hard bound" in stopped
+    assert time.monotonic() - t0 < 25.0
+    assert records[0]["problems"] == []
+    assert "not attempted" in records[1]["problems"][0]
