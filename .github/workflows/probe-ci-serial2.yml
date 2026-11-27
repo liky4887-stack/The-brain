@@ -1,7 +1,7 @@
-name: probe-ci-serial
+name: probe-ci-serial2
 on:
   push:
-    branches: [probe/ci-serial]
+    branches: [probe/ci-serial2]
 permissions:
   contents: read
 jobs:
@@ -19,4 +19,4 @@ jobs:
           PYTHONPATH: packages/brain-core
         run: |
           git config --global user.email ci@example.com; git config --global user.name ci
-          timeout 1200 python -u -m pytest tests -v -m "not benchmark" -p no:cacheprovider -x || echo "pytest exit $?"
+          timeout 900 python -u -m pytest tests -v -m "not benchmark" -p no:cacheprovider -x -o faulthandler_timeout=150 || echo "pytest exit $?"
