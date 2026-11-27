@@ -112,6 +112,6 @@ def test_bucket_mip_rows_are_all_labelled_and_hard_demand_names_capacity():
     # measured: the capacity rows are NOT in the minimal set. The linking big-M
     # (sum x <= M y, M tight from capacity) already encodes the per-sku-day
     # capacity, so demand coverage conflicts with the linking family.
-    assert r["minimal_families"] == ["demand coverage (late var)", "setup linking"], r
+    assert r["minimal_families"] == ["demand coverage (late var)", "setup linking (includes line capacity)"], r
     assert r["slack_by_family"]["demand coverage (late var)"] > 0
     assert all(x["ratio"] > 0 for x in r["slack_rows"])
