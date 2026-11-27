@@ -93,12 +93,17 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
     hard = job_budget_s is not None
     pool = None
     mp = None
+    # spawn, not the Linux default fork: forking a parent that already
+    # runs solver/BLAS threads can deadlock the child - the same class
+    # that stalled serial CI in decompose/parallel.py (fixed there by
+    # spawn; pytest shows "use of fork() may lead to deadlocks" here)
+    import multiprocessing as mp
+    ctx = mp.get_context("spawn")
     if hard:
-        import multiprocessing as mp
-        pool = mp.Pool(max(1, workers))
+        pool = ctx.Pool(max(1, workers))
     elif workers > 1 and len(pending) > 1:
         from concurrent.futures import ProcessPoolExecutor
-        pool = ProcessPoolExecutor(max_workers=workers)
+        pool = ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
     try:
         while pending:
             if clock() - t0 > wall_guard_s:
@@ -116,15 +121,27 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
                     break
             wave, pending = pending[:max(1, workers)], pending[max(1, workers):]
             if hard:
-                async_res = pool.map_async(runner, wave)
-                try:
-                    got = async_res.get(timeout=max(1.0, remaining))
-                except mp.TimeoutError:
+                # one handle PER PLANT: on the hard bound the plants of
+                # this wave that already finished are KEPT (map_async
+                # was all-or-nothing and recorded them not-attempted)
+                handles = [(i, pool.apply_async(runner, (i,)))
+                           for i in wave]
+                deadline = time.monotonic() + max(1.0, remaining)
+                got, late = [], []
+                for i, hnd in handles:
+                    try:
+                        got.append(hnd.get(timeout=max(
+                            0.0, deadline - time.monotonic())))
+                    except mp.TimeoutError:
+                        late.append(i)
+                if late:
                     stopped_by = ("wave hard bound: wave exceeded the "
                                   "remaining job budget; pool "
                                   "terminated, unfinished plants "
                                   "recorded as not attempted")
-                    for i in wave:
+                    for rec in got:
+                        records[rec["plant"]] = rec
+                    for i in late:
                         records[i] = not_attempted_record(
                             i, stopped_by)
                     break   # remaining pending plants are filled by
