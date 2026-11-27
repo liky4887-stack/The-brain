@@ -1,0 +1,20 @@
+name: probe-cgr-suite
+on:
+  push:
+    branches: [probe/cgr-suite]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" highspy pytest
+      - name: full suite as ci.yml defines it (no -x so every failure is named)
+        run: |
+          echo "SHA $GITHUB_SHA"
+          python -m pytest tests -q -m "not benchmark" -p no:cacheprovider
