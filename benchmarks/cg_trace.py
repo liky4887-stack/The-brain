@@ -68,6 +68,30 @@ def build_manifest(seed: int, n: int, expect: str | None = None) -> Manifest:
     return m
 
 
+def pool_guard(ps, hs, cap, sup, lab, dw) -> dict:
+    """Identity of the pools this run used + the raw-record lateness bound
+    for THOSE pools, and the guard verdict on this row (pools_hash is what
+    any later cross-row comparison must match). Findings are recorded and
+    printed, never silently dropped."""
+    from brain_core.guards.physical_bound import lateness_lower_bound
+    from brain_core.guards.pool_identity import (compare_to_pool_bound,
+                                                 pools_hash)
+    from brain_core.rolling import two_level as T
+    h = pools_hash(sup, lab)
+    lb = lateness_lower_bound([p.factory for p in ps], hs, cc.DAYS,
+                              cap * (1 - T.DEFAULT_CHG_ALLOWANCE),
+                              supplier_cap=sup, labor_cap=lab,
+                              inv0s=[None] * len(ps))
+    bound = {"pools_hash": h, "lower_bound": lb,
+             "late_weight": T.DEFAULT_WEIGHTS.late}
+    kind = "converged_lp" if dw.converged else "lower_bound"
+    obj = dw.master_series[-1] if dw.master_series else None
+    row = {"pools_hash": h, "kind": kind, "objective": obj}
+    f = compare_to_pool_bound(row, bound)
+    return {"pools_hash": h, "pool_bound": bound, "pool_row": row,
+            "pool_findings": [[x.rule, x.detail] for x in f]}
+
+
 if __name__ == "__main__":
     seed, out = int(sys.argv[1]), sys.argv[2]
     n = int(os.environ.get("CMP_SIZE", "2"))
@@ -90,6 +114,7 @@ if __name__ == "__main__":
                "n_problems": len(dw.problems),
                "master_series": dw.master_series, "lb_series": dw.lb_series},
               open(out + ".raw", "w"), default=str)
+    pool_info = pool_guard(ps, hs, cap, sup, lab, dw)
     rec = {"class_name": manifest.declared["class_name"],
            "manifest_hash": manifest.hash(),
            "manifest": dict(manifest.declared),
@@ -97,6 +122,7 @@ if __name__ == "__main__":
            "class": {"n": n, "seed_base": seed,
                      "supplier": cc.SUPPLIER_FACTOR,
                      "labor": cc.LABOR_FACTOR, "days": cc.DAYS},
+           **pool_info,
            "sha": cc._sha(), "seeded": False,
            "progress_window": DEFAULT_CG_PROGRESS_WINDOW,
            "status": dw.status, "converged": dw.converged,
@@ -108,5 +134,6 @@ if __name__ == "__main__":
            "flat_lb": {str(t): longest_flat(dw.lb_series, t, False)
                        for t in tols}}
     json.dump(rec, open(out, "w"), default=str)
-    print(json.dumps({k: rec[k] for k in ("class", "status",
-          "iterations", "wall_s", "flat_master", "flat_lb")}))
+    print(json.dumps({k: rec[k] for k in ("class", "pools_hash", "status",
+          "iterations", "wall_s", "flat_master", "flat_lb",
+          "pool_findings")}))

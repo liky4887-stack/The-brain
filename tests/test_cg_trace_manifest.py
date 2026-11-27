@@ -31,3 +31,17 @@ def test_declared_class_match_passes_and_hash_is_stable():
     a = cg_trace.build_manifest(0, 2)
     b = cg_trace.build_manifest(0, 2, expect=a.declared["class_name"])
     assert a.hash() == b.hash()
+
+
+def test_pool_guard_records_identity_and_flags_a_converged_value_below_bound():
+    import cg_trace
+    from types import SimpleNamespace
+    import coupled_comparison as cc
+    ps, hs, cap = cc.build_cluster(2, seed_base=400012)
+    sup, lab, _ = cc.binding_caps(ps, hs, cap)
+    ok = cg_trace.pool_guard(ps, hs, cap, sup, lab, SimpleNamespace(
+        converged=False, master_series=[1.0]))
+    assert ok["pools_hash"] and ok["pool_findings"] == []   # weak LB: fine
+    bad = cg_trace.pool_guard(ps, hs, cap, sup, lab, SimpleNamespace(
+        converged=True, master_series=[1.0]))
+    assert bad["pool_findings"][0][0] == "below_physical_bound_pool"
