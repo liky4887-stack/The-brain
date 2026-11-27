@@ -1,0 +1,8 @@
+# Locked CI dependency versions (the versions the suite was measured with).
+# tests/test_env_lock.py fails if an installed package differs from a pin here.
+numpy==2.2.6
+scipy==1.15.3
+pydantic==2.11.7
+ortools==9.12.4544
+highspy==1.9.0
+pyvrp==0.11.3

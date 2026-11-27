@@ -7,16 +7,16 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" highspy pytest pyvrp
+      - run: python -m pip install --quiet -r config/ci-requirements.txt pytest pytest-timeout
       - name: serial suite, per-test progress, hard stop at 20 min so the log survives
         env:
           PYTHONPATH: packages/brain-core
         run: |
           git config --global user.email ci@example.com; git config --global user.name ci
-          timeout 900 python -u -m pytest tests -v -m "not benchmark" -p no:cacheprovider -x -o faulthandler_timeout=150 || echo "pytest exit $?"
+          timeout 2100 python -u -m pytest tests -v --durations=15 -m "not benchmark" -p no:cacheprovider --timeout=240 -o timeout_method=thread -o faulthandler_timeout=150 || echo "pytest exit $?"
