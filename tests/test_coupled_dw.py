@@ -272,3 +272,21 @@ def test_master_lp_reports_failure_when_all_methods_fail(monkeypatch):
         [[{"cost": 1.0, "mat": {}, "lab": {}, "qty": {}}]], [("m", 0)],
         [1.0])
     assert obj is None and "retries" in st
+
+
+def test_tol_rel_floor_keeps_the_bound_and_never_adds_iterations():
+    """tol_rel is a relative floor on the pricing tolerance (original cost
+    units). On binding caps (0.75x) it must reach the same LP bound as the
+    absolute tolerance and take no more iterations."""
+    from brain_core.rolling.coupled_dw import column_generation
+    ps, hs, cap, days = _two_plants()
+    solo, mat_tot = _uncoupled(ps, hs, cap, days)
+    caps = {k: 0.75 * v for k, v in mat_tot.items()}
+    a = column_generation([p.factory for p in ps], hs, days, cap,
+                          supplier_cap=caps, max_iter=60, time_limit_s=30.0)
+    b = column_generation([p.factory for p in ps], hs, days, cap,
+                          supplier_cap=caps, max_iter=60, time_limit_s=30.0,
+                          tol_rel=1e-9)
+    assert a.converged and b.converged, (a.status, b.status)
+    assert b.iterations <= a.iterations
+    assert abs(b.lower_bound - a.lower_bound) <= 1e-6 * abs(a.lower_bound) + 1
