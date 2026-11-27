@@ -147,6 +147,9 @@ def _solve_master(colsets, pools, caps):
     return float(res.fun), u, sigma, art, status, lam
 
 
+from ..guards.progress import DEFAULT_CG_PROGRESS_WINDOW  # noqa: E402
+
+
 def column_generation(factories: list, horizon_start, days: int,
                       cap_min: float,
                       supplier_cap: dict[tuple[str, int], float],
@@ -161,7 +164,7 @@ def column_generation(factories: list, horizon_start, days: int,
                       im_every: int = 0,
                       alloc_every: int = 0,
                       dive: bool = True,
-                      progress_window: int | None = None,
+                      progress_window: int | None = DEFAULT_CG_PROGRESS_WINDOW,
                       progress_rel_tol: float = 1e-9) -> DWResult:
     """Full CG loop: seed columns = uncoupled optima (or seed_qtys -
     e.g. a heuristic or monolithic coupled plan, one qty map per
