@@ -3,7 +3,7 @@
 name: serving
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/**", "feat/**"]
     paths: ["serving/**", "tests/test_serving.py", ".github/workflows/serving.yml"]
   pull_request:
     paths: ["serving/**", "tests/test_serving.py"]
