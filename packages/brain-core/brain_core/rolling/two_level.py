@@ -266,7 +266,10 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
 
     rows, cols, vals, sense, rhs = [], [], [], [], []
 
-    def add_row(entries, sn, rh):
+    fam_rows = []
+
+    def add_row(entries, sn, rh, fam="unlabelled"):
+        fam_rows.append(fam)
         r = len(rhs)
         for j, v in entries:
             rows.append(r); cols.append(j); vals.append(v)
@@ -280,14 +283,14 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             ent = [(xidx[(s, t, l)], 1.0 / sku[s][0])
                    for s in active if (s, t, l) in xidx]
             if ent:
-                add_row(ent, "L", cap_override.get((l, t), cap_eff))
+                add_row(ent, "L", cap_override.get((l, t), cap_eff), "line-day capacity")
     # linking: sum_l x_itl <= M_it * y_it, tight M
     for s in active:
         M = linking_m(sku[s], cap_eff, sum(dem[s]))
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0) for l in sku[s][1]]
             ent.append((yidx[(s, t)], -M))
-            add_row(ent, "L", 0.0)
+            add_row(ent, "L", 0.0, "setup linking")
     # hard shared-resource limits (allocate-then-solve shares):
     # mat_cap[(material, day)] caps material consumed by that day's
     # production; lab_cap[day] caps line-minutes used that day
@@ -299,13 +302,13 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                    if (s, t, l) in xidx
                    and recipes.get(s, {}).get(r, 0.0)]
             if ent:
-                add_row(ent, "L", capv)
+                add_row(ent, "L", capv, "shared material cap")
         for t, capv in (lab_cap or {}).items():
             ent = [(xidx[(s, t, l)], 1.0 / sku[s][0])
                    for s in active for l in sku[s][1]
                    if (s, t, l) in xidx]
             if ent:
-                add_row(ent, "L", capv)
+                add_row(ent, "L", capv, "shared labour cap")
     # coverage with lateness / earliness (cumulative, per SKU-day)
     for s in active:
         cum = 0.0
@@ -315,11 +318,11 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
             ent = [(xidx[(s, tau, l)], 1.0)
                    for tau in range(t + 1) for l in sku[s][1]]
             ent.append((loidx[(s, t)], 1.0))
-            add_row(ent, "G", target)
+            add_row(ent, "G", target, "demand coverage (late var)")
             ent_e = [(xidx[(s, tau, l)], 1.0)
                      for tau in range(t + 1) for l in sku[s][1]]
             ent_e.append((eidx[(s, t)], -1.0))
-            add_row(ent_e, "L", target)
+            add_row(ent_e, "L", target, "earliness")
 
     lb = np.zeros(n_vars)
     ub = np.full(n_vars, np.inf)
@@ -329,7 +332,7 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
         integ[j] = 1
     A = coo_matrix((vals, (rows, cols)), shape=(len(rhs), n_vars)).tocsr()
     mip = MIP("buckets", c, A, tuple(sense), np.array(rhs, dtype=float),
-              lb, ub, integ)
+              lb, ub, integ, tuple(fam_rows))
     return mip, {"x": xidx, "y": yidx, "active": active, "sku": sku,
                  "skipped": skipped}
 

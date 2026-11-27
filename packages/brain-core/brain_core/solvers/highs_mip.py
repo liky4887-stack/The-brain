@@ -33,6 +33,7 @@ class MIP:
     lb: np.ndarray
     ub: np.ndarray
     integrality: np.ndarray  # 1 = integer
+    row_family: Optional[tuple] = None  # per row: constraint-family name
 
 
 def read_mps(path: str) -> MIP:
@@ -155,3 +156,120 @@ def solve_mip(mip: MIP, time_limit_s: float = 60.0,
     return {"status": res.message, "objective": objective, "x": res.x,
             "node_count": getattr(res, "mip_node_count", None),
             "gap": getattr(res, "mip_gap", None)}
+
+
+def _milp_feasible(mip: MIP, keep: np.ndarray, time_limit_s: float):
+    """Feasibility of the rows in `keep` only: True / False / None (undecided)."""
+    from scipy.optimize import Bounds, LinearConstraint, milp
+    sense = np.array(mip.sense)
+    lo = np.where(sense == "G", mip.rhs, -np.inf)
+    hi = np.where(sense == "L", mip.rhs, np.inf)
+    eq = sense == "E"
+    lo[eq] = hi[eq] = mip.rhs[eq]
+    res = milp(np.zeros(len(mip.c)), integrality=mip.integrality,
+               bounds=Bounds(mip.lb, mip.ub),
+               constraints=LinearConstraint(mip.A[keep], lo[keep], hi[keep]),
+               options={"time_limit": time_limit_s})
+    if res.status == 0:
+        return True
+    if res.status == 2:
+        return False
+    return None
+
+
+RATIO_RHS_FLOOR = 1.0   # |rhs| below this: ratio denominator is this floor (flagged)
+
+
+def explain_infeasible_mip(mip: MIP, time_limit_s: float = 30.0,
+                           slack_weights: Optional[np.ndarray] = None,
+                           normalize: bool = False) -> dict:
+    """Name WHAT conflicts and HOW MUCH is missing, at constraint-FAMILY level.
+
+    Needs mip.row_family (one name per row). Two parts, both stated as
+    family-level, never row-level:
+    1. Elastic model: every row gets a nonnegative slack (both directions
+       for E rows) and the weighted total slack is minimized (integrality
+       kept). Weight per row defaults to 1, so a row's slack is in that
+       ROW's own units; amounts are comparable inside a family (same units)
+       and NOT across families. The minimum is one optimal repair, not the
+       only one. Reported: per family the total slack and the rows with
+       slack > 1e-9 (row index, amount).
+    2. Deletion filter over families: drop a whole family, keep the drop
+       when the remaining families stay INFEASIBLE. The result is a
+       minimal set of FAMILIES (removing any one family makes the rest
+       feasible); it does not say which rows inside a family conflict.
+    Each slack row is reported with its absolute amount (row units) AND a
+    relative violation ratio = slack / max(|rhs|, RATIO_RHS_FLOOR). For a
+    row with |rhs| < RATIO_RHS_FLOOR (zero or tiny rhs) the denominator is
+    the floor, so the ratio equals the absolute amount, and the row is
+    flagged ratio_basis="floor". normalize=True also minimizes the ratio
+    (weights 1/denominator) instead of the absolute amounts; the ratio is
+    scale-free but depends on the rhs size, so it is a comparison aid, not
+    a cost.
+    An undecided solve is reported as "undecided", never as a result.
+    Not applied to feasible problems: call it only after INFEASIBLE.
+    """
+    from scipy.optimize import Bounds, LinearConstraint, milp
+    from scipy.sparse import csr_matrix, hstack, identity
+    if mip.row_family is None:
+        raise ValueError("MIP has no row_family labels")
+    fam = np.array(mip.row_family)
+    m, n = mip.A.shape
+    sense = np.array(mip.sense)
+    denom = np.maximum(np.abs(mip.rhs), RATIO_RHS_FLOOR)
+    w = np.ones(m) if slack_weights is None else np.asarray(slack_weights, float)
+    if normalize and slack_weights is None:
+        w = 1.0 / denom
+    # columns: x, s_minus (for L/E: a x - s <= rhs), s_plus (for G/E: a x + s >= rhs)
+    I = identity(m, format="csr")
+    A = hstack([csr_matrix(mip.A), -I, I], format="csr")
+    lo = np.where(sense == "G", mip.rhs, -np.inf)
+    hi = np.where(sense == "L", mip.rhs, np.inf)
+    eq = sense == "E"
+    lo[eq] = hi[eq] = mip.rhs[eq]
+    # s_minus only meaningful for L/E rows, s_plus for G/E rows
+    ub_minus = np.where(sense == "G", 0.0, np.inf)
+    ub_plus = np.where(sense == "L", 0.0, np.inf)
+    c = np.concatenate([np.zeros(n), w, w])
+    lb = np.concatenate([mip.lb, np.zeros(2 * m)])
+    ub = np.concatenate([mip.ub, ub_minus, ub_plus])
+    integ = np.concatenate([mip.integrality, np.zeros(2 * m)])
+    res = milp(c, integrality=integ, bounds=Bounds(lb, ub),
+               constraints=LinearConstraint(A, lo, hi),
+               options={"time_limit": time_limit_s})
+    out = {"level": "family", "slack_by_family": {}, "slack_rows": [],
+           "minimal_families": None, "notes": []}
+    if res.x is None:
+        out["notes"].append(f"elastic model undecided: {res.message}")
+    else:
+        sl = res.x[n:n + m] + res.x[n + m:]
+        for i in np.nonzero(sl > 1e-9)[0]:
+            out["slack_rows"].append({
+                "row": int(i), "family": str(fam[i]), "amount": float(sl[i]),
+                "ratio": float(sl[i] / denom[i]),
+                "ratio_basis": "rhs" if abs(mip.rhs[i]) >= RATIO_RHS_FLOOR else "floor"})
+            out["slack_by_family"][str(fam[i])] = \
+                out["slack_by_family"].get(str(fam[i]), 0.0) + float(sl[i])
+        out["slack_weights"] = ("1/max(|rhs|,floor) (ratio)" if normalize else
+                                "1 per row unit (row's own units; not comparable across families)")
+        fr = {}
+        for r_ in out["slack_rows"]:
+            fr[r_["family"]] = max(fr.get(r_["family"], 0.0), r_["ratio"])
+        out["worst_ratio_by_family"] = fr
+        if res.status != 0:
+            out["notes"].append("elastic solve not proven optimal: amounts are an upper bound on the minimum")
+    names = sorted(set(fam.tolist()))
+    if _milp_feasible(mip, np.ones(m, bool), time_limit_s) is not False:
+        out["notes"].append("problem not proven infeasible: no family set named")
+        return out
+    core = set(names)
+    for f in names:
+        trial = core - {f}
+        keep = np.isin(fam, list(trial))
+        r = _milp_feasible(mip, keep, time_limit_s)
+        if r is False:
+            core = trial
+        elif r is None:
+            out["notes"].append(f"family {f!r}: re-solve undecided, set may be unminimized")
+    out["minimal_families"] = sorted(core)
+    return out
