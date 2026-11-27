@@ -39,6 +39,13 @@ from brain_core.guards.progress import DEFAULT_CG_PROGRESS_WINDOW  # noqa: E402
 from brain_core.guards.manifest import (Manifest, assert_manifest,  # noqa: E402
                                         observed_environment)
 from brain_core.rolling.two_level import linking_m_version  # noqa: E402
+from brain_core.rolling.two_level import ObjectiveWeights  # noqa: E402
+
+# The weights this runner solves with. Passed EXPLICITLY to column_generation
+# and sealed in the manifest, so the record is what was used. A monolith row
+# with a different setup weight (calibration rows use 2.3-24.8, EOQ-calibrated
+# per TBO) is NOT comparable with it.
+WEIGHTS = ObjectiveWeights()
 
 
 def class_name(actual: dict) -> str:
@@ -46,7 +53,9 @@ def class_name(actual: dict) -> str:
     sealed manifest), never typed by hand."""
     return (f"pools {actual['supplier']}/{actual['labor']} n={actual['n']} "
             f"{actual['days']}d linking-M {actual['linking_m_version']} "
-            f"seed_base {actual['seed_base']}")
+            f"seed_base {actual['seed_base']} "
+            f"weights setup {actual['weights']['setup']:g}/"
+            f"late {actual['weights']['late']:g}")
 
 
 def build_manifest(seed: int, n: int, expect: str | None = None) -> Manifest:
@@ -56,6 +65,8 @@ def build_manifest(seed: int, n: int, expect: str | None = None) -> Manifest:
     actual = {"supplier": cc.SUPPLIER_FACTOR, "labor": cc.LABOR_FACTOR,
               "n": n, "days": cc.DAYS, "seed_base": seed,
               "linking_m_version": linking_m_version(),
+              "weights": {"setup": WEIGHTS.setup, "late": WEIGHTS.late,
+                          "early": WEIGHTS.early, "energy": WEIGHTS.energy},
               "code_sha": cc._sha(),
               "cg_iters": int(os.environ.get("CG_ITERS", "400")),
               "cg_wall_s": float(os.environ.get("CG_WALL_S", "900")),
@@ -106,7 +117,7 @@ if __name__ == "__main__":
         labor_cap=lab, max_iter=int(os.environ.get("CG_ITERS", "400")),
         time_limit_s=30.0, seed_qtys=None,
         wall_s=float(os.environ.get("CG_WALL_S", "900")),
-        tol_rel=float(os.environ.get("CG_TOL_REL", "0")))
+        tol_rel=float(os.environ.get("CG_TOL_REL", "0")), weights=WEIGHTS)
     wall = time.perf_counter() - t0
     tols = [1e-12, 1e-9, 1e-6, 1e-4]
     json.dump({"status": dw.status, "converged": dw.converged,

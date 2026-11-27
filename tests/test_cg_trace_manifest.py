@@ -45,3 +45,32 @@ def test_pool_guard_records_identity_and_flags_a_converged_value_below_bound():
     bad = cg_trace.pool_guard(ps, hs, cap, sup, lab, SimpleNamespace(
         converged=True, master_series=[1.0], lb_series=[]))
     assert bad["pool_findings"][0][0] == "below_physical_bound_pool"
+
+
+def test_weights_are_sealed_in_the_manifest_and_shown_in_the_class_name():
+    d = cg_trace.build_manifest(3, 2).declared
+    assert d["weights"] == {"setup": 50.0, "late": 1000.0,
+                            "early": 0.001, "energy": 0.0}
+    assert "weights setup 50/late 1000" in d["class_name"]
+
+
+def test_the_weights_sealed_are_the_weights_passed_to_the_solver(
+        monkeypatch, tmp_path):
+    """Fail-before: the runner passed no weights (solver default) and the
+    row did not say which were used. Intercept column_generation and
+    compare what it receives with the manifest."""
+    import runpy
+    import brain_core.rolling.coupled_dw as dwmod
+    seen = {}
+
+    def fake(*a, **k):
+        seen.update(k)
+        raise RuntimeError("stop after capture")
+
+    monkeypatch.setattr(dwmod, "column_generation", fake)
+    monkeypatch.setattr(sys, "argv", ["cg_trace.py", "3", str(tmp_path / "o")])
+    monkeypatch.setenv("CMP_SIZE", "2")
+    with pytest.raises(RuntimeError, match="stop after capture"):
+        runpy.run_path(cg_trace.__file__, run_name="__main__")
+    assert seen["weights"].setup == 50.0 and seen["weights"].late == 1000.0
+    assert seen["weights"] == cg_trace.WEIGHTS
