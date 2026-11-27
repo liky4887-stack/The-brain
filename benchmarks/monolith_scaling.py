@@ -627,6 +627,16 @@ def main():
             rec["incumbent"] = r["objective"]
             rec["mip_gap"] = r.get("gap")
             rec["nodes"] = r.get("node_count")
+        # guard: every record passes the anomaly rules; findings are
+        # stored in the record and printed, never hidden
+        from brain_core.guards.anomaly import check_record
+        _f = check_record(
+            {k: v for k, v in rec.items() if k != "trajectory"})
+        rec["guard_findings"] = [(x.rule, x.detail) for x in _f
+                                 if x.rule != "nan_or_missing"
+                                 or r["x"] is not None]
+        if rec["guard_findings"]:
+            print("GUARD FINDINGS:", rec["guard_findings"], flush=True)
         out["solves"][spec] = rec
         out["stages"]["solve:" + spec] = {
             "t_s": round(time.perf_counter() - T0, 1),
