@@ -24,8 +24,29 @@ class Manifest:
     declared: dict = field(default_factory=dict)
 
     def hash(self) -> str:
-        blob = json.dumps(self.declared, sort_keys=True, default=str)
+        # _canon: a set's str() order changes between processes (hash
+        # randomisation), so default=str gave one manifest two hashes
+        blob = json.dumps(_canon(self.declared), sort_keys=True,
+                          default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _canon(v):
+    if isinstance(v, dict):
+        return {str(k): _canon(x) for k, x in v.items()}
+    if isinstance(v, (set, frozenset)):
+        return sorted((_canon(x) for x in v), key=repr)
+    if isinstance(v, (list, tuple)):
+        return [_canon(x) for x in v]
+    return v
+
+
+def _same(a, b) -> bool:
+    # True == 1 and 1 == 1.0 in Python: a bool where a number was
+    # declared (or the reverse) must still count as drift
+    if isinstance(a, bool) != isinstance(b, bool):
+        return False
+    return a == b
 
 
 def check_manifest(m: Manifest, actual: dict) -> list[str]:
@@ -33,7 +54,7 @@ def check_manifest(m: Manifest, actual: dict) -> list[str]:
     for k, want in sorted(m.declared.items()):
         if k not in actual:
             problems.append(f"{k}: declared {want!r}, actual MISSING")
-        elif actual[k] != want:
+        elif not _same(actual[k], want):
             problems.append(f"{k}: declared {want!r}, actual "
                             f"{actual[k]!r}")
     return problems
