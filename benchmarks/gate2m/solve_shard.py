@@ -92,7 +92,6 @@ def execute(idx, workers, t0, wall_guard_s, mem_guard_mb,
     stopped_by = None
     hard = job_budget_s is not None
     pool = None
-    mp = None
     # spawn, not the Linux default fork: forking a parent that already
     # runs solver/BLAS threads can deadlock the child - the same class
     # that stalled serial CI in decompose/parallel.py (fixed there by
