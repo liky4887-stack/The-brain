@@ -1,0 +1,38 @@
+name: probe-plant2245
+# Experiment only (not a verdict): plant 2245 alone on a clean free runner,
+# branch code, to measure the dense-day behaviour without codespace load.
+on:
+  push:
+    branches: [probe/plant2245]
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544"
+      - name: plant 2245 alone
+        run: |
+          echo "SHA $GITHUB_SHA"; nproc; cat /proc/cpuinfo | grep -m1 "model name"
+          cd benchmarks/gate2m
+          PYTHONPATH=../../packages/brain-core:. python - <<'PY'
+          import json, time
+          import brain_core.rolling.two_level as tl
+          from common import run_plant
+          orig = tl.solve_day_exact
+          def wrap(factory, chunks, day, *a, **k):
+              t = time.time(); r = orig(factory, chunks, day, *a, **k)
+              if len(chunks) > 110:
+                  print("DENSE day", day, "chunks", len(chunks), "wall_s", round(time.time()-t, 1), "problems", r[1], flush=True)
+              return r
+          tl.solve_day_exact = wrap
+          t = time.time()
+          r = run_plant(2245, seq_num_workers=1)
+          print("SOLVE_S", round(time.time()-t, 1))
+          print(json.dumps({k: r[k] for k in ("plant", "seed", "solve_s", "problems", "kpis", "windows")}))
+          PY
