@@ -184,15 +184,20 @@ def fake_slow_rec(i):
 def test_wave_hard_bound_terminates_and_records_honestly():
     """A wave that overruns the remaining job budget is TERMINATED;
     its plants are recorded not-attempted, the step returns in time
-    for the upload step to run (the shard-194 lesson)."""
+    for the upload step to run (the shard-194 lesson).
+
+    Deterministic: the guard arithmetic runs on an injected clock frozen
+    at 0 (the earlier version used the real clock on a 2 s budget and
+    lost a race on slow CI to the 'job budget guard' check, which fired
+    first). Only the plant's own 30 s sleep is real time."""
     import time
     t0 = time.monotonic()
-    records, stopped = execute([0, 1], workers=1, t0=t0,
+    records, stopped = execute([0, 1], workers=1, t0=0.0,
                                wall_guard_s=1e9, mem_guard_mb=1e9,
-                               runner=fake_slow_rec,
+                               runner=fake_slow_rec, clock=_FrozenClock(),
                                job_budget_s=2.0, upload_margin_s=1.5)
     elapsed = time.monotonic() - t0
-    assert stopped is not None and "hard bound" in stopped
+    assert stopped is not None and "hard bound" in stopped, stopped
     assert elapsed < 15.0   # killed, not the runner's 30s
     assert all("not attempted" in r["problems"][0]
                for r in records)
