@@ -10,6 +10,10 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,6 +35,13 @@ jobs:
                   print("DENSE day", day, "chunks", len(chunks), "wall_s", round(time.time()-t, 1), "problems", r[1], flush=True)
               return r
           tl.solve_day_exact = wrap
+          import brain_core.rolling.two_level as _t
+          _om = _t.solve_mip
+          def wm(mip, *a, **k):
+              t = time.time(); r = _om(mip, *a, **k)
+              print("BUCKET_MIP vars", len(mip.c), "nodes", r.get("node_count"), "wall_s", round(time.time()-t, 1), "gap", r.get("gap"), "status", str(r["status"])[:40], "node_limit", k.get("node_limit"), flush=True)
+              return r
+          _t.solve_mip = wm
           t = time.time()
           r = run_plant(2245, seq_num_workers=1)
           print("SOLVE_S", round(time.time()-t, 1))
