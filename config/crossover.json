@@ -1,1 +1,24 @@
-{"sizes": [2, 4, 8, 16], "cg_wall_s": 600, "monolith_limit_s": 600, "alloc_every": 5, "im_every": 25, "stab_alpha": 0.3, "iters": 1000, "replicas": 5}
+{
+ "sizes": [
+  2,
+  4,
+  8,
+  16
+ ],
+ "cg_wall_s": 600,
+ "monolith_limit_s": 600,
+ "alloc_every": 5,
+ "im_every": 25,
+ "stab_alpha": 0.3,
+ "iters": 1000,
+ "replicas": 5,
+ "class": {
+  "supplier_factor": 0.75,
+  "labor_factor": 0.8,
+  "horizon_days": 7,
+  "caps": "coupled_comparison harness pools; no caps_v key in this harness (caps-v1/v2 apply to monolith_scaling calib classes only)",
+  "measured_run": "45863417715",
+  "measured_sha": "2bc3e6bdbf743ef1bdcc68d728a2dd646f4dff1b",
+  "note": "not comparable with calib classes or the 1.1/1.1 class; the 64-plant sweep run 45842450508 is VOID (invalid UB plans)"
+ }
+}
