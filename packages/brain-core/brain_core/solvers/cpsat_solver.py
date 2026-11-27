@@ -85,6 +85,7 @@ def solve_cpsat(problem: SchedulingProblem, time_limit_s: float = 10.0) -> Solve
         )
 
     if status_code == cp_model.INFEASIBLE:
+        diagnostics["conflicting_constraints"] = explain_infeasible_cpsat(problem)
         return SolveResult(status=SolveStatus.INFEASIBLE, solve_time_ms=solve_time_ms,
                            solver_diagnostics=diagnostics)
 
@@ -100,3 +101,60 @@ def _by_order(problem: SchedulingProblem, assignments):
     """Yield assignments in problem.orders order."""
     by_id = {a.order_id: a for a in assignments}
     return [by_id[o.id] for o in problem.orders]
+
+
+def explain_infeasible_cpsat(problem: SchedulingProblem, time_limit_s: float = 10.0) -> list[str]:
+    """Name a MINIMAL set of conflicting rules for an infeasible problem.
+
+    Method (CP-SAT assumptions): each rule is guarded by a literal (the hard deadline of each order). The model
+    is solved under the literals of the rules still active; on INFEASIBLE
+    the solver returns a sufficient set of assumptions, then a deletion
+    filter drops each rule in turn and keeps the drop only when the rest
+    stays INFEASIBLE. The result is irreducible: removing any one named
+    rule makes the remaining rules feasible. The machine's no-overlap and
+    the processing times are the structure itself and are never blamed.
+    If a re-solve is undecided within the limit the list carries an
+    explicit "unminimized" entry (never silent). Returns [] when the
+    problem is infeasible without any named rule.
+    """
+    horizon = max(problem.horizon, 1)
+    d_names = {o.id: f"deadline of order {o.id} (end <= {o.deadline})"
+               for o in problem.orders if o.deadline is not None}
+    all_rules = list(d_names.values())
+
+    def run(active):
+        m = cp_model.CpModel()
+        lit = {}
+        ivs, ends = [], {}
+        for o in problem.orders:
+            st = m.new_int_var(0, horizon, f"s_{o.id}")
+            en = m.new_int_var(0, horizon, f"e_{o.id}")
+            ivs.append(m.new_interval_var(st, o.processing_time, en, f"i_{o.id}"))
+            if o.id in d_names:
+                lit[d_names[o.id]] = m.new_bool_var(f"deadline_{o.id}")
+                m.add(en <= o.deadline).only_enforce_if(lit[d_names[o.id]])
+        m.add_no_overlap(ivs)
+        m.add_assumptions([lit[n] for n in all_rules if n in active])
+        sv = cp_model.CpSolver()
+        sv.parameters.max_time_in_seconds = time_limit_s
+        code = sv.solve(m)
+        core = set()
+        if code == cp_model.INFEASIBLE:
+            idx = set(sv.sufficient_assumptions_for_infeasibility())
+            core = {n for n in active if lit[n].index in idx}
+        return code, core
+
+    code, core = run(set(all_rules))
+    if code != cp_model.INFEASIBLE:
+        return []
+    unminimized = False
+    for n in sorted(core):
+        c2, core2 = run(core - {n})
+        if c2 == cp_model.INFEASIBLE:
+            core = core2 if core2 else core - {n}
+        elif c2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            unminimized = True
+    out = sorted(core)
+    if unminimized:
+        out.append("(unminimized: a re-solve was undecided within the limit)")
+    return out
