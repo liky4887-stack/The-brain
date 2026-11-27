@@ -52,3 +52,14 @@ def test_scaling_does_not_change_duals_or_objective(monkeypatch):
     import numpy as np
     assert np.allclose(b1[1], b2[1], rtol=1e-5, atol=1e-3)
     assert a[0] is not None
+
+
+def test_cheap_regime_scale_follows_data():
+    """Costs ~1e3 (cheap regime): the data-derived scale keeps the master
+    solvable and the objective is exactly the expensive one times the factor."""
+    cs, pools, caps = _fixture()
+    f = 1e-6
+    cs2 = [[dict(c, cost=c["cost"] * f) for c in p] for p in cs]
+    obj, _u, _s, art, st, _lam = D._solve_master(cs2, pools, caps)
+    assert st == "optimal" and art == 0.0, (st, art)
+    assert abs(obj - 131266872.51616867 * f) <= 1e-6 * obj
