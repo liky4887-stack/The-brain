@@ -62,3 +62,26 @@ def compare_to_pool_bound(row: dict, bound: dict,
                         f"{row.get('kind')} {obj} below late_weight x "
                         f"lateness bound = {need} on the same pools")]
     return []
+
+
+def cg_series_findings(master_series, lb_series, rel_tol: float = 1e-9) -> list:
+    """Self-consistency of a CG run. The restricted master only gains
+    columns, so its value never rises; every valid Farley bound is <= the
+    true LP optimum <= every restricted master. A rise, or a bound above a
+    master value, means the master LP numerics are not trustworthy (measured:
+    HiGHS default tolerance on a scaled master, rises of 16-57 on 1e8-scale
+    columns) and the row must not be filed as a result."""
+    f = []
+    m = [v for v in (master_series or []) if v is not None]
+    worst = max(((m[i] - m[i - 1], i) for i in range(1, len(m))),
+                default=(0.0, 0))
+    if m and worst[0] > rel_tol * max(1.0, abs(m[worst[1] - 1])):
+        f.append(Finding("master_not_monotone",
+                         f"restricted master rose by {worst[0]:.6g} at "
+                         f"iteration {worst[1]}"))
+    lbs = [v for v in (lb_series or []) if v is not None]
+    if m and lbs and max(lbs) > min(m) + rel_tol * max(1.0, abs(min(m))):
+        f.append(Finding("farley_above_master",
+                         f"best Farley bound {max(lbs):.10g} above the "
+                         f"smallest master {min(m):.10g}"))
+    return f

@@ -47,3 +47,13 @@ def test_weak_lower_bound_below_is_not_a_contradiction():
     bound = {"pools_hash": h, "lower_bound": 1e5, "late_weight": 1000.0}
     assert compare_to_pool_bound({"pools_hash": h, "kind": "lower_bound",
                                   "objective": 5.0}, bound) == []
+
+
+def test_cg_series_guard_flags_master_rise_and_bound_above_master():
+    from brain_core.guards.pool_identity import cg_series_findings
+    ok = cg_series_findings([10.0, 9.0, 8.5, 8.5], [None, 7.0, 8.4, None])
+    assert ok == []
+    rise = cg_series_findings([2268.6, 2273.7, 2268.9], [None, None, None])
+    assert [x.rule for x in rise] == ["master_not_monotone"]
+    cross = cg_series_findings([2273.7, 2268.6], [2269.84, None])
+    assert [x.rule for x in cross] == ["farley_above_master"]

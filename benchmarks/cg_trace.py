@@ -87,7 +87,9 @@ def pool_guard(ps, hs, cap, sup, lab, dw) -> dict:
     kind = "converged_lp" if dw.converged else "lower_bound"
     obj = dw.master_series[-1] if dw.master_series else None
     row = {"pools_hash": h, "kind": kind, "objective": obj}
-    f = compare_to_pool_bound(row, bound)
+    from brain_core.guards.pool_identity import cg_series_findings
+    f = compare_to_pool_bound(row, bound) + cg_series_findings(
+        dw.master_series, dw.lb_series)
     return {"pools_hash": h, "pool_bound": bound, "pool_row": row,
             "pool_findings": [[x.rule, x.detail] for x in f]}
 
