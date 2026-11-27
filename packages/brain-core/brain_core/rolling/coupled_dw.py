@@ -117,27 +117,32 @@ def _solve_master(colsets, pools, caps):
     for j, (p_i, _cc, _u) in enumerate(cols):
         if p_i is not None:
             A_eq[p_i, j] = 1.0
-    first_msg = None
     res = None
     # default HiGHS first; a numerical failure (observed: status 4
     # "model_status Unknown" late in CG with BIGM 1e12 next to costs
-    # near 1e8) is retried with the other HiGHS algorithms and the
-    # retry is RECORDED in the returned status, never silent
+    # near 1e8) is retried with the other HiGHS algorithms. EVERY
+    # attempt is recorded (method, status, message, seconds) together
+    # with the master size at that moment, never silent.
+    import time as _t
+    size = (f"master size: {n_pools + n_plants} rows, {n} cols "
+            f"({art0} real columns + {n_pools} artificial)")
+    attempts = []
     for method in ("highs", "highs-ipm", "highs-ds"):
+        t0 = _t.monotonic()
         res = linprog(c, A_ub=A_ub.tocsr(),
                       b_ub=np.array(caps, dtype=float),
                       A_eq=A_eq.tocsr(), b_eq=np.ones(n_plants),
                       bounds=(0.0, None), method=method)
+        attempts.append(f"{method}: status {res.status} "
+                        f"({res.message}) {_t.monotonic() - t0:.2f}s")
         if res.status == 0:
             break
-        if first_msg is None:
-            first_msg = (f"master LP {method} status {res.status}: "
-                         f"{res.message}")
+    first_msg = None if len(attempts) == 1 and res.status == 0 else \
+        "attempts: " + " | ".join(attempts) + f"; {size}"
     if res.status != 0:
         return (None, None, None, None,
-                f"{first_msg}; retries highs-ipm/highs-ds also failed "
-                f"(last status {res.status}: {res.message})",
-                None)
+                f"master LP failed; retries highs-ipm/highs-ds also failed; "
+                f"{first_msg}", None)
     u = np.asarray(res.ineqlin.marginals)      # <= 0 for min / <= rows
     sigma = np.asarray(res.eqlin.marginals)    # free
     art = float(res.x[art0:].sum())
