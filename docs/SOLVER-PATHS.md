@@ -41,7 +41,7 @@ code; each is exercised by its own tests only.
 
 - CP-SAT single-machine scheduler: minimal set of conflicting hard
   deadlines (assumptions plus deletion filter), `solvers/cpsat_solver.py`.
-- MIP: family-level slack amounts and minimal set of constraint families,
+- MIP: family-level slack amounts and minimal set of constraint families (the "setup linking" family is labelled "includes line capacity": its big-M is built from line capacity, so a capacity shortfall shows up there),
   `solvers/highs_mip.py::explain_infeasible_mip`. The shipped bucket MIP is
   elastic (late variables) and does not become infeasible; the explanation
   applies to hard-constraint MIPs.

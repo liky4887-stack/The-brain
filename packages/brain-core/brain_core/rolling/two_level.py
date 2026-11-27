@@ -290,7 +290,7 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0) for l in sku[s][1]]
             ent.append((yidx[(s, t)], -M))
-            add_row(ent, "L", 0.0, "setup linking")
+            add_row(ent, "L", 0.0, "setup linking (includes line capacity)")
     # hard shared-resource limits (allocate-then-solve shares):
     # mat_cap[(material, day)] caps material consumed by that day's
     # production; lab_cap[day] caps line-minutes used that day
