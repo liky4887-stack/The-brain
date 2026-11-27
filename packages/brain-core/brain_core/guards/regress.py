@@ -11,7 +11,11 @@ CLASS_KEYS = ("pool", "caps_v", "regime", "n", "seed", "time_limit_s")
 
 
 def class_of(row: dict) -> tuple:
-    return tuple(row.get(k) for k in CLASS_KEYS)
+    # linking_m_version: rows written before the version existed (all
+    # published numbers up to 2026-11-27) used M v1 by construction, so
+    # a missing value is v1; v1 and v2 rows are never one class.
+    return tuple(row.get(k) for k in CLASS_KEYS) + (
+        row.get("linking_m_version") or "v1",)
 
 
 def compare(new: dict, ref: dict, rel_tol: float = 1e-6,

@@ -479,7 +479,8 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
     for the coupled bucket model as specified. Tolerances match the
     window validator (0.05 minutes capacity, 1e-6 quantities).
     """
-    from .two_level import DEFAULT_WEIGHTS, DEFAULT_CHG_ALLOWANCE
+    from .two_level import (DEFAULT_WEIGHTS, DEFAULT_CHG_ALLOWANCE,
+                            linking_m)
     # data from the raw records, NOT from the model's helpers: a defect
     # in _sku_data/_recipe_data/due_day must not pass model and
     # validator together (guards/independent_data.py)
@@ -548,7 +549,7 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
                     f"plant {p_i} {l} day {t}: {mins:.1f} min > "
                     f"cap {cap_eff:.1f}")
         for (s, t), q in sorted(per_st.items()):
-            M = min(cap_eff * sku[s][0], sum(dem.get(s, [0.0])) + 1.0)
+            M = linking_m(sku[s], cap_eff, sum(dem.get(s, [0.0])))
             if q > M + 1e-6:
                 problems.append(
                     f"plant {p_i} {s} day {t}: produced {q:.1f} > "
@@ -594,3 +595,32 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
                  "late_unit_days": round(total_late, 3),
                  "early_unit_days": round(total_early, 3)})
     return problems, kpis
+
+
+def linking_m_problems(factory, horizon_start, days: int, cap_min: float,
+                       chg_allowance: float = None,
+                       version: str = None) -> list[str]:
+    """Check the model's linking M against the physical maximum, from
+    raw records: for every SKU, M must be >= min(sum over eligible lines
+    of cap_eff * rate, total window demand). A smaller M silently cuts
+    plans that are feasible per line capacity and never shows up as a
+    violation in any plan (the validator would reject them as well)."""
+    from .two_level import DEFAULT_CHG_ALLOWANCE, linking_m
+    from ..guards.independent_data import raw_due_day, raw_sku_data
+    chg = DEFAULT_CHG_ALLOWANCE if chg_allowance is None else chg_allowance
+    cap_eff = cap_min * (1.0 - chg)
+    sku = raw_sku_data(factory)
+    dem: dict = {}
+    for d in factory.demands:
+        t = raw_due_day(d.due, horizon_start)
+        if 0 <= t < days:
+            dem[d.item] = dem.get(d.item, 0.0) + d.quantity
+    out = []
+    for s, (rate, lines, _) in sorted(sku.items()):
+        need = min(len(lines) * cap_eff * rate, dem.get(s, 0.0))
+        M = linking_m(sku[s], cap_eff, dem.get(s, 0.0), version)
+        if M < need - 1e-6:
+            out.append(f"{s}: linking M {M:.1f} < physical maximum "
+                       f"{need:.1f} ({len(lines)} lines, demand "
+                       f"{dem.get(s, 0.0):.1f})")
+    return out

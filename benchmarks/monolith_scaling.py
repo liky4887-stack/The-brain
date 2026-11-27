@@ -26,7 +26,7 @@ from coupled_comparison import qty_from_mip_x
 from brain_core.rolling.coupled import (build_coupled_mip,
                                         validate_coupled_plan,
                                         _plant_usage)
-from brain_core.rolling.two_level import solve_buckets
+from brain_core.rolling.two_level import solve_buckets, linking_m_version
 from brain_core.solvers.highs_mip import solve_mip
 from brain_core.guards.durable import atomic_write_text, write_run_json
 
@@ -531,6 +531,7 @@ def main():
     days = c["days"]
     out["runner"] = runner_specs()
     out["code_sha"] = _sha()
+    out["linking_m_version"] = linking_m_version()
     # manifest: what this run declares it is (class, size, knobs, code,
     # libraries). Re-checked at every solve below; drift is a finding
     # in the record (a mid-run pull or pip upgrade can no longer mix
@@ -542,6 +543,7 @@ def main():
 
     def _actual():
         return {"cls": cls, "n": n, "code_sha": _sha(), **_knobs,
+                "linking_m_version": linking_m_version(),
                 **observed_environment()}
     manifest = Manifest(_actual())
     out["manifest_hash"] = manifest.hash()

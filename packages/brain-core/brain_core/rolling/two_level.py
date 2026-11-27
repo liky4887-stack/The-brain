@@ -122,6 +122,43 @@ class WindowPlan:
     problems: list[str] = field(default_factory=list)
 
 
+LINKING_M_VERSIONS = ("v1", "v2")
+
+
+def linking_m_version() -> str:
+    """Model version of the setup-linking M (env BRAIN_LINKING_M, default
+    v1 = the M every number published before 2026-11-27 used).
+      v1  M = min(cap_eff * rate, total demand + 1): ONE line-day of
+          capacity, although the linking row sums x over ALL eligible
+          lines, so a SKU eligible on 3 lines could not use more than
+          one line-day per day (measured: 104,422 demanded, 47,465
+          delivered with 3 lines idle enough to make all of it).
+      v2  M = min(sum over eligible lines of cap_eff_l * rate_l,
+          total demand + 1): the true per-line sum, still tight.
+    Numbers of different versions are never compared (the version is in
+    the run manifest and the regression class key)."""
+    import os
+    v = os.environ.get("BRAIN_LINKING_M", "v1")
+    if v not in LINKING_M_VERSIONS:
+        raise ValueError(f"BRAIN_LINKING_M={v!r}; expected one of "
+                         f"{LINKING_M_VERSIONS}")
+    return v
+
+
+def linking_m(sku_entry, cap_eff: float, total_demand: float,
+              version: str | None = None, line_cap: dict | None = None
+              ) -> float:
+    """sku_entry = (rate per minute, [eligible lines], setup state).
+    line_cap: optional per-line effective minutes (default cap_eff for
+    every line)."""
+    rate, lines = sku_entry[0], sku_entry[1]
+    version = version or linking_m_version()
+    if version == "v1":
+        return min(cap_eff * rate, total_demand + 1.0)
+    per_line = sum((line_cap or {}).get(l, cap_eff) * rate for l in lines)
+    return min(per_line, total_demand + 1.0)
+
+
 def due_day(due: datetime, horizon_start: datetime) -> int:
     """Day index whose END is `due`: due at midnight ending day d -> d.
 
@@ -246,7 +283,7 @@ def build_bucket_mip(factory: Factory, horizon_start: datetime, days: int,
                 add_row(ent, "L", cap_override.get((l, t), cap_eff))
     # linking: sum_l x_itl <= M_it * y_it, tight M
     for s in active:
-        M = min(cap_eff * sku[s][0], sum(dem[s]) + 1.0)
+        M = linking_m(sku[s], cap_eff, sum(dem[s]))
         for t in range(days):
             ent = [(xidx[(s, t, l)], 1.0) for l in sku[s][1]]
             ent.append((yidx[(s, t)], -M))
