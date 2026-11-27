@@ -14,6 +14,7 @@ around a record it could not place.
 
 from __future__ import annotations
 
+import multiprocessing
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
@@ -63,7 +64,13 @@ def solve_decomposed(factory: Factory, horizon_start, days: int,
     jobs = [(factory, c, horizon_start, days, cap_min, solve_kw)
             for c in part.cells]
     if len(jobs) > 1:
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        # spawn, not fork: forking a process that already runs solver
+        # or server threads can deadlock the child (measured on CI:
+        # serial test run stalled here for 20+ min, traceback in
+        # concurrent.futures result wait). Cells are picklable.
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=max_workers,
+                                 mp_context=ctx) as pool:
             solved = list(pool.map(_solve_cell, jobs))
     else:
         solved = [_solve_cell(j) for j in jobs]
