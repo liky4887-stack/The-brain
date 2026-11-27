@@ -22,3 +22,12 @@ Findings (MEASURED from the records unless marked):
 Status of the fix:
 - Done in this change: `cg_trace.py` passes `WEIGHTS` explicitly to the solver, seals them in the manifest (`weights`) and shows them in the class name ("weights setup 50/late 1000"). Test fails on the old runner, passes on the new. Applies to NEW rows only.
 - Not done: old CG rows cannot be corrected (weights not recorded); `coupled_comparison.py`, `coupled_cg_scaling.py` do not yet record weights; the monolith calibration path still uses per-row EOQ setup weights, so a CG row and a calibration monolith row are still not comparable by construction. A guard that refuses a comparison with unequal weights does not exist. All CG numbers stay "pre weight-fix, not a claim".
+
+## Choice made (2026-11-27, decided by the agent under the user's standing rule "results, not decisions"; reversible)
+
+- New CG-vs-monolith comparison rows use the SAME weights on both sides, the defaults 50 / 1000 / 0.001 (early), the same as the 18 retained plans. All three CG runners and `coupled_comparison.py` now pass them explicitly and record them.
+- Old calibration monolith rows (per-row EOQ setup weight 2.3-24.8) are kept as they are and labelled NON-COMPARABLE with CG. The guard `brain_core/guards/weights_guard.py` returns `calibration_weights_not_comparable` for them, `weights_differ_not_comparable` for two rows that declare different weights, and `weights_not_recorded` (never a silent pass) when a row declares none.
+- Reason: it keeps the 18 validated plans and every same-pool agreement usable without re-running the calibration rows, and it needs no new runs (no spend).
+- To reverse: run CG at the calibration row's S (pass `ObjectiveWeights(setup=S)` in the runner) and compare only rows whose `weights` match; the guard needs no change.
+- Not wired: no code path compares a CG row with a monolith row automatically (the comparisons are made in reports), so `compare_weights` is a helper to call before filing a comparison, not an automatic stop. Tested on real raw rows from the results branch (the retained plan compares clean with a CG row at the defaults; a calibration row is flagged) when that branch is checked out locally; skipped in CI.
+- `coupled_dual` (Lagrangian) has no weights argument and uses solver defaults; recorded in its row as `weights_note`.
