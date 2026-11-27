@@ -73,11 +73,22 @@ DENSE_DAY_CHUNKS = 110   # measured: UNKNOWNs at 121-124 chunks
 DENSE_DAY_BUDGET_S = 300.0
 DENSE_DAY_MAX_S = 600.0
 # very dense days (registry fc9f56ec5ce7, recurrence): plant 2245 w1d5 has
-# 139 chunks, UNKNOWN at the 600 s cap, decided at a 1800 s cap
-# (measured in a repro, shared 4-core box: day wall 2,400.7 s)
+# 139 chunks and stayed UNKNOWN at 600 s (CI) and at 1800 s (repro): more
+# wall time does not decide it reliably. Structural change: no long
+# escalation; a reproducible deterministic-time exact attempt, then
+# fix-and-optimize with growing pin fractions (the restriction is
+# always reported through notes).
 VERY_DENSE_DAY_CHUNKS = 130
-VERY_DENSE_DAY_BUDGET_S = 600.0
-VERY_DENSE_DAY_MAX_S = 1800.0
+VERY_DENSE_DAY_BUDGET_S = 120.0
+VERY_DENSE_DAY_MAX_S = 120.0
+VERY_DENSE_PIN_FRACTIONS = (0.25, 0.5, 1.0)
+# Reproducible bucket stage: when set (None = unchanged behaviour), the
+# bucket MIP also stops at this many B&B nodes (HiGHS, single thread:
+# deterministic); the wall time_limit stays as the safety net. Wall-time
+# stops hand a different day mix to the day models on each run (seen on
+# plant 2245: 332 vs 329 setups), so a gate that needs repeatable
+# results sets this.
+BUCKET_NODE_LIMIT: int | None = None
 
 
 def _min_incoming_changeover(factory: Factory) -> dict:
@@ -323,7 +334,8 @@ def solve_buckets(factory: Factory, horizon_start: datetime, days: int,
                                  mat_cap=mat_cap, lab_cap=lab_cap)
     if not maps["active"]:
         return BucketResult("no-demand", 0.0, 0.0, {}, maps["skipped"], 0, 0)
-    res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0)
+    res = solve_mip(mip, time_limit_s=time_limit_s, mip_rel_gap=0.0,
+                    node_limit=BUCKET_NODE_LIMIT)
     n_bin = int(mip.integrality.sum())
     n_rows = int(mip.A.shape[0])
     if res["x"] is None:
@@ -473,7 +485,9 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
                     num_workers: int | None = None,
                     unknown_attempts: int = 3,
                     notes: list | None = None,
-                    max_limit_s: float = 120.0
+                    max_limit_s: float = 120.0,
+                    det_limit: bool = False,
+                    pin_fractions: tuple = (0.25,)
                     ) -> tuple[list[LotAssignment], list[str]]:
     """One day, one integrated CP-SAT model, exact at the true cost level.
 
@@ -655,7 +669,14 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
     limit = time_limit_s
     status = None
     for attempt in range(max(1, unknown_attempts)):
-        solver.parameters.max_time_in_seconds = limit
+        if det_limit:
+            # reproducible stop: CP-SAT deterministic time (single
+            # worker, same model and hint -> same search and same
+            # result); wall time is only a generous safety net
+            solver.parameters.max_deterministic_time = limit
+            solver.parameters.max_time_in_seconds = limit * 6.0
+        else:
+            solver.parameters.max_time_in_seconds = limit
         status = solver.solve(m)
         if status != cp_model.UNKNOWN or attempt == max(1, unknown_attempts) - 1:
             break
@@ -674,52 +695,53 @@ def solve_day_exact(factory: Factory, chunks: list[tuple[str, float]],
         # falls through to the original undecided report, never to an
         # INFEASIBLE claim. A successful fallback is not silent: the
         # restriction is reported through `notes`.
-        load: dict[str, float] = {}
-        tail_st: dict[str, str] = {}
-        min_in = _min_incoming_changeover(factory)
-        pinned = {}
-        for name, q in sorted(chunks, key=lambda cq: -cq[1]):
-            if len(pinned) >= max(1, len(chunks) // 4):
-                break
-            st = state[name]
-            best = None
-            best_chg = 0.0
-            for l in sku[name.split("#")[0]][1]:
-                if (name, l) not in x:
-                    continue
-                chg = 0.0
-                prev = tail_st.get(l)
-                if prev is not None and prev != st:
-                    # conservative: cheapest incoming arc to this state,
-                    # not the optimistic tail->state entry (the exact
-                    # tour pays at least this per extra state group)
-                    chg = min_in.get(st, 0.0)
-                if load.get(l, 0.0) + prod[name] + chg <= 0.9 * cap_min:
-                    if best is None or load.get(l, 0.0) < load.get(best, 0.0):
-                        best, best_chg = l, chg
-            if best is None:
-                break  # first chunk that fits nowhere: stop pinning
-            pinned[name] = best
-            load[best] = load.get(best, 0.0) + prod[name] + best_chg
-            tail_st[best] = st
-        if pinned:
-            asg, probs = solve_day_exact(
-                factory, chunks, day, cap_min, window_start_day,
-                min(max(60.0, time_limit_s), max_limit_s), hint=hint,
-                fixed=pinned,
-                line_blacklist=line_blacklist, weights=weights,
-                num_workers=num_workers, unknown_attempts=1,
-                notes=notes)
-            if asg:
-                if notes is not None:
-                    notes.append(
-                        f"day {day}: decided with fixed-prefix "
-                        f"restriction (largest {len(pinned)} of "
-                        f"{len(chunks)} chunks pinned to capacity-aware "
-                        "greedy lines)")
-                return asg, probs
-            # fallback failed: pins were our choice, so the day stays
-            # undecided - fall through to the honest UNKNOWN report
+        for frac in pin_fractions:
+            load: dict[str, float] = {}
+            tail_st: dict[str, str] = {}
+            min_in = _min_incoming_changeover(factory)
+            pinned = {}
+            for name, q in sorted(chunks, key=lambda cq: -cq[1]):
+                if len(pinned) >= max(1, int(len(chunks) * frac)):
+                    break
+                st = state[name]
+                best = None
+                best_chg = 0.0
+                for l in sku[name.split("#")[0]][1]:
+                    if (name, l) not in x:
+                        continue
+                    chg = 0.0
+                    prev = tail_st.get(l)
+                    if prev is not None and prev != st:
+                        # conservative: cheapest incoming arc to this state,
+                        # not the optimistic tail->state entry (the exact
+                        # tour pays at least this per extra state group)
+                        chg = min_in.get(st, 0.0)
+                    if load.get(l, 0.0) + prod[name] + chg <= 0.9 * cap_min:
+                        if best is None or load.get(l, 0.0) < load.get(best, 0.0):
+                            best, best_chg = l, chg
+                if best is None:
+                    break  # first chunk that fits nowhere: stop pinning
+                pinned[name] = best
+                load[best] = load.get(best, 0.0) + prod[name] + best_chg
+                tail_st[best] = st
+            if pinned:
+                asg, probs = solve_day_exact(
+                    factory, chunks, day, cap_min, window_start_day,
+                    min(max(60.0, time_limit_s), max_limit_s), hint=hint,
+                    fixed=pinned,
+                    line_blacklist=line_blacklist, weights=weights,
+                    num_workers=num_workers, unknown_attempts=1, det_limit=det_limit,
+                    notes=notes)
+                if asg:
+                    if notes is not None:
+                        notes.append(
+                            f"day {day}: decided with fixed-prefix "
+                            f"restriction (largest {len(pinned)} of "
+                            f"{len(chunks)} chunks pinned to capacity-aware "
+                            "greedy lines)")
+                    return asg, probs
+                # fallback failed: pins were our choice, so the day stays
+                # undecided - fall through to the honest UNKNOWN report
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         name = solver.status_name(status)
         if name == "INFEASIBLE":
@@ -837,7 +859,10 @@ def solve_window(factory: Factory, horizon_start: datetime, days: int,
                 hint=day_hint.get(t), weights=weights,
                 num_workers=seq_num_workers, notes=day_notes,
                 max_limit_s=(VERY_DENSE_DAY_MAX_S if vdense
-                             else (DENSE_DAY_MAX_S if dense else 120.0)))
+                             else (DENSE_DAY_MAX_S if dense else 120.0)),
+                det_limit=vdense,
+                pin_fractions=(VERY_DENSE_PIN_FRACTIONS if vdense
+                               else (0.25,)))
             if not day_problems:
                 break
             if not any("INFEASIBLE" in p for p in day_problems):

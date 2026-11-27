@@ -373,6 +373,7 @@ def test_very_dense_day_budget_wiring(monkeypatch):
         def spy(factory, chunks, day, cap_min, window_start_day,
                 time_limit_s, **kw):
             seen.append((len(chunks), time_limit_s, kw.get("max_limit_s")))
+            flags.append((kw.get("det_limit"), kw.get("pin_fractions")))
             return [], [f"day {day}: spy stop"]
 
         monkeypatch.setattr(tl, "solve_day_exact", spy)
@@ -380,7 +381,11 @@ def test_very_dense_day_budget_wiring(monkeypatch):
                      bucket_time_s=30, seq_time_s=5)
         return seen
 
+    flags = []
     vd = run(140)
+    assert flags and all(d is True and pf == tl.VERY_DENSE_PIN_FRACTIONS
+                         for d, pf in flags)
+    flags.clear()
     assert vd and all(n > tl.VERY_DENSE_DAY_CHUNKS for n, _, _ in vd)
     for _, limit, cap in vd:
         assert limit == tl.VERY_DENSE_DAY_BUDGET_S
@@ -394,3 +399,34 @@ def test_very_dense_day_budget_wiring(monkeypatch):
     normal = run(50)
     for _, limit, cap in normal:
         assert limit == 5 and cap == 120.0
+
+
+def test_det_limit_day_is_reproducible():
+    """det_limit stops CP-SAT on deterministic time: two identical calls
+    return the identical assignment (the property the very-dense tier
+    relies on)."""
+    from brain_core.rolling.two_level import solve_day_exact
+    dems = [Demand(name="D0", item="S0", location="P",
+                   due=H0 + timedelta(days=1), quantity=30.0)]
+    f = tiny_factory(dems, rates={"S0": 10.0})
+    chunks = [("S0", 5.0)] * 6
+    runs = []
+    for _ in range(2):
+        asg, probs = solve_day_exact(f, chunks, 0, 96 * 15, 0, 20.0,
+                                     num_workers=1, det_limit=True)
+        assert not probs, probs
+        runs.append(sorted(str(sorted(a.__dict__.items())) for a in asg))
+    assert runs[0] and runs[0] == runs[1]
+
+
+def test_solve_mip_node_limit_option_is_accepted():
+    """node_limit is forwarded (None keeps the old behaviour)."""
+    import numpy as np
+    from scipy.sparse import csr_matrix
+    from brain_core.solvers.highs_mip import MIP, solve_mip
+    mip = MIP("t", np.array([1.0, 1.0]), csr_matrix(np.array([[1.0, 1.0]])),
+              ("G",), np.array([1.0]), np.zeros(2), np.ones(2),
+              np.ones(2))
+    a = solve_mip(mip, 10.0)
+    b = solve_mip(mip, 10.0, node_limit=1000)
+    assert a["objective"] == b["objective"] == 1.0

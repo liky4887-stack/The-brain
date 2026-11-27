@@ -74,6 +74,10 @@ def run_plant(i: int, window_days: int = WINDOW_DAYS,
     solve_rolling ends by running the SAME independent validator on the
     full frozen plan, so res.problems already carries that verdict; the
     merge step re-runs the validator from this record alone."""
+    import os
+    from brain_core.rolling import two_level as _tl
+    _nodes = os.environ.get("GATE_BUCKET_NODES")
+    _tl.BUCKET_NODE_LIMIT = int(_nodes) if _nodes else None
     t0 = time.monotonic()
     p = generate_fnb_factory(params or plant_params(i))
     gen_s = time.monotonic() - t0
