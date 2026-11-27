@@ -43,3 +43,15 @@ Every run that produced, or was meant to produce, a number. Cancelled, broken an
 - Measured (single plants, pools unlimited, calib3 n=4 seeds 3 and 4, plant 3, SHA 839f4da): under v1 the LP relaxation bound is 2,824,575 and 9,276,849 (all lateness penalty) and the MIP is Optimal with late 2,823 and 9,275 unit-days; under v2 the LP bound is 874.99 and 1,543.24 and the 40 s incumbents are 1,192.27 and 1,937.88 with late 0.
 - Expectation (not measured for coupled or CG runs): where v1 forced lateness, objectives of order 1e6 to 1e8 drop to order 1e3 under v2. Certified relative gaps are then expected to GROW, because the LP bound is weak on cheap instances (e.g. 875 vs 1,192). That would be a regime change, not a regression. v1 and v2 numbers are never compared.
 - All existing CG numbers stay "pre weight-fix, not a claim" and carry linking-M v1.
+
+### Measured since (calib3 n=4, caps-v2 1.5x, 1 thread, code 9f765de; v1 and v2 are never compared)
+- Coupled 600 s rows: v1 seed 3 Time limit, gap 1.11e-4, late 2,822.988 unit-days; v1 seed 4 Optimal, late 9,274.741; v2 seed 3 Time limit, gap 10.96%, late 0; v2 seed 4 Time limit, gap 8.32%, late 0. The v2 rows ran with one other probe, so wall and node counts are not comparable to the next row.
+- v2 seed 3, 1,800 s, alone: Time limit, 99,739 nodes, incumbent 6,615.97, bound 5,986.18, gap 9.52%. The incumbent is flat from 42 s to about 1,198 s; the bound rises 5,501 to 5,986. The gap closes through the bound only (bound-limited). No claim about what stronger formulations would do.
+
+### KPI naming
+- `late_unit_days` counts NEW shortfall only. `backlog_unit_days` is the model's lateness term (cumulative shortfall charged every day). Compare a plan with the model objective through `backlog_unit_days`.
+- End shortfall (units) and the lateness term (shortfall unit-days x weight) are different quantities and stay in separate columns.
+
+### Pools 0.9 (CG cluster, n=2, 7 days, linking-M v1 rows)
+- The v1 monolith lateness overstates the physical minimum (pool plus plant-minutes LP bound) by 0%, 0.2%, 14.5%, 10.3%, 1.0%, 3.1% on the six late seeds (100003, 200006, 400012, 500015, 700021, 800024). The v1 label is kept; rows are not averaged.
+- The linking-M v2 monolith lateness equals that bound to 1e-8 on all six. The 1e8-scale objectives measure how the model distributes shortfall that the pools make unavoidable; they are not a measure of plan quality.
