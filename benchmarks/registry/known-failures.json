@@ -157,7 +157,7 @@
     "sha": "6a55e4a",
     "step": 0
    },
-   "root_cause": "measured offline on the dumped master (fixture tests/fixtures/master_status15.json.gz): scale mismatch. BIGM 100x or 10x the largest column cost still fails (fix a, rejected); scaling costs makes it optimal, objective 131,266,872.516, artificials 0 (fix c, kept; first as a constant 1e-4, then derived from the data). Evidence run with the fix (codespace, 900 s wall limit, SHA 821b8ed): iteration 178 passes, no master failure in 400 iterations; the run is NOT CONVERGED after 400 iterations (master 321,858,611 vs Farley bound 321,858,436), a separate finding."
+   "root_cause": "measured offline on the dumped master (fixture tests/fixtures/master_status15.json.gz): scale mismatch. BIGM 100x or 10x the largest column cost still fails (fix a, rejected); scaling costs makes it optimal, objective 131,266,872.516, artificials 0 (fix c, kept; first as a constant 1e-4, then derived from the data). Evidence runs with the fix (codespace, 900 s wall limit, 400 iteration cap, code SHA 821b8ed, alone): (1) the failing class, pools 0.9/0.9 seed 0 n=2 7 days: 400 iterations, no master failure (master values at iterations 176 to 180 are 131,266,894.0 to 131,266,903.9), status NOT CONVERGED after 400 iterations, best certified Farley bound 131,266,807.8, master 131,266,893.5 at the end, the only recorded problem is the iteration-0 artificial note; (2) separate no-regression check on class 0.75/0.8 seed 0: 400 iterations, no master failure, also NOT CONVERGED at the cap. The non-convergence at 400 iterations (long tail-off) is a separate open finding, not part of this fix."
   }
  },
  "version": 1
