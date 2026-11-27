@@ -91,6 +91,10 @@ def test_validator_on_hand_plan():
                                      supplier_cap={("RM-1", 0): 300.0})
     assert probs == [], probs
     assert k["late_unit_days"] == 0 and k["backlog_units_end"] == 0
+    # produced on day 0 for a day-0 due: nothing is early. A due-day
+    # rule off by one (or a duplicated line counted twice in the stock
+    # walk) makes this 120.0
+    assert k["early_unit_days"] == 0
     probs, _ = validate_coupled_plan([f], [plan], H0, 3, 480.0,
                                      supplier_cap={("RM-1", 0): 299.0})
     assert any("supplier pool" in p for p in probs)
