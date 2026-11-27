@@ -1,131 +1,145 @@
 {
- "entries": {
-  "3b7e07ee1b2f": {
-   "attempts": 4,
-   "avoidance": "capacity-aware warm start always on; fix-and-optimize fallback after UNKNOWN escalation (pins largest quarter, 90% capacity margin, 60-120 s cap); a failed fallback reports the original undecided status, never INFEASIBLE-under-pins",
-   "first_seen": {
-    "run_id": "45616135861",
-    "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
-    "step": 1
-   },
-   "fix_commit": "38e229be21cb592c84046314b97924f56f76711d",
-   "last_seen": {
-    "run_id": "45616135861",
-    "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
-    "step": 1
-   },
-   "root_cause": "measured: dense day models with a single CP-SAT worker stall without an incumbent seed; quantity-only greedy seeds overload lines on the densest days. Capacity-aware hint decides all three repro instances at 100 s: plant 43 d4 (124 chunks), 43 d5 (133), 155 d4 (138); plant 76 d4 (127) decides via the fix-and-optimize fallback with the restriction recorded in kpis['restricted_days']",
-   "signature": "3b7e07ee1b2f",
-   "status": "fixed",
-   "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)"
+  "entries": {
+    "3b7e07ee1b2f": {
+      "attempts": 4,
+      "avoidance": "capacity-aware warm start always on; fix-and-optimize fallback after UNKNOWN escalation (pins largest quarter, 90% capacity margin, 60-120 s cap); a failed fallback reports the original undecided status, never INFEASIBLE-under-pins",
+      "first_seen": {
+        "run_id": "45616135861",
+        "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
+        "step": 1
+      },
+      "fix_commit": "38e229be21cb592c84046314b97924f56f76711d",
+      "last_seen": {
+        "run_id": "45616135861",
+        "sha": "4f1f52b5aaf217ad500e89db2a79c11bc1c9adfb",
+        "step": 1
+      },
+      "root_cause": "measured: dense day models with a single CP-SAT worker stall without an incumbent seed; quantity-only greedy seeds overload lines on the densest days. Capacity-aware hint decides all three repro instances at 100 s: plant 43 d4 (124 chunks), 43 d5 (133), 155 d4 (138); plant 76 d4 (127) decides via the fix-and-optimize fallback with the restriction recorded in kpis['restricted_days']",
+      "signature": "3b7e07ee1b2f",
+      "status": "fixed",
+      "summary": "day-model CP-SAT UNKNOWN after 120s escalation (window 1, days 4-5; plants 43/76/155 in S1; same class as run #3 plants 14/82 pre-fix)"
+    },
+    "43c2596bdee8": {
+      "attempts": 0,
+      "avoidance": "wave hard bound: each wave is submitted with timeout = job budget (6000s, matches the 100-min job timeout) - upload margin (300s) - elapsed; on expiry the pool is terminated (SIGTERM) and unfinished plants are recorded not-attempted, so the solve step always exits and the upload step always runs. Soft wall guard 5400s remains the first line. Jobs are NEVER rerun.",
+      "first_seen": {
+        "run_id": "45786313189",
+        "sha": "1e8ef94",
+        "step": 7
+      },
+      "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
+      "last_seen": {
+        "run_id": "45786313189",
+        "sha": "1e8ef94",
+        "step": 7
+      },
+      "signature": "43c2596bdee8",
+      "status": "fixed",
+      "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded"
+    },
+    "9f1a8959beb4": {
+      "attempts": 1,
+      "avoidance": "rm -f the RESULT path after the /tmp backup, before checkout -B onto the results branch",
+      "first_seen": {
+        "run_id": "45622543829",
+        "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+        "step": 1
+      },
+      "fix_commit": "86581198b72f03632ddf9239a5dbd51e9e0e0660",
+      "last_seen": {
+        "run_id": "45622547998",
+        "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+        "step": 1
+      },
+      "signature": "9f1a8959beb4",
+      "status": "fixed",
+      "summary": "publish: checkout -B onto results branch refuses to clobber local RESULT.json -> exit 1 before push (gate2m #6 45622543829, scale #3 45622547998)"
+    },
+    "e1945e36a495": {
+      "attempts": 1,
+      "avoidance": "regression test test_checkpoint_payload_end_to_end calls the real _checkpoint; launches run the canary but only a full shard run reaches checkpoints - the test covers that gap",
+      "first_seen": {
+        "run_id": "45852637645",
+        "sha": "366983699cd63f68bd533726856f00d9d63dae94",
+        "step": 7
+      },
+      "fix": "import sys added; _checkpoint lifted to module level and exercised by a direct regression test (negative control: removing the import makes the test error)",
+      "fix_commit": "(this commit)",
+      "last_seen": {
+        "run_id": "45852637645",
+        "sha": "366983699cd63f68bd533726856f00d9d63dae94",
+        "step": 7
+      },
+      "root_cause": "measured from job logs (solve(6) id 140023017284): NameError at solve_shard.py _checkpoint 'argv': sys.argv; the argv provenance field was added in 2b1b853 without the import; no test exercised the checkpoint path (execute() defaults checkpoint=None)",
+      "signature": "e1945e36a495",
+      "title": "solve_shard checkpoint payload references sys.argv but solve_shard.py never imports sys: every solve job NameErrors at its first checkpoint, minutes in; the canary (--dry-run) never reaches the checkpoint path, so it passes green"
+    },
+    "ec7d0c9923f8": {
+      "attempts": 0,
+      "avoidance": "results branch always based on remote tip; RESULT stashed across checkout; rebase-retry push",
+      "first_seen": {
+        "run_id": "45612194065",
+        "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+        "step": 0
+      },
+      "fix_commit": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+      "last_seen": {
+        "run_id": "45612194065",
+        "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
+        "step": 0
+      },
+      "signature": "ec7d0c9923f8",
+      "status": "fixed",
+      "summary": "publish branched results branch from run SHA -> diverged -> push rejected -> RESULT lost (gate2m runs #4/#5, scale #2)"
+    },
+    "f7ca2901b4bd": {
+      "attempts": 1,
+      "avoidance": "never report plan cost from an unvalidated UB; harness gate in coupled_comparison.py",
+      "first_seen": {
+        "run_id": "45842450508",
+        "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
+        "step": "crossover"
+      },
+      "fix": "explicit zero share per pool; every UB write gated by validate_coupled_plan (rejected loudly). Harness counts UB only if valid.",
+      "fix_commit": "(this commit)",
+      "last_seen": {
+        "run_id": "45842450508",
+        "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
+        "step": "crossover"
+      },
+      "root_cause": "allocate_solve omitted pool keys with zero share, so those plants had no cap on that pool; union exceeded the shared cap. Confirmed by post-fix n=2 replica: validator problems 0.",
+      "signature": "f7ca2901b4bd",
+      "status": "healed (attempt 1); 5-replica sweep rerun pending",
+      "title": "coupled integer_master reports UB plans that FAIL the independent coupled validator (shared supplier pool caps exceeded): 30/30 replicas at n=2..64 in the 5-replica crossover (heuristic seed none, no allocate)"
+    },
+    "fc9f56ec5ce7": {
+      "attempt_2": {
+        "branch": "fix/dense-day-cap",
+        "commit": "a8fc6dc",
+        "idea": "CP-SAT deterministic-time stop for days above 130 chunks, pin-fraction fallback, optional bucket node limit",
+        "measurement": "plant 2245 alone on clean Actions runners, repeat x2, phase 1 (no node limit, runs 45933970357): UNKNOWN both, 962 s; phase 2 (bucket node limit 300, run 45940378452): UNKNOWN both, 797 and 795 s, setups 329 both, changeover 3330 vs 3150 min (not identical)",
+        "outcome": "did not decide the day; the one structural attempt failed the clean measurement; option 2: declared OPEN, branch not merged",
+        "wording": "undecided after 120 deterministic s (CP-SAT) per attempt, plant 2245, window 1, day 5; never a final failure of the plant"
+      },
+      "attempts": 2,
+      "avoidance": "dense-day budget escalation in solve_window: days with more than 110 chunks start at 300s with a 600s escalation cap (solve_day_exact max_limit_s); normal days unchanged. Wiring regression test test_dense_day_budget_wiring.",
+      "first_seen": {
+        "run_id": "45642234090",
+        "sha": "5adf866b5e9d9aa703e5067bf4487363c5a9d171",
+        "step": 4
+      },
+      "fix_commit": "dbfac0958b73629291f0676aa821ee4b2f954e1e",
+      "reopened": {
+        "run_id": "45858321122",
+        "sha": "2e4b75e81a640def4cdf2ca51b2b7143120cc1b4",
+        "verdict": "undecided after 600 s (block B shard); exact assignment+sequencing UNKNOWN, not disproven, not infeasible",
+        "where": "plant 2245 (seed 3245), window 1, day 5, 137 chunks"
+      },
+      "root_cause": "measured: needs-more-time. Dense day models onset UNKNOWN at 121-124 chunks (below the 3b7e07ee1b2f ~130-138 saturation theory). Plant 766 w1d4 (121 chunks): UNKNOWN at 120s, DECIDED at 300s. Plant 594 w1d5 (124 chunks): UNKNOWN at 120s and 300s, DECIDED at 600s (validated feasible plan at the cap). Zero UNKNOWNs at <=110 chunks in 249,179 validated assignments.",
+      "signature": "fc9f56ec5ce7",
+      "status": "open",
+      "summary": "day-model CP-SAT UNKNOWN after 120s at 53M-var scale (window 1 day 5 plant 594, window 1 day 4 plant 766) WITH the 3b7e07ee1b2f heal chain already in place (hint + x4 escalation + fix-and-optimize fallback all ran): same class, deeper density. 2 of 249,179 assignments; verdict OPEN, everything else PASS-clean."
+    }
   },
-  "43c2596bdee8": {
-   "attempts": 0,
-   "avoidance": "wave hard bound: each wave is submitted with timeout = job budget (6000s, matches the 100-min job timeout) - upload margin (300s) - elapsed; on expiry the pool is terminated (SIGTERM) and unfinished plants are recorded not-attempted, so the solve step always exits and the upload step always runs. Soft wall guard 5400s remains the first line. Jobs are NEVER rerun.",
-   "first_seen": {
-    "run_id": "45786313189",
-    "sha": "1e8ef94",
-    "step": 7
-   },
-   "fix_commit": "c178d7771c500db6beaa55fda9957808404524f3",
-   "last_seen": {
-    "run_id": "45786313189",
-    "sha": "1e8ef94",
-    "step": 7
-   },
-   "signature": "43c2596bdee8",
-   "status": "fixed",
-   "summary": "JobCancelled: shard job cancelled at the 60-min job timeout while the solve step was still in progress; the 2700s wall guard stops starting new waves but pool.map waits for the whole 4-plant wave, so one over-running plant solve carried the job past the timeout; shard artifact never uploaded"
-  },
-  "9f1a8959beb4": {
-   "attempts": 1,
-   "avoidance": "rm -f the RESULT path after the /tmp backup, before checkout -B onto the results branch",
-   "first_seen": {
-    "run_id": "45622543829",
-    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
-    "step": 1
-   },
-   "fix_commit": "86581198b72f03632ddf9239a5dbd51e9e0e0660",
-   "last_seen": {
-    "run_id": "45622547998",
-    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
-    "step": 1
-   },
-   "signature": "9f1a8959beb4",
-   "status": "fixed",
-   "summary": "publish: checkout -B onto results branch refuses to clobber local RESULT.json -> exit 1 before push (gate2m #6 45622543829, scale #3 45622547998)"
-  },
-  "e1945e36a495": {
-   "attempts": 1,
-   "avoidance": "regression test test_checkpoint_payload_end_to_end calls the real _checkpoint; launches run the canary but only a full shard run reaches checkpoints - the test covers that gap",
-   "first_seen": {
-    "run_id": "45852637645",
-    "sha": "366983699cd63f68bd533726856f00d9d63dae94",
-    "step": 7
-   },
-   "fix": "import sys added; _checkpoint lifted to module level and exercised by a direct regression test (negative control: removing the import makes the test error)",
-   "fix_commit": "(this commit)",
-   "last_seen": {
-    "run_id": "45852637645",
-    "sha": "366983699cd63f68bd533726856f00d9d63dae94",
-    "step": 7
-   },
-   "root_cause": "measured from job logs (solve(6) id 140023017284): NameError at solve_shard.py _checkpoint 'argv': sys.argv; the argv provenance field was added in 2b1b853 without the import; no test exercised the checkpoint path (execute() defaults checkpoint=None)",
-   "signature": "e1945e36a495",
-   "title": "solve_shard checkpoint payload references sys.argv but solve_shard.py never imports sys: every solve job NameErrors at its first checkpoint, minutes in; the canary (--dry-run) never reaches the checkpoint path, so it passes green"
-  },
-  "ec7d0c9923f8": {
-   "attempts": 0,
-   "avoidance": "results branch always based on remote tip; RESULT stashed across checkout; rebase-retry push",
-   "first_seen": {
-    "run_id": "45612194065",
-    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
-    "step": 0
-   },
-   "fix_commit": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
-   "last_seen": {
-    "run_id": "45612194065",
-    "sha": "6ce03f5b5c451138d7c34fbc9cb8fdc0417bba9a",
-    "step": 0
-   },
-   "signature": "ec7d0c9923f8",
-   "status": "fixed",
-   "summary": "publish branched results branch from run SHA -> diverged -> push rejected -> RESULT lost (gate2m runs #4/#5, scale #2)"
-  },
-  "f7ca2901b4bd": {
-   "attempts": 1,
-   "avoidance": "never report plan cost from an unvalidated UB; harness gate in coupled_comparison.py",
-   "first_seen": {
-    "run_id": "45842450508",
-    "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
-    "step": "crossover"
-   },
-   "fix": "explicit zero share per pool; every UB write gated by validate_coupled_plan (rejected loudly). Harness counts UB only if valid.",
-   "fix_commit": "(this commit)",
-   "last_seen": {
-    "run_id": "45842450508",
-    "sha": "714239777896c9c34b6d3070bc6887801d9cb0b8",
-    "step": "crossover"
-   },
-   "root_cause": "allocate_solve omitted pool keys with zero share, so those plants had no cap on that pool; union exceeded the shared cap. Confirmed by post-fix n=2 replica: validator problems 0.",
-   "signature": "f7ca2901b4bd",
-   "status": "healed (attempt 1); 5-replica sweep rerun pending",
-   "title": "coupled integer_master reports UB plans that FAIL the independent coupled validator (shared supplier pool caps exceeded): 30/30 replicas at n=2..64 in the 5-replica crossover (heuristic seed none, no allocate)"
-  },
-  "fc9f56ec5ce7": {
-   "attempts": 1,
-   "avoidance": "dense-day budget escalation in solve_window: days with more than 110 chunks start at 300s with a 600s escalation cap (solve_day_exact max_limit_s); normal days unchanged. Wiring regression test test_dense_day_budget_wiring.",
-   "first_seen": {
-    "run_id": "45642234090",
-    "sha": "5adf866b5e9d9aa703e5067bf4487363c5a9d171",
-    "step": 4
-   },
-   "fix_commit": "dbfac0958b73629291f0676aa821ee4b2f954e1e",
-   "root_cause": "measured: needs-more-time. Dense day models onset UNKNOWN at 121-124 chunks (below the 3b7e07ee1b2f ~130-138 saturation theory). Plant 766 w1d4 (121 chunks): UNKNOWN at 120s, DECIDED at 300s. Plant 594 w1d5 (124 chunks): UNKNOWN at 120s and 300s, DECIDED at 600s (validated feasible plan at the cap). Zero UNKNOWNs at <=110 chunks in 249,179 validated assignments.",
-   "signature": "fc9f56ec5ce7",
-   "status": "fixed",
-   "summary": "day-model CP-SAT UNKNOWN after 120s at 53M-var scale (window 1 day 5 plant 594, window 1 day 4 plant 766) WITH the 3b7e07ee1b2f heal chain already in place (hint + x4 escalation + fix-and-optimize fallback all ran): same class, deeper density. 2 of 249,179 assignments; verdict OPEN, everything else PASS-clean."
-  }
- },
- "version": 1
+  "version": 1
 }
