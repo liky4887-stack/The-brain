@@ -31,3 +31,22 @@ Status of the fix:
 - To reverse: run CG at the calibration row's S (pass `ObjectiveWeights(setup=S)` in the runner) and compare only rows whose `weights` match; the guard needs no change.
 - Not wired: no code path compares a CG row with a monolith row automatically (the comparisons are made in reports), so `compare_weights` is a helper to call before filing a comparison, not an automatic stop. Tested on real raw rows from the results branch (the retained plan compares clean with a CG row at the defaults; a calibration row is flagged) when that branch is checked out locally; skipped in CI.
 - `coupled_dual` (Lagrangian) has no weights argument and uses solver defaults; recorded in its row as `weights_note`.
+
+## Same-pool CG rerun with recorded weights (2026-11-28, MEASURED)
+
+Class: pools 0.9/0.9, n=2, 7 days, linking-M v2 (caps-v2 pools), CG wall 900 s, cap 400 iterations, concurrency 3, codespace 4 cores. CG code SHA 9615471 (ci green), weights 50/1000/0.001 sealed in each row. Monolith rows: `codespace-results/mpv2/mp-SEED.json`, SHA 821b8ed, weights 50/1000/0.001, limit 300 s, Optimal, gap 0. Each pair was compared through `benchmarks/compare_cg_monolith.py`: `weights_verdict: weights_comparable`, `pools_verdict: pools_same` (CG pools_hash equals the hash computed from the monolith caps file). Raw: monolith-results `codespace-results/wfix/`.
+
+| Seed | CG status | Iter | CG wall | CG value | Monolith objective | Monolith minus CG | Relative |
+|---|---|---|---|---|---|---|---|
+| 100003 | converged (exact pricing) | 116 | 257.9 s | 134,176,888.217 (converged master LP) | 134,177,450.883 | 562.67 | 4.19e-6 |
+| 200006 | stalled, bound flat (progress guard) | 247 | 460.9 s | 152,746,440.316 (last valid bound, NOT converged) | 152,747,200.117 | 759.80 | 4.97e-6 |
+| 700021 | converged (exact pricing) | 203 | 413.3 s | 147,326,980.061 (converged master LP) | 147,327,889.439 | 909.38 | 6.17e-6 |
+
+Worst row: 700021, relative 6.17e-6 (mean of the three 5.1e-6). In all three the CG value is not above the monolith optimum (valid bound), and none of the 3 runs had pool findings.
+
+What this settles, and what it does not:
+- The CG numbers with recorded weights are identical to the old unrecorded cgv2b rows (same 134,176,888.217 / 152,746,440.316 / 147,326,980.061 values to 3 decimals). So for these three seeds the inference "the old CG rows ran at the default weights 50/1000/0.001" is now consistent with a measurement: the same code path at recorded 50/1000/0.001 reproduces them. It is not proven for the other old rows (other seeds, sizes, pool factors).
+- Agreement with the monolith at the same weights holds for these 3 seeds only (CG LP below the integer optimum by 4-6e-6 relative, consistent with an integrality gap, not a weight effect).
+- 200006 stalls again at the same bound; it is the seed `tol_rel` handled (explicit option, not default).
+- The old cgv2 / cgv2b / mlt / trace / cg2-cg7 rows still carry no weights and still do not count as results. Only rows from SHA 9615471 or later with weights in the manifest count.
+- No weight difference was found for these seeds, so no old CG comparison is removed on this evidence. The calibration monolith rows (per-row EOQ setup weights 2.3-24.8) stay non-comparable with CG.
