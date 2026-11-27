@@ -3,7 +3,7 @@ name: ci
 # (benchmarks/launch_scale.py preflight queries this workflow's result for the SHA).
 on:
   push:
-    branches: [main, ci/fix-suite]
+    branches: [main, ci/fix-suite, "fix/**", "feat/**"]
 permissions:
   contents: read
 jobs:
