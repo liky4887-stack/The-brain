@@ -29,15 +29,29 @@ SPEC_LIMITS = {
 SPEC_KEYS = set(SPEC_LIMITS) | {"seed", "families"}
 
 
+def unknown_keys(spec: dict) -> list[str]:
+    """Keys the worker does not read. A misspelt key ("n_sku") used to be
+    ignored silently and the default solved instead: a value written in the
+    wrong place. Default is WARN (job still runs, the warning travels in the
+    API reply and the result); SPEC_STRICT_KEYS=1 refuses it (400). Warn
+    first so existing clients that send extra keys keep working."""
+    return sorted(set(spec) - SPEC_KEYS) if isinstance(spec, dict) else []
+
+
+def strict_keys() -> bool:
+    import os
+    return os.environ.get("SPEC_STRICT_KEYS", "") in ("1", "true", "yes")
+
+
 def validate_spec(spec: dict) -> list[str]:
-    """Every out-of-bounds or non-numeric field, by name."""
+    """Every out-of-bounds or non-numeric field, by name (plus unknown
+    keys when SPEC_STRICT_KEYS is set). The numeric bounds are the outside
+    reviewer's choice, not a user decision."""
     out = []
     if not isinstance(spec, dict):
         return ["spec must be a JSON object"]
-    # a misspelt key ("n_sku") used to be ignored silently and the
-    # default solved instead: a value written in the wrong place
-    unknown = sorted(set(spec) - SPEC_KEYS)
-    if unknown:
+    unknown = unknown_keys(spec)
+    if unknown and strict_keys():
         out.append(f"unknown key(s) {unknown}; accepted: "
                    f"{sorted(SPEC_KEYS)}")
     fam = spec.get("families")
@@ -112,6 +126,8 @@ def run_job(spec: dict) -> dict:
         "problems": list(res.problems),
         "kpis": {k: round(v, 6) if isinstance(v, float) else v
                  for k, v in res.kpis.items()},
+        "warnings": ([f"unknown spec key(s) ignored: {unknown_keys(spec)}"]
+                     if unknown_keys(spec) else []),
     }
 
 

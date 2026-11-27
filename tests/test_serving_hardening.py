@@ -19,10 +19,38 @@ def test_spec_limits():
     bad = validate_spec({"seed": "x", "n_skus": 10**7, "days": -1,
                          "utilization": float("nan")})
     assert len(bad) == 4
-    typo = validate_spec({"seed": 1, "n_sku": 50})
-    assert typo and "n_sku" in typo[0]
+    # unknown keys: WARN by default (contract unchanged), refuse only when
+    # SPEC_STRICT_KEYS is set
+    assert validate_spec({"seed": 1, "n_sku": 50}) == []
+    from worker import unknown_keys
+    assert unknown_keys({"seed": 1, "n_sku": 50}) == ["n_sku"]
     r = run_job({"n_skus": 10**7})
     assert r["ok"] is False and r["status"] == "rejected"
+
+
+def test_strict_keys_flag_refuses_unknown_keys(monkeypatch):
+    from worker import validate_spec
+    monkeypatch.setenv("SPEC_STRICT_KEYS", "1")
+    typo = validate_spec({"seed": 1, "n_sku": 50})
+    assert typo and "n_sku" in typo[0]
+
+
+def test_api_accepts_unknown_key_with_warning():
+    import threading
+    import urllib.request
+    from api import serve_http
+    from job_queue import JobQueue
+    q = JobQueue("sqlite", ":memory:")
+    srv = serve_http(q, port=0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/jobs"
+    req = urllib.request.Request(url, data=json.dumps(
+        {"seed": 1, "n_sku": 5}).encode(), method="POST")
+    with urllib.request.urlopen(req) as r:
+        body = json.loads(r.read())
+        assert r.status == 201
+    assert body["id"] and "n_sku" in body["warnings"][0]
+    srv.shutdown()
 
 
 def test_api_rejects_out_of_bounds_spec():
