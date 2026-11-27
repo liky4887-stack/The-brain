@@ -33,6 +33,9 @@ def longest_flat(series, rel_tol, decreasing=True):
     return worst
 
 
+from brain_core.guards.progress import DEFAULT_CG_PROGRESS_WINDOW  # noqa: E402
+
+
 if __name__ == "__main__":
     seed, out = int(sys.argv[1]), sys.argv[2]
     n = int(os.environ.get("CMP_SIZE", "2"))
@@ -50,6 +53,7 @@ if __name__ == "__main__":
                      "supplier": cc.SUPPLIER_FACTOR,
                      "labor": cc.LABOR_FACTOR, "days": cc.DAYS},
            "sha": cc._sha(), "seeded": False,
+           "progress_window": DEFAULT_CG_PROGRESS_WINDOW,
            "status": dw.status, "converged": dw.converged,
            "iterations": dw.iterations, "wall_s": round(wall, 1),
            "master_series": dw.master_series, "lb_series": dw.lb_series,
