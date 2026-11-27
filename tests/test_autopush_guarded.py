@@ -119,3 +119,24 @@ def test_fault_injection_crash_and_invalid_mip_flagged(tmp_path):
            f"import json;json.dump({bad!r}, open({str(out)!r},'w'))"]
     r, _ = _guarded(tmp_path, bare, cmd)
     assert r.returncode == 4 and "invalid_not_a_mip" in r.stdout
+
+
+def test_run_guarded_refuses_to_start_when_push_is_impossible(tmp_path):
+    """Fail-before: the command used to run for its whole duration and
+    only then discover that the result could not be pushed."""
+    marker = tmp_path / "started"
+    out = tmp_path / "o.json"
+    base = [sys.executable, str(ROOT / "benchmarks" / "run_guarded.py"),
+            "--name", "t", "--timeout", "30", "--out", str(out),
+            "--push-workdir", str(tmp_path / "w"), "--push-branch", "res"]
+    cmd = ["--", sys.executable, "-c",
+           f"open({str(marker)!r},'w').write('x');"
+           f"open({str(out)!r},'w').write('{{}}')"]
+    r = subprocess.run(base + ["--push-remote",
+                               str(tmp_path / "missing.git")] + cmd,
+                       capture_output=True, text=True)
+    assert r.returncode == 5 and "PREFLIGHT FAILED" in r.stdout
+    assert not marker.exists()
+    ok = subprocess.run(base + ["--push-remote", _bare(tmp_path)] + cmd,
+                        capture_output=True, text=True)
+    assert "PREFLIGHT: " in ok.stdout and marker.exists()
