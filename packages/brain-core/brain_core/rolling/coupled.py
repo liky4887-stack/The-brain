@@ -17,6 +17,7 @@ never dressed as a bound.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .two_level import solve_buckets, _sku_data, _recipe_data
@@ -509,6 +510,17 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
         per_ld: dict = {}
         per_st: dict = {}
         for (s, t, l), q in qty.items():
+            # NaN compares False with everything: it used to skip every
+            # check below and the plan counted as valid. Same for a day
+            # outside the window (its minutes were never capped).
+            if not isinstance(q, (int, float)) or not math.isfinite(q):
+                problems.append(f"plant {p_i}: invariant: non-finite "
+                                f"qty {q!r} for {s} {t} {l}")
+                continue
+            if not (0 <= t < days):
+                problems.append(f"plant {p_i}: invariant: day {t} "
+                                f"outside window [0, {days}) for {s} {l}")
+                continue
             if q < -1e-9:
                 problems.append(f"plant {p_i}: negative qty {s} {t} {l}")
                 continue

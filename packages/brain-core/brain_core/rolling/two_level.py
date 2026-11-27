@@ -927,10 +927,15 @@ def validate_window_plan(factory: Factory, plan: WindowPlan,
     sequence order; per-SKU daily stock walk for lateness/earliness;
     KPIs recomputed, never read from solver output.
     """
+    from ..guards.invariants import assignment_findings, enforce
     sku = _sku_data(factory)
     matrices = {m.name: m for m in factory.setup_matrices}
     res_mtx = {r.name: matrices.get(r.setup_matrix) for r in factory.resources}
-    problems: list[str] = []
+    # runtime invariants on every returned lot (value + placement):
+    # record mode lands them in problems, strict mode pauses the run
+    problems: list[str] = enforce(
+        assignment_findings(plan.assignments, plan.days, day0),
+        "validate_window_plan")
     by_ld: dict[tuple[str, int], list[LotAssignment]] = {}
     for a in plan.assignments:
         by_ld.setdefault((a.line, a.day - day0), []).append(a)
@@ -969,7 +974,7 @@ def validate_window_plan(factory: Factory, plan: WindowPlan,
                                 f"{l} day {t} pos {a.seq_pos}: recorded "
                                 f"changeover {a.chg_from_prev_min} != {chg}")
             prev = state
-        if total > cap_min + 0.05:
+        if not (total <= cap_min + 0.05):   # NaN-safe: NaN fails too
             problems.append(f"{l} day {t}: {total:.1f} min > {cap_min}")
     walk = _daily_walk(factory, plan.horizon_start, plan.days,
                        plan.assignments, inv0, day0)

@@ -422,6 +422,10 @@ def column_generation(factories: list, horizon_start, days: int,
     res._colsets = colsets          # internal: for the integer master
     res._pools, res._caps = pools, caps
     res._cap_min = cap_min
+    from ..guards.invariants import dw_bound_findings, enforce
+    res.problems.extend(x for x in enforce(dw_bound_findings(res),
+                                           "column_generation")
+                        if x not in res.problems)
     return res
 
 
@@ -611,4 +615,8 @@ def integer_master(dw: DWResult, factories: list, horizon_start,
         dw.selected_qtys = selected
     # a worse integer-master incumbent never displaces a better UB
     # found by another primal path (e.g. allocate_solve)
+    from ..guards.invariants import dw_bound_findings, enforce
+    dw.problems.extend(x for x in enforce(dw_bound_findings(dw),
+                                          "integer_master")
+                       if x not in dw.problems)
     return dw
