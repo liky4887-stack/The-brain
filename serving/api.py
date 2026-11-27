@@ -60,7 +60,13 @@ def make_handler(queue):
                 self._json(400, {"error": "invalid spec",
                                  "problems": bad})
                 return
-            self._json(201, {"id": queue.submit(spec)})
+            from worker import unknown_keys
+            warn = unknown_keys(spec)
+            reply = {"id": queue.submit(spec)}
+            if warn:
+                reply["warnings"] = [f"unknown spec key(s) {warn} will be "
+                                     "ignored (SPEC_STRICT_KEYS=1 rejects)"]
+            self._json(201, reply)
 
         def log_message(self, *args) -> None:  # quiet in tests
             pass

@@ -3,8 +3,8 @@
 name: serving
 on:
   push:
-    branches: [main]
-    paths: ["serving/**", "tests/test_serving.py", ".github/workflows/serving.yml"]
+    branches: [main, "fix/**", "feat/**"]
+    paths: ["serving/**", "tests/test_serving.py", "tests/test_serving_hardening.py", ".github/workflows/serving.yml"]
   pull_request:
     paths: ["serving/**", "tests/test_serving.py"]
 
@@ -30,7 +30,7 @@ jobs:
       - name: Install
         run: python -m pip install --quiet "numpy==2.2.6" "scipy==1.15.3" "pydantic==2.11.7" "ortools==9.12.4544" "pg8000==1.31.2" pytest
       - name: Unit tests (sqlite backend)
-        run: python -m pytest tests/test_serving.py -q
+        run: python -m pytest tests/test_serving.py tests/test_serving_hardening.py -q
       - name: Postgres-backed queue round-trip
         run: |
           psql "postgresql://serving:serving@localhost:5432/serving" -f serving/schema.sql
@@ -50,4 +50,25 @@ jobs:
           assert got["status"] == "done" and got["result"]["ok"], got
           print("postgres round-trip OK:", got["result"]["assignments"],
                 "assignments validated")
+          PY
+      - name: Postgres stale-running sweep (fail_stale on a real Postgres)
+        run: |
+          DATABASE_URL="postgresql://serving:serving@localhost:5432/serving" \
+            python - <<'PY'
+          import sys
+          sys.path.insert(0, "packages/brain-core"); sys.path.insert(0, "serving")
+          from job_queue import JobQueue
+          q = JobQueue("postgres", {"host": "localhost", "port": 5432,
+                                    "user": "serving", "password": "serving",
+                                    "database": "serving"})
+          jid = q.submit({"seed": 1})
+          assert q.claim()["id"] == jid
+          assert q.fail_stale(3600) == 0, "fresh claim must be left alone"
+          cur = q._conn.cursor()
+          cur.execute("UPDATE jobs SET claimed_at = now() - interval '2 hours' WHERE id = %s", (jid,))
+          q._conn.commit()
+          assert q.fail_stale(3600) == 1
+          job = q.get(jid)
+          assert job["status"] == "failed" and "worker lost" in str(job["result"]), job
+          print("postgres fail_stale OK")
           PY
