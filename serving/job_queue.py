@@ -84,7 +84,7 @@ class JobQueue:
             "UPDATE jobs SET status='running', claimed_at=now()"
             " WHERE id = (SELECT id FROM jobs WHERE status='queued'"
             " ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)"
-            " RETURNING id, spec")
+            " RETURNING id, spec::text")
         row = cur.fetchone()
         self._conn.commit()
         if row is None:

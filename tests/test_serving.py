@@ -90,3 +90,32 @@ def test_api_submit_and_read_back(tmp_path):
             assert json.load(resp)["ok"] is True
     finally:
         httpd.shutdown()
+
+
+def test_postgres_claim_returns_spec_as_text_not_a_decoded_object():
+    """Fail-before (CI serving workflow, red on main since 2026-11-26):
+    claim() on Postgres did RETURNING spec (JSONB), which pg8000 decodes to
+    a dict, and json.loads(dict) raised TypeError. get() already cast
+    ::text. A fake Postgres cursor checks the SQL casts and the loads."""
+    q = JobQueue.__new__(JobQueue)
+    q.backend = "postgres"
+    seen = {}
+
+    class Cur:
+        def execute(self, sql, *a):
+            seen["sql"] = sql
+
+        def fetchone(self):
+            return (7, '{"seed": 3}')      # text, as ::text returns
+
+    class Conn:
+        def cursor(self):
+            return Cur()
+
+        def commit(self):
+            pass
+
+    q._conn = Conn()
+    job = q.claim()
+    assert job == {"id": 7, "spec": {"seed": 3}}
+    assert "spec::text" in seen["sql"]
