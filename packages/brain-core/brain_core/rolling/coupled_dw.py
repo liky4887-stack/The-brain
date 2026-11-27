@@ -30,6 +30,12 @@ from dataclasses import dataclass, field
 from .coupled import _base_objective, _plant_usage
 from .two_level import solve_buckets, _recipe_data, _sku_data
 
+# Master costs are multiplied by MASTER_COST_SCALE inside _solve_master and the
+# objective and duals are scaled back: same solution, but the LP no longer
+# mixes artificial costs 1e12 with column costs up to ~1e9 (measured: at
+# pools 0.9 seed 0 iteration 178 all three HiGHS algorithms returned Status
+# 15 'Unknown' unscaled; with scale 1e-4 the master is optimal, artificials 0).
+MASTER_COST_SCALE = 1e-4
 BIGM = 1e12          # artificial-column cost (real objectives ~1e8)
 TOL = 1e-6
 
@@ -107,7 +113,7 @@ def _solve_master(colsets, pools, caps):
         e[r] = -1.0     # artificial = cap borrowing: usage - art <= cap
         cols.append((None, BIGM, e))
     n = len(cols)
-    c = np.array([cc for _p, cc, _u in cols])
+    c = np.array([cc for _p, cc, _u in cols]) * MASTER_COST_SCALE
     A_ub = lil_matrix((n_pools, n))
     for j, (_p, _cc, u) in enumerate(cols):
         for r in range(n_pools):
@@ -143,13 +149,13 @@ def _solve_master(colsets, pools, caps):
         return (None, None, None, None,
                 f"master LP failed; retries highs-ipm/highs-ds also failed; "
                 f"{first_msg}", None)
-    u = np.asarray(res.ineqlin.marginals)      # <= 0 for min / <= rows
-    sigma = np.asarray(res.eqlin.marginals)    # free
+    u = np.asarray(res.ineqlin.marginals) / MASTER_COST_SCALE  # <= 0
+    sigma = np.asarray(res.eqlin.marginals) / MASTER_COST_SCALE  # free
     art = float(res.x[art0:].sum())
     lam = np.asarray(res.x[:art0])             # column weights
     status = "optimal" if first_msg is None else \
         f"optimal after retry ({first_msg}; solved with {method})"
-    return float(res.fun), u, sigma, art, status, lam
+    return float(res.fun) / MASTER_COST_SCALE, u, sigma, art, status, lam
 
 
 from ..guards.progress import DEFAULT_CG_PROGRESS_WINDOW  # noqa: E402
@@ -400,7 +406,15 @@ def column_generation(factories: list, horizon_start, days: int,
             force_exact_next = True
             continue
         if new_cols == 0:
-            if round_exact:
+            if round_exact and art > 1e-6:
+                # converged only by borrowing capacity at BIGM: the pools
+                # cannot be met by the column pool. NOT a certified bound.
+                res.problems.append(f"iter {it}: converged_with_artificials "
+                                    f"({art:.6g}): pools infeasible for the "
+                                    "columns; not certified")
+                res.status = ("stalled: converged_with_artificials - "
+                              "bound NOT certified")
+            elif round_exact:
                 res.converged = True
                 res.bound_certified = True
                 res.lower_bound = obj   # certified convexification bd
