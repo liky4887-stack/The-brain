@@ -48,3 +48,14 @@ def test_healing_decision_boundaries():
     reg["entries"]["s1"]["attempts"] = MAX_HEAL_ATTEMPTS
     d = healing_decision(reg, "s1", 1, run_has_fix=True)
     assert d["action"] == "pause" and "budget" in d["why"]
+
+
+def test_master_status15_failure_is_registered_as_fixed_with_commit():
+    import json, os
+    reg = json.load(open(os.path.join(os.path.dirname(__file__), "..",
+                                      "benchmarks", "registry", "known-failures.json")))
+    hits = [e for e in reg["entries"].values() if "Status 15" in e.get("summary", "")]
+    assert len(hits) == 1
+    e = hits[0]
+    assert e["status"] == "fixed" and e["attempts"] == 2 and len(e["fix_commit"]) == 40
+    assert "scale mismatch" in e["root_cause"]
