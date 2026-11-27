@@ -6,6 +6,8 @@
 > evidence: docs/COUPLED-MEASUREMENTS.md only, and DW bounds count
 > as bounds only when bound_certified is true.
 
+Provenance: the paragraph below is a summary written by the agent from the user's WhatsApp voice notes of 2026-11-25, 2:49 to 2:54 PM (EET). It is not a verbatim quote and this file does not itself prove the user's authority.
+
 User ask (2026-11-25, 2:51 PM): stack blocks of ~100M variables toward
 a billion+, with a supervisor layer over each block that reviews the
 results and compares them against the other blocks. Results must be
