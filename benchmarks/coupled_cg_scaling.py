@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "packages" / "brain-core"))
 
 from brain_core.synthetic import FnbParams, generate_fnb_factory
-from brain_core.rolling.two_level import solve_buckets
+from brain_core.rolling.two_level import solve_buckets, ObjectiveWeights
 from brain_core.rolling.coupled import _plant_usage
 from brain_core.rolling.coupled_dw import (column_generation,
                                            integer_master)
@@ -28,6 +28,7 @@ CAP_FACTOR = 0.75
 # measured UB 118,373,179 vs LB 60,940,576 (proven gap 0.485) on size 2
 # while alloc_every=5 gave UB 60,941,104 (gap ~8.7e-6), same LB. A row with
 # alloc_every=0 is 'primal not meaningful'.
+WEIGHTS = ObjectiveWeights()   # passed explicitly and recorded in each row
 ALLOC_EVERY = int(__import__('os').environ.get('CG_ALLOC_EVERY', '5'))
 SEEDS = [101 * (i + 1) for i in range(16)]
 
@@ -66,17 +67,17 @@ def run_one(n, mode):
         t0 = time.perf_counter()
         dw = column_generation([p.factory for p in ps], hs, DAYS, cap,
                                supplier_cap=caps, max_iter=60,
-                               time_limit_s=30.0, alloc_every=ALLOC_EVERY)
+                               time_limit_s=30.0, alloc_every=ALLOC_EVERY, weights=WEIGHTS)
         t_cg = time.perf_counter() - t0
     if mode in ("im", "both"):
         if dw is None:
             dw = column_generation([p.factory for p in ps], hs, DAYS,
                                    cap, supplier_cap=caps, max_iter=60,
                                    time_limit_s=30.0,
-                                   alloc_every=ALLOC_EVERY)
+                                   alloc_every=ALLOC_EVERY, weights=WEIGHTS)
         t0 = time.perf_counter()
         dw = integer_master(dw, [p.factory for p in ps], hs, DAYS,
-                            time_limit_s=240.0)
+                            time_limit_s=240.0, weights=WEIGHTS)
         t_im = time.perf_counter() - t0
     return dw, t_cg, t_im, slowest
 
@@ -89,6 +90,8 @@ def measure_row(n, mode):
     return {
         "plants": n, "seeds": SEEDS[:n], "cap_factor": CAP_FACTOR,
         "alloc_every": ALLOC_EVERY,
+        "weights": {"setup": WEIGHTS.setup, "late": WEIGHTS.late,
+                    "early": WEIGHTS.early, "energy": WEIGHTS.energy},
         "primal_note": ("primal not meaningful (alloc_every=0: columns-only "
                         "integer master)" if not ALLOC_EVERY else "ok"),
         "cg": {"wall_s": round(t_cg, 3) if t_cg is not None else None,

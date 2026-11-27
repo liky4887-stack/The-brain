@@ -43,7 +43,7 @@ from brain_core.rolling.coupled import (build_coupled_mip,
                                         _plant_usage)
 from brain_core.rolling.coupled_dw import (column_generation,
                                            integer_master)
-from brain_core.rolling.two_level import solve_buckets
+from brain_core.rolling.two_level import solve_buckets, ObjectiveWeights
 from brain_core.solvers.highs_mip import solve_mip
 
 DAYS = 7
@@ -110,6 +110,11 @@ def _sha() -> str:
         return "unknown"
 
 
+# Same weights for the monolith and CG, passed explicitly and recorded in
+# the row (a comparison with different weights measures the weights).
+WEIGHTS = ObjectiveWeights()
+
+
 def run(n, monolith_limit_s=90.0, crash_inject=False,
         seed_base=0):
     ps, hs, cap = build_cluster(n, seed_base=seed_base)
@@ -117,6 +122,8 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
     sup, lab, solo = binding_caps(ps, hs, cap)
     out = {"plants": n, "days": DAYS, "sha": _sha(),
            "seed_base": seed_base,
+           "weights": {"setup": WEIGHTS.setup, "late": WEIGHTS.late,
+                       "early": WEIGHTS.early, "energy": WEIGHTS.energy},
            "time_limits": {"monolith_s": monolith_limit_s},
            "cap_factors": {
         "supplier": SUPPLIER_FACTOR, "labor": LABOR_FACTOR},
@@ -125,7 +132,8 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
 
     # A. monolithic
     t0 = time.perf_counter()
-    mip, meta = build_coupled_mip(factories, hs, DAYS, cap, sup, lab)
+    mip, meta = build_coupled_mip(factories, hs, DAYS, cap, sup, lab,
+                                  weights=WEIGHTS)
     res = solve_mip(mip, time_limit_s=monolith_limit_s, mip_rel_gap=0.0)
     t_mono = time.perf_counter() - t0
     mono = {"wall_s": round(t_mono, 2), "status": str(res["status"]),
@@ -165,6 +173,11 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
     out["lagrangian"] = {"wall_s": round(t_lr, 2),
                          "lower_bound": lr.lower_bound,
                          "note_status": None,
+                         "weights_note": "coupled_dual takes no weights "
+                                         "argument: solver defaults apply "
+                                         "(setup 50 / late 1000), equal to "
+                                         "WEIGHTS only while those are the "
+                                         "defaults",
                          "rounds": lr.rounds_run,
                          "note": "same convexification bound as CG in "
                                  "theory; subgradient attainment "
@@ -196,7 +209,7 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
                                supplier_cap=sup, labor_cap=lab,
                                max_iter=int(os.environ.get(
                                    "CMP_CG_ITERS", "60")),
-                               time_limit_s=30.0,
+                               time_limit_s=30.0, weights=WEIGHTS,
                                seed_qtys=seed,
                                stab_alpha=float(os.environ.get(
                                    "CMP_STAB_ALPHA", "0.0")),
@@ -210,7 +223,7 @@ def run(n, monolith_limit_s=90.0, crash_inject=False,
                                    "CMP_ALLOC_EVERY", "0")))
         t_cg = time.perf_counter() - t0
         t0 = time.perf_counter()
-        dw = integer_master(dw, factories, hs, DAYS,
+        dw = integer_master(dw, factories, hs, DAYS, weights=WEIGHTS,
                             time_limit_s=min(120.0, monolith_limit_s))
         t_im = time.perf_counter() - t0
     finally:

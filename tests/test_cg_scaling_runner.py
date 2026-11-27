@@ -52,3 +52,9 @@ def test_default_primal_is_sound_on_size_2(tmp_path):
 def test_alloc_every_zero_row_is_labelled_primal_not_meaningful(tmp_path):
     row = _run(tmp_path, CG_ALLOC_EVERY="0")["rows"][0]
     assert row["primal_note"].startswith("primal not meaningful")
+
+
+def test_row_records_the_weights_it_solved_with(tmp_path):
+    row = _run(tmp_path, CG_ALLOC_EVERY="5")["rows"][0]
+    assert row["weights"] == {"setup": 50.0, "late": 1000.0,
+                              "early": 0.001, "energy": 0.0}
