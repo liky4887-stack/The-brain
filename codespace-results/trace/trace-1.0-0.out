@@ -1,0 +1,1 @@
+{"class": {"n": 2, "seed_base": 0, "supplier": 1.0, "labor": 1.0, "days": 7}, "status": "converged (certified: exact pricing)", "iterations": 1, "wall_s": 10.6, "flat_master": {"1e-12": 0, "1e-09": 0, "1e-06": 0, "0.0001": 0}, "flat_lb": {"1e-12": 0, "1e-09": 0, "1e-06": 0, "0.0001": 0}}

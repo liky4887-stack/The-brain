@@ -1,0 +1,1 @@
+{"class": {"n": 2, "seed_base": 0, "supplier": 0.9, "labor": 0.9, "days": 7}, "status": "master failed", "iterations": 178, "wall_s": 548.8, "flat_master": {"1e-12": 22, "1e-09": 22, "1e-06": 28, "0.0001": 53}, "flat_lb": {"1e-12": 12, "1e-09": 12, "1e-06": 33, "0.0001": 51}}
