@@ -1,0 +1,7 @@
+generate {'t_s': 0.0, 'dt_s': 0.0, 'peak_rss_mb': 119.2}
+caps {'t_s': 0.0, 'dt_s': 0.0, 'peak_rss_mb': 121.2}
+build {'t_s': 0.1, 'dt_s': 0.1, 'peak_rss_mb': 123.8}
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+solve {'t_s': 600.1, 'dt_s': 600.0, 'peak_rss_mb': 308.7}
+validate {'t_s': 600.1, 'dt_s': 0.0, 'peak_rss_mb': 308.7}
+DONE Time limit reached 0.10962997897770783 308.7

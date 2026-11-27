@@ -1,0 +1,11 @@
+generate {'t_s': 0.2, 'dt_s': 0.2, 'peak_rss_mb': 120.1}
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+caps {'t_s': 225.6, 'dt_s': 225.4, 'peak_rss_mb': 205.3}
+build {'t_s': 225.7, 'dt_s': 0.1, 'peak_rss_mb': 205.3}
+Running HiGHS 1.9.0 (git hash: fa40bdf): Copyright (c) 2024 HiGHS under MIT licence terms
+solve {'t_s': 825.7, 'dt_s': 600.1, 'peak_rss_mb': 362.6}
+validate {'t_s': 825.7, 'dt_s': 0.0, 'peak_rss_mb': 362.6}
+DONE Time limit reached 0.0001112401895309902 362.8
