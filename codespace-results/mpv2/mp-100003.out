@@ -1,0 +1,1 @@
+{"linking_m_version": "v2", "caps_note": "computed", "status": "Optimization terminated successfully. (HiGHS Status 7: Optimal)", "gap": 0.0, "objective": 134177450.88266462, "wall_s": 5.0, "decomp_terms_sum": 134177450.88266717, "terms": {"setup": 1700.0, "late": 134175335.7165599, "early": 415.1661072638146}, "end_backlog": 65126.16785827991}

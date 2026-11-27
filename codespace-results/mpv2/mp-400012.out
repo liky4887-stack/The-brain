@@ -1,0 +1,1 @@
+{"linking_m_version": "v2", "caps_note": "computed", "status": "Time limit reached. (HiGHS Status 13: Time limit reached)", "gap": 0.05708342551824332, "objective": 2439.9281074971555, "wall_s": 300.0, "decomp_terms_sum": 2439.9281075408117, "terms": {"setup": 1450.0, "late": 4.3655745685100555e-08, "early": 989.9281074971557}, "end_backlog": 2.9103830456733704e-11}
