@@ -536,6 +536,7 @@ def main():
     # libraries). Re-checked at every solve below; drift is a finding
     # in the record (a mid-run pull or pip upgrade can no longer mix
     # two code versions into one row)
+    from brain_core.guards.anomaly import LATENESS_BOUND_REL_TOL
     from brain_core.guards.manifest import (Manifest, check_manifest,
                                             observed_environment)
     _knobs = {k: os.environ.get(k) for k in sorted(os.environ)
@@ -544,6 +545,7 @@ def main():
     def _actual():
         return {"cls": cls, "n": n, "code_sha": _sha(), **_knobs,
                 "linking_m_version": linking_m_version(),
+                "lateness_bound_rel_tol": LATENESS_BOUND_REL_TOL,
                 **observed_environment()}
     manifest = Manifest(_actual())
     out["manifest_hash"] = manifest.hash()

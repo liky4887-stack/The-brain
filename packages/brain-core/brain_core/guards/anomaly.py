@@ -27,6 +27,11 @@ import math
 from dataclasses import dataclass
 
 
+# relative tolerance of the below_physical_bound rule; declared in the run
+# manifest so a changed tolerance changes the manifest hash
+LATENESS_BOUND_REL_TOL = 1e-6
+
+
 @dataclass
 class Finding:
     rule: str
@@ -115,8 +120,13 @@ def check_record(rec: dict, manifest_hash: str | None = None,
         # refuse only when the claim is below the bound by MORE than the
         # relative tolerance (numeric noise equals the bound to ~1e-8)
         a, lbd = lt.get("backlog_unit_days"), lt.get("lower_bound")
-        tol = lt.get("rel_tol", 1e-6)
-        if not (isinstance(a, (int, float)) and isinstance(lbd, (int, float))
+        tol = lt.get("rel_tol", LATENESS_BOUND_REL_TOL)
+        if lt.get("inventory_handled") is not True:
+            # the bound's assumptions are not covered: never judge silently
+            f.append(Finding("bound_not_applicable",
+                             "lateness_check lacks inventory_handled=True: "
+                             "bound assumptions do not apply, plan not judged"))
+        elif not (isinstance(a, (int, float)) and isinstance(lbd, (int, float))
                 and a >= lbd - tol * max(1.0, abs(lbd))):
             f.append(Finding("below_physical_bound",
                              f"backlog_unit_days {a} below the pool-level "
@@ -126,7 +136,8 @@ def check_record(rec: dict, manifest_hash: str | None = None,
 
 RULE_ORDER = ("class_mismatch", "nan_or_missing", "invalid_not_a_mip",
               "status_incoherent", "bound_crossed", "ub_not_validated",
-              "objective_mismatch", "below_physical_bound")
+              "objective_mismatch", "below_physical_bound",
+              "bound_not_applicable")
 
 
 class RunPaused(RuntimeError):
