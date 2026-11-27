@@ -501,6 +501,7 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
     mat_tot: dict = {}
     lab_tot: dict = {}
     total_late = 0.0
+    total_backlog_days = 0.0
     total_early = 0.0
     total_setups = 0
     for p_i, (f, qty) in enumerate(zip(factories, qtys)):
@@ -566,6 +567,10 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
                                for tau in range(t + 1)
                                for l in sku.get(s, (0, [], None))[1])
                 short = cum - produced
+                if short > 1e-9:
+                    # the model's lateness term: cumulative shortfall
+                    # charged on EVERY day it persists
+                    total_backlog_days += short
                 if short > 1e-6:
                     total_late += short - max(0.0, cum - ds[t]
                                               - sum(qty.get((s, tau, l), 0.0)
@@ -592,6 +597,10 @@ def validate_coupled_plan(factories: list, qtys: list, horizon_start,
             problems.append(
                 f"labor pool day {t}: {use:.1f} min > cap {cap:.1f}")
     kpis.update({"setups": total_setups,
+                 # late_unit_days counts only NEW shortfall per day;
+                 # backlog_unit_days is the model's lateness term
+                 # (cumulative shortfall on every day it persists)
+                 "backlog_unit_days": round(total_backlog_days, 3),
                  "late_unit_days": round(total_late, 3),
                  "early_unit_days": round(total_early, 3)})
     return problems, kpis

@@ -10,6 +10,9 @@ only runs a fix action that was declared safe for that rule. Rules:
                     validator reported problems (or none ran)
  status_incoherent  status says optimal but gap > tol, or nodes < 0
  bound_crossed      lower bound above the incumbent (min problem)
+ objective_mismatch the objective recomputed from the plan (guards.objective)
+                    differs from the solver objective by > recon_tol
+                    relative: a hidden or mis-weighted term
  nan_or_missing     NaN/inf or required field missing
 Catches only these rules. A wrong model with a valid-looking result
 passes; that needs an independent validator the rule cannot invent.
@@ -55,7 +58,8 @@ def _walk_numbers(obj, path="", depth=0):
 
 
 def check_record(rec: dict, manifest_hash: str | None = None,
-                 int_tol: float = 1e-6, gap_tol: float = 1e-4):
+                 int_tol: float = 1e-6, gap_tol: float = 1e-4,
+                 recon_tol: float = 1e-6):
     f = []
     for k in REQUIRED:
         if rec.get(k) is None:
@@ -93,11 +97,19 @@ def check_record(rec: dict, manifest_hash: str | None = None,
     if lb is not None and inc is not None \
             and lb > inc + 1e-6 * max(1.0, abs(inc)):
         f.append(Finding("bound_crossed", f"lb {lb} > inc {inc}"))
+    rec_o = rec.get("objective_reconciliation")
+    if isinstance(rec_o, dict):
+        a, b = rec_o.get("solver"), rec_o.get("recomputed")
+        if not (isinstance(a, (int, float)) and isinstance(b, (int, float))
+                and abs(a - b) <= recon_tol * max(1.0, abs(a))):
+            f.append(Finding("objective_mismatch",
+                             f"solver {a} vs recomputed from plan {b}"))
     return f
 
 
 RULE_ORDER = ("class_mismatch", "nan_or_missing", "invalid_not_a_mip",
-              "status_incoherent", "bound_crossed", "ub_not_validated")
+              "status_incoherent", "bound_crossed", "ub_not_validated",
+              "objective_mismatch")
 
 
 class RunPaused(RuntimeError):
