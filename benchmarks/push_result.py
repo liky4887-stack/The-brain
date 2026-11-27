@@ -60,3 +60,24 @@ def push_files(files, remote, branch, dest_dir, workdir, retries=3,
         last = p.stderr.strip()[-300:]
         time.sleep(1)
     raise PushFailed(f"push failed after {retries} attempts: {last}")
+
+
+def preflight_push(remote, branch, workdir):
+    """Prove BEFORE a long run that a push can work: clone/fetch the
+    results branch and `git push --dry-run` (contacts the remote with
+    write intent, so missing credentials fail here: measured on the
+    codespace as 'could not read Username'). Raises PushFailed."""
+    if not os.path.isdir(os.path.join(workdir, ".git")):
+        r = subprocess.run(["git", "clone", "-q", "--branch", branch,
+                            remote, workdir], capture_output=True,
+                           text=True)
+        if r.returncode:
+            raise PushFailed("preflight clone: " + r.stderr.strip()[-300:])
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    r = subprocess.run(["git", "push", "--dry-run", "-q", "origin",
+                        f"HEAD:{branch}"], cwd=workdir, env=env,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode:
+        raise PushFailed("preflight push --dry-run: "
+                         + r.stderr.strip()[-300:])
+    return {"status": "push-possible"}
