@@ -1,0 +1,25 @@
+{
+ "class": {
+  "n": 2,
+  "seed_base": 300009,
+  "supplier": 0.9,
+  "labor": 0.9,
+  "days": 7
+ },
+ "sha": "3b5662e749a815bffe2c711a1192bfbcdc56bef0",
+ "machine": "codespaces-7f4565",
+ "uncoupled_objective_sum": 2621.3501216106897,
+ "concurrency_note": "2 monolith solves in parallel on 4 cores, 1 thread each, idle otherwise",
+ "solves": {
+  "monolith": {
+   "status": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+   "incumbent": 3122.3214912560525,
+   "mip_gap": 0.0,
+   "nodes": 165638,
+   "int_violation": null,
+   "wall_s": 1080.8,
+   "time_limit_s": 3600.0,
+   "has_incumbent": true
+  }
+ }
+}
